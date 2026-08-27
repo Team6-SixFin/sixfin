@@ -1,3 +1,4 @@
 rootProject.name = 'sixfin'
 
 include 'trading-service'
+include 'gateway-service'
