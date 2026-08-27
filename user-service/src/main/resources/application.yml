@@ -1,11 +1,11 @@
 spring:
   application:
-    name: trading-service
+    name: user-service
   profiles:
     active: local
 
 server:
-  port: 19093
+  port: 19092
 
 eureka:
    client:
