@@ -1,0 +1,8 @@
+
+dependencies {
+    // Eureka 서비스 등록 서버 기능
+    implementation 'org.springframework.cloud:spring-cloud-starter-netflix-eureka-server'
+
+    // Health Check와 운영 상태 확인
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+}
