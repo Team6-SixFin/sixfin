@@ -1,0 +1,5 @@
+package com.sparta.learning.application.port;
+
+//구현은 infrastructure/messaging에
+public interface EventPublisher {
+}

@@ -1,0 +1,21 @@
+spring:
+  application:
+    name: trading-service
+  profiles:
+    active: local
+
+server:
+  port: 19093
+
+eureka:
+   client:
+    service-url:
+      defaultZone: http://localhost:19090/eureka/
+
+management:
+   tracing:
+     sampling:
+      probability: 1.0
+     export:
+       zipkin:
+         endpoint: http://localhost:9411/api/v1/spans

@@ -1,10 +1,10 @@
-package com.sparta.sixfin;
+package com.sparta.trading;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 
 @SpringBootTest
-class SixfinApplicationTests {
+class TradingServiceApplicationTests {
 
     @Test
     void contextLoads() {
