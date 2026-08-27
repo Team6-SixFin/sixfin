@@ -1,0 +1,5 @@
+spring:
+  application:
+    name: trading-service
+  profiles:
+    active: local
