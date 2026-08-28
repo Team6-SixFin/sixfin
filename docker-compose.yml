@@ -2,21 +2,19 @@ version: "3.8"
 
 services:
   # ---------- DB ----------
-  mysql:
-    image: mysql:8.0
-    container_name: mysql
-    ports:
-      - "3306:3306"
+  postgres:
+    image: postgres:17
+    container_name: sixfin-postgres
     environment:
-      MYSQL_ROOT_PASSWORD: root1234
-      MYSQL_DATABASE: appdb
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "5432:5432"
     volumes:
-      - mysql-data:/var/lib/mysql
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-proot1234"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      - pgdata:/var/lib/postgresql/data
+      - ./infra/postgres:/docker-entrypoint-initdb.d
+    command: ["postgres", "-c", "max_connections=300"]
 
   # ---------- Redis (캐시) ----------
   redis:
