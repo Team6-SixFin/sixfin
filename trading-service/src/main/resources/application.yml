@@ -3,6 +3,11 @@ spring:
     name: trading-service
   profiles:
     active: local
+  Kafka:
+    bootstrap-servers: localhost:9092
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
 
 server:
   port: 19093
@@ -19,3 +24,4 @@ management:
      export:
        zipkin:
          endpoint: http://localhost:9411/api/v1/spans
+
