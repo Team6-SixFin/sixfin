@@ -3,37 +3,21 @@ package com.sparta.learning.global.entity;
 import jakarta.persistence.Column;
 import jakarta.persistence.EntityListeners;
 import jakarta.persistence.MappedSuperclass;
+import lombok.AccessLevel;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.CreatedDate;
-import org.springframework.data.annotation.LastModifiedBy;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
-import java.time.LocalDateTime;
-import java.util.UUID;
+import java.time.OffsetDateTime;
 
 @Getter
 @MappedSuperclass
 @EntityListeners(AuditingEntityListener.class)
-public class BaseEntity {
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+public abstract class BaseEntity {
 
     @CreatedDate
-    @Column(updatable = false)
-    private LocalDateTime createdAt;
-
-    @Column(updatable = false)
-    private UUID createdBy;
-
-    @LastModifiedBy
-    private LocalDateTime updatedAt;
-
-    private UUID updatedBy;
-
-    private LocalDateTime deletedAt;
-
-    private UUID deletedBy;
-
-    public void markDeleted(UUID deletedBy){
-        this.deletedAt = LocalDateTime.now();
-        this.deletedBy = deletedBy;
-    }
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private OffsetDateTime createdAt;
 }
