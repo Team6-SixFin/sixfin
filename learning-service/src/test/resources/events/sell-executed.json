@@ -1,0 +1,23 @@
+{
+  "eventId": "5d04a1d3-8cde-42ae-9d64-a293e42d3075",
+  "eventType": "SELL_EXECUTED",
+  "eventVersion": 1,
+  "occurredAt": "2026-08-28T10:15:00-04:00",
+  "userId": "a8f2f9b7-f09a-4d51-a6ef-76de5c03b8f1",
+  "payload": {
+    "executionId": "488ca691-334b-4187-ab3c-161630054ac5",
+    "orderId": "aa552dab-47b5-4495-9b26-035047816e35",
+    "positionId": "f4802bf4-b752-4d1f-9d3e-1f0a7ca57282",
+    "stockId": 1,
+    "stockCode": "AAPL",
+    "stockName": "Apple Inc.",
+    "quantity": 5,
+    "executedPrice": 179.5000,
+    "positionQuantityAfter": 10,
+    "positionAverageEntryPrice": 182.4467,
+    "plannedStopLossPrice": 174.0000,
+    "executionRealizedProfit": -14.7335,
+    "quoteTimestamp": "2026-08-28T10:14:59-04:00",
+    "executedAt": "2026-08-28T10:15:00-04:00"
+  }
+}

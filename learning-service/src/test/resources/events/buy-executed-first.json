@@ -1,0 +1,29 @@
+{
+  "eventId": "9f06b071-30a7-4f86-89e7-c78eb62211d1",
+  "eventType": "BUY_EXECUTED",
+  "eventVersion": 1,
+  "occurredAt": "2026-08-27T10:31:00-04:00",
+  "userId": "a8f2f9b7-f09a-4d51-a6ef-76de5c03b8f1",
+  "payload": {
+    "executionId": "0be48fa2-01f6-4d82-8c30-6bc9f2d51e10",
+    "orderId": "64039210-c047-41d7-9db3-f81e685e13a1",
+    "positionId": "f4802bf4-b752-4d1f-9d3e-1f0a7ca57282",
+    "isNewPosition": true,
+    "stockId": 1,
+    "stockCode": "AAPL",
+    "stockName": "Apple Inc.",
+    "quantity": 10,
+    "executedPrice": 183.1700,
+    "positionQuantityAfter": 10,
+    "positionAverageEntryPrice": 183.1700,
+    "plannedStopLossPrice": 174.0000,
+    "investmentReason": "신제품 출시 이후 서비스 매출 성장 기대",
+    "marketContext": {
+      "recent20DayHigh": 187.4000,
+      "recent20DayLow": 169.2100,
+      "recent5DayReturnRate": 5.2000,
+      "quoteTimestamp": "2026-08-27T10:30:59-04:00"
+    },
+    "executedAt": "2026-08-27T10:31:00-04:00"
+  }
+}

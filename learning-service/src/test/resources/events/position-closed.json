@@ -1,0 +1,21 @@
+{
+  "eventId": "ffcab65b-a10e-4688-a379-340579e524ed",
+  "eventType": "POSITION_CLOSED",
+  "eventVersion": 1,
+  "occurredAt": "2026-08-28T11:10:00-04:00",
+  "userId": "a8f2f9b7-f09a-4d51-a6ef-76de5c03b8f1",
+  "payload": {
+    "positionId": "f4802bf4-b752-4d1f-9d3e-1f0a7ca57282",
+    "stockId": 1,
+    "stockCode": "AAPL",
+    "stockName": "Apple Inc.",
+    "totalQuantity": 15,
+    "averageEntryPrice": 182.4467,
+    "averageExitPrice": 177.0000,
+    "stopLossPrice": 174.0000,
+    "realizedProfit": -81.7005,
+    "realizedReturnRate": -2.9851,
+    "openedAt": "2026-08-27T10:31:00-04:00",
+    "closedAt": "2026-08-28T11:10:00-04:00"
+  }
+}
