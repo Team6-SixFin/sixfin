@@ -8,7 +8,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.Map;
 
 @Getter
@@ -25,15 +25,15 @@ public class ErrorResponse {
     private final String message;
     private final Map<String, Object> details;
 
-    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
-    private final LocalDateTime timestamp;
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ssXXX")
+    private final OffsetDateTime timestamp;
 
     public static ErrorResponse of(ErrorCode errorCode, String reason) {
         return ErrorResponse.builder()
                 .code(errorCode.name())
                 .message(errorCode.getMessage())
                 .details(Map.of("reason", reason))
-                .timestamp(LocalDateTime.now())
+                .timestamp(OffsetDateTime.now())
                 .build();
     }
 }
