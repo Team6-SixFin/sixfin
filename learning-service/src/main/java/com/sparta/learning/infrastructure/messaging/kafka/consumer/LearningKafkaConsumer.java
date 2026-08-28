@@ -19,11 +19,11 @@ public class LearningKafkaConsumer {
 
     // 이 메서드는 Kafka에서 메시지를 소비하는 리스너 메서드입니다.
     // @KafkaListener 어노테이션은 이 메서드를 Kafka 리스너로 설정합니다.
-    @KafkaListener(groupId = "group_a", topics = "topic1")
+    @KafkaListener(groupId = "group_a", topics = "trade-events.v1")
     // Kafka 토픽 "test-topic"에서 메시지를 수신하면 이 메서드가 호출됩니다.
     // groupId는 컨슈머 그룹을 지정하여 동일한 그룹에 속한 다른 컨슈머와 메시지를 분배받습니다.
     public void consumeFromGroupA(String message) {
-        log.info("Group A consumed message from topic1: " + message);
+        log.info("Group A consumed message from trade-events.v1: " + message);
     }
 
 
