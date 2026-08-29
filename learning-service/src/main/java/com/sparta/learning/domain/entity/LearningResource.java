@@ -19,6 +19,8 @@ import lombok.NoArgsConstructor;
 
 import java.time.OffsetDateTime;
 
+import org.hibernate.annotations.CreationTimestamp;
+
 @Getter
 @Entity
 @Table(
@@ -80,6 +82,7 @@ public class LearningResource {
     @Column(name = "status", nullable = false, length = 20)
     private ResourceStatus status;
 
+    @CreationTimestamp
     @Column(name = "searched_at", nullable = false)
     private OffsetDateTime searchedAt;
 
@@ -122,7 +125,6 @@ public class LearningResource {
         this.durationSeconds = durationSeconds;
         this.viewCount = viewCount;
         this.status = ResourceStatus.ACTIVE;
-        this.searchedAt = searchedAt == null ? OffsetDateTime.now() : searchedAt;
         this.lastVerifiedAt = lastVerifiedAt;
         this.expiresAt = expiresAt;
     }
