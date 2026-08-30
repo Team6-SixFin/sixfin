@@ -1,0 +1,12 @@
+# 수집 산출물 — Yahoo 데이터 재배포 이슈로 커밋하지 않는다
+out/
+backup/
+
+# 가상환경
+.venv/
+venv/
+
+# 파이썬
+__pycache__/
+*.py[cod]
+.pytest_cache/
