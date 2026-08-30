@@ -80,5 +80,5 @@ services:
       - prometheus
 
 volumes:
-  mysql-data:
+  pgdata:
   kafka-data:
