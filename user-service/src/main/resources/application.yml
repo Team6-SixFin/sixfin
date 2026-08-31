@@ -2,15 +2,28 @@ spring:
   application:
     name: user-service
   profiles:
-    active: local
+    active: ${SPRING_PROFILES_ACTIVE:local}
+  datasource:
+    url: ${LEARNING_DB_URL:jdbc:postgresql://localhost:5432/${POSTGRES_DB:sixfin}}
+    username: ${POSTGRES_USER}
+    password: ${POSTGRES_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: ${JPA_DDL_AUTO:update}
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
 
 server:
-  port: 19092
+  port: ${SERVER_PORT:19092}
 
 eureka:
    client:
     service-url:
-      defaultZone: http://localhost:19090/eureka/
+      defaultZone: ${EUREKA_DEFAULT_ZONE:http://localhost:19090/eureka/}
 
 management:
    tracing:
@@ -18,4 +31,4 @@ management:
       probability: 1.0
      export:
        zipkin:
-         endpoint: http://localhost:9411/api/v1/spans
+         endpoint: ${ZIPKIN_ENDPOINT:http://localhost:9411/api/v1/spans}
