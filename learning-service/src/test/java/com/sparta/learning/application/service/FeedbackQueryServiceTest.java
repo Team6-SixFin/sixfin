@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.sparta.learning.application.dto.query.FeedbackListQuery;
 import com.sparta.learning.application.dto.response.FeedbackDetailResponse;
 import com.sparta.learning.application.dto.response.FeedbackListItemResponse;
+import com.sparta.learning.application.dto.response.PositionFeedbackResponse;
 import com.sparta.learning.domain.entity.DiagnosisResult;
 import com.sparta.learning.domain.entity.ExecutionSnapshot;
 import com.sparta.learning.domain.entity.Feedback;
@@ -171,7 +172,10 @@ class FeedbackQueryServiceTest {
         when(learningResource.getThumbnailUrl()).thenReturn("https://img.youtube.com/example.jpg");
 
         when(feedbackDetailQueryRepository.findFeedback(101L, USER_ID)).thenReturn(Optional.of(feedback));
-        when(feedbackDetailQueryRepository.findFirstExecution(POSITION_ID)).thenReturn(execution);
+        when(executionSnapshotRepository.findFirstByPositionIdAndUserIdOrderByExecutedAtAscIdAsc(
+                POSITION_ID,
+                USER_ID
+        )).thenReturn(Optional.of(execution));
         when(feedbackDetailQueryRepository.findDiagnoses(101L)).thenReturn(List.of(diagnosis));
         when(feedbackDetailQueryRepository.findActiveResources(101L)).thenReturn(List.of(feedbackResource));
 
@@ -197,6 +201,80 @@ class FeedbackQueryServiceTest {
                 .isInstanceOf(CustomException.class)
                 .satisfies(exception -> assertThat(((CustomException) exception).getErrorCode())
                         .isEqualTo(LearningErrorCode.FEEDBACK_NOT_FOUND));
+    }
+
+    // 포지션 피드백을 시간 흐름대로 응답하고 최초 체결의 종목 정보를 사용하는지 확인
+    @Test
+    void returnsPositionFeedbackTimeline() {
+        ExecutionSnapshot firstExecution = mock(ExecutionSnapshot.class);
+        when(firstExecution.getPositionId()).thenReturn(POSITION_ID);
+        when(firstExecution.getStockSymbol()).thenReturn("AAPL");
+        when(firstExecution.getStockName()).thenReturn("Apple Inc.");
+
+        Feedback entryFeedback = createPositionFeedback(
+                101L,
+                FeedbackType.ENTRY_FEEDBACK,
+                "최초 매수 피드백",
+                null,
+                "2026-08-31T10:00:00+09:00"
+        );
+        UUID basedOnExecutionId = UUID.fromString("95214e93-2942-4c96-997f-ab34348ee019");
+        Feedback onDemandFeedback = createPositionFeedback(
+                102L,
+                FeedbackType.ON_DEMAND_FEEDBACK,
+                "요청형 피드백",
+                basedOnExecutionId,
+                "2026-08-31T11:00:00+09:00"
+        );
+
+        when(executionSnapshotRepository.findFirstByPositionIdAndUserIdOrderByExecutedAtAscIdAsc(
+                POSITION_ID,
+                USER_ID
+        )).thenReturn(Optional.of(firstExecution));
+        when(feedbackQueryRepository.findAllByPosition(USER_ID, POSITION_ID))
+                .thenReturn(List.of(entryFeedback, onDemandFeedback));
+
+        PositionFeedbackResponse result = feedbackQueryService.getPositionFeedbacks(USER_ID, POSITION_ID);
+
+        assertThat(result.positionId()).isEqualTo(POSITION_ID);
+        assertThat(result.stockSymbol()).isEqualTo("AAPL");
+        assertThat(result.feedbacks()).extracting(item -> item.feedbackId())
+                .containsExactly(101L, 102L);
+        assertThat(result.feedbacks().getFirst().summary()).isEqualTo("최초 매수 피드백");
+        assertThat(result.feedbacks().get(1).basedOnExecutionId()).isEqualTo(basedOnExecutionId);
+    }
+
+    // 포지션은 존재하지만 피드백 생성 전이라면 정상 응답과 빈 배열을 반환
+    @Test
+    void returnsEmptyFeedbacksForKnownPosition() {
+        ExecutionSnapshot firstExecution = mock(ExecutionSnapshot.class);
+        when(firstExecution.getPositionId()).thenReturn(POSITION_ID);
+        when(firstExecution.getStockSymbol()).thenReturn("AAPL");
+        when(firstExecution.getStockName()).thenReturn("Apple Inc.");
+        when(executionSnapshotRepository.findFirstByPositionIdAndUserIdOrderByExecutedAtAscIdAsc(
+                POSITION_ID,
+                USER_ID
+        )).thenReturn(Optional.of(firstExecution));
+        when(feedbackQueryRepository.findAllByPosition(USER_ID, POSITION_ID)).thenReturn(List.of());
+
+        PositionFeedbackResponse result = feedbackQueryService.getPositionFeedbacks(USER_ID, POSITION_ID);
+
+        assertThat(result.positionId()).isEqualTo(POSITION_ID);
+        assertThat(result.feedbacks()).isEmpty();
+    }
+
+    // 존재하지 않거나 다른 사용자의 포지션은 피드백 목록을 조회하지 않고 404로 처리
+    @Test
+    void rejectsMissingOrUnownedPosition() {
+        when(executionSnapshotRepository.findFirstByPositionIdAndUserIdOrderByExecutedAtAscIdAsc(
+                POSITION_ID,
+                USER_ID
+        )).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> feedbackQueryService.getPositionFeedbacks(USER_ID, POSITION_ID))
+                .isInstanceOf(CustomException.class)
+                .satisfies(exception -> assertThat(((CustomException) exception).getErrorCode())
+                        .isEqualTo(LearningErrorCode.POSITION_NOT_FOUND));
     }
 
     private Feedback createFeedback() {
@@ -241,5 +319,26 @@ class FeedbackQueryServiceTest {
         when(execution.getPlannedStopLossPrice()).thenReturn(new java.math.BigDecimal("175.0000"));
         when(execution.getExecutedAt()).thenReturn(OffsetDateTime.parse("2026-08-31T10:00:00+09:00"));
         return execution;
+    }
+
+    private Feedback createPositionFeedback(
+            Long feedbackId,
+            FeedbackType feedbackType,
+            String summary,
+            UUID basedOnExecutionId,
+            String createdAt
+    ) {
+        Feedback feedback = mock(Feedback.class);
+        when(feedback.getId()).thenReturn(feedbackId);
+        when(feedback.getFeedbackType()).thenReturn(feedbackType);
+        when(feedback.getStatus()).thenReturn(FeedbackStatus.COMPLETED);
+        when(feedback.getContent()).thenReturn(
+                JsonNodeFactory.instance.objectNode().put("summary", summary)
+        );
+        when(feedback.isAiUsed()).thenReturn(true);
+        when(feedback.getBasedOnExecutionId()).thenReturn(basedOnExecutionId);
+        when(feedback.getCreatedAt()).thenReturn(OffsetDateTime.parse(createdAt));
+        when(feedback.getCompletedAt()).thenReturn(OffsetDateTime.parse(createdAt).plusSeconds(5));
+        return feedback;
     }
 }
