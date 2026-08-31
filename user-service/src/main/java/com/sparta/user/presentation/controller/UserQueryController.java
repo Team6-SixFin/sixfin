@@ -6,8 +6,10 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 
-//search 같이 DB에 변동 사항이 없는 경우 사용하시면 됩니다.
-
+/**
+ * 사용자 정보 조회 REST Controller (/api/users)
+ * - 성공 응답 Wrapping 제거 및 HTTP Status + 순수 데이터 반환
+ */
 @RestController
 @RequestMapping("api/user")
 @RequiredArgsConstructor
