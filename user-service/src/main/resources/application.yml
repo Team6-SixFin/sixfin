@@ -32,3 +32,8 @@ management:
      export:
        zipkin:
          endpoint: ${ZIPKIN_ENDPOINT:http://localhost:9411/api/v1/spans}
+
+jwt:
+  secret: ${JWT_SECRET}
+  access-expiration: 1800000 # 30분
+  refresh-expiration: 1209600000 # 14일
