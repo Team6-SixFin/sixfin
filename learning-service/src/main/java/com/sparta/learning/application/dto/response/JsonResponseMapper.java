@@ -28,4 +28,13 @@ final class JsonResponseMapper {
 
         return OBJECT_MAPPER.convertValue(node, MAP_TYPE);
     }
+
+    static String textValue(JsonNode node, String fieldName) {
+        if (node == null) {
+            return null;
+        }
+
+        JsonNode value = node.get(fieldName);
+        return value != null && value.isTextual() ? value.textValue() : null;
+    }
 }

@@ -7,11 +7,8 @@ import com.sparta.learning.domain.model.FeedbackType;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
-public record FeedbackListItemResponse(
+public record PositionFeedbackItemResponse(
         Long feedbackId,
-        UUID positionId,
-        String stockSymbol,
-        String stockName,
         FeedbackType feedbackType,
         FeedbackStatus status,
         String summary,
@@ -21,16 +18,9 @@ public record FeedbackListItemResponse(
         OffsetDateTime completedAt
 ) {
 
-    public static FeedbackListItemResponse from(
-            Feedback feedback,
-            String stockSymbol,
-            String stockName
-    ) {
-        return new FeedbackListItemResponse(
+    public static PositionFeedbackItemResponse from(Feedback feedback) {
+        return new PositionFeedbackItemResponse(
                 feedback.getId(),
-                feedback.getPositionId(),
-                stockSymbol,
-                stockName,
                 feedback.getFeedbackType(),
                 feedback.getStatus(),
                 JsonResponseMapper.textValue(feedback.getContent(), "summary"),
@@ -40,5 +30,4 @@ public record FeedbackListItemResponse(
                 feedback.getCompletedAt()
         );
     }
-
 }

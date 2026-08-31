@@ -10,6 +10,7 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 
 import java.util.List;
+import java.util.UUID;
 
 import static com.sparta.learning.domain.entity.QFeedback.feedback;
 
@@ -42,6 +43,19 @@ public class FeedbackQueryRepositoryCustomImpl implements FeedbackQueryRepositor
                 .fetchOne();
 
         return new PageImpl<>(content, pageable, total == null ? 0L : total);
+    }
+
+    @Override
+    public List<Feedback> findAllByPosition(UUID userId, UUID positionId) {
+        return queryFactory
+                .selectFrom(feedback)
+                .where(
+                        feedback.userId.eq(userId),
+                        feedback.positionId.eq(positionId)
+                )
+                // 최초 매수부터 종료 회고까지 시간 흐름대로
+                .orderBy(feedback.createdAt.asc(), feedback.id.asc())
+                .fetch();
     }
 
     private BooleanBuilder createConditions(FeedbackListQuery query) {

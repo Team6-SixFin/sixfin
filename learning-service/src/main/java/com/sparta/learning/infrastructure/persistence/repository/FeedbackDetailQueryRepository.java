@@ -2,7 +2,6 @@ package com.sparta.learning.infrastructure.persistence.repository;
 
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import com.sparta.learning.domain.entity.DiagnosisResult;
-import com.sparta.learning.domain.entity.ExecutionSnapshot;
 import com.sparta.learning.domain.entity.Feedback;
 import com.sparta.learning.domain.entity.FeedbackResource;
 import com.sparta.learning.domain.model.ResourceStatus;
@@ -37,14 +36,6 @@ public class FeedbackDetailQueryRepository {
                         feedback.userId.eq(userId)
                 )
                 .fetchOne());
-    }
-
-    public ExecutionSnapshot findFirstExecution(UUID positionId) {
-        return queryFactory
-                .selectFrom(executionSnapshot)
-                .where(executionSnapshot.positionId.eq(positionId))
-                .orderBy(executionSnapshot.executedAt.asc(), executionSnapshot.id.asc())
-                .fetchFirst();
     }
 
     public List<DiagnosisResult> findDiagnoses(Long feedbackId) {

@@ -3,6 +3,7 @@ package com.sparta.learning.application.service;
 import com.sparta.learning.application.dto.query.FeedbackListQuery;
 import com.sparta.learning.application.dto.response.FeedbackDetailResponse;
 import com.sparta.learning.application.dto.response.FeedbackListItemResponse;
+import com.sparta.learning.application.dto.response.PositionFeedbackResponse;
 import com.sparta.learning.domain.entity.DiagnosisResult;
 import com.sparta.learning.domain.entity.ExecutionSnapshot;
 import com.sparta.learning.domain.entity.Feedback;
@@ -61,8 +62,9 @@ public class FeedbackQueryService {
         Feedback feedback = feedbackDetailQueryRepository.findFeedback(feedbackId, userId)
                 .orElseThrow(() -> new CustomException(LearningErrorCode.FEEDBACK_NOT_FOUND));
 
-        ExecutionSnapshot firstExecution = feedbackDetailQueryRepository
-                .findFirstExecution(feedback.getPositionId());
+        ExecutionSnapshot firstExecution = executionSnapshotRepository
+                .findFirstByPositionIdAndUserIdOrderByExecutedAtAscIdAsc(feedback.getPositionId(), userId)
+                .orElse(null);
         List<DiagnosisResult> diagnosisResults = feedbackDetailQueryRepository.findDiagnoses(feedbackId);
         List<FeedbackResource> feedbackResources = feedbackDetailQueryRepository.findActiveResources(feedbackId);
 
@@ -72,6 +74,16 @@ public class FeedbackQueryService {
                 diagnosisResults,
                 feedbackResources
         );
+    }
+
+    public PositionFeedbackResponse getPositionFeedbacks(UUID userId, UUID positionId) {
+        // 최초 매수 결과가 있어야 포지션이 존재, 포지션 존재 여부와 소유권 검증
+        ExecutionSnapshot firstExecution = executionSnapshotRepository
+                .findFirstByPositionIdAndUserIdOrderByExecutedAtAscIdAsc(positionId, userId)
+                .orElseThrow(() -> new CustomException(LearningErrorCode.POSITION_NOT_FOUND));
+
+        List<Feedback> feedbacks = feedbackQueryRepository.findAllByPosition(userId, positionId);
+        return PositionFeedbackResponse.from(firstExecution, feedbacks);
     }
 
     private Map<UUID, StockInfo> findStockInfo(List<Feedback> feedbacks) {
