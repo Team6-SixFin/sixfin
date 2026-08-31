@@ -21,6 +21,13 @@ spring:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.apache.kafka.common.serialization.StringSerializer
 
+market:
+  clock:
+    start-seq: 0
+    end-seq: 7393       # recent_20d_high가 NULL 되기 직전. 일봉 보강 시 7783으로 확장
+    speed-factor: 1
+    cache-refresh-interval-ms: 1000
+
 server:
   port: 19093
 
