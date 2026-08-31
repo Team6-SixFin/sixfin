@@ -1,11 +1,13 @@
 package com.sparta.learning.presentation.controller;
 
 import com.sparta.learning.application.dto.query.FeedbackListQuery;
+import com.sparta.learning.application.dto.response.FeedbackDetailResponse;
 import com.sparta.learning.application.dto.response.FeedbackListItemResponse;
 import com.sparta.learning.application.service.FeedbackQueryService;
 import com.sparta.learning.global.response.PageResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -44,5 +46,13 @@ public class FeedbackQueryController {
         );
 
         return feedbackQueryService.getFeedbacks(query);
+    }
+
+    @GetMapping("/{feedbackId}")
+    public FeedbackDetailResponse getFeedbackDetail(
+            @RequestHeader(USER_ID_HEADER) UUID userId,
+            @PathVariable Long feedbackId
+    ) {
+        return feedbackQueryService.getFeedbackDetail(userId, feedbackId);
     }
 }

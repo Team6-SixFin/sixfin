@@ -1,11 +1,17 @@
 package com.sparta.learning.application.service;
 
 import com.sparta.learning.application.dto.query.FeedbackListQuery;
+import com.sparta.learning.application.dto.response.FeedbackDetailResponse;
 import com.sparta.learning.application.dto.response.FeedbackListItemResponse;
+import com.sparta.learning.domain.entity.DiagnosisResult;
 import com.sparta.learning.domain.entity.ExecutionSnapshot;
 import com.sparta.learning.domain.entity.Feedback;
+import com.sparta.learning.domain.entity.FeedbackResource;
+import com.sparta.learning.global.exception.CustomException;
+import com.sparta.learning.global.exception.LearningErrorCode;
 import com.sparta.learning.global.response.PageResponse;
 import com.sparta.learning.infrastructure.persistence.repository.ExecutionSnapshotRepository;
+import com.sparta.learning.infrastructure.persistence.repository.FeedbackDetailQueryRepository;
 import com.sparta.learning.infrastructure.persistence.repository.FeedbackQueryRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -28,6 +34,7 @@ public class FeedbackQueryService {
 
     private final FeedbackQueryRepository feedbackQueryRepository;
     private final ExecutionSnapshotRepository executionSnapshotRepository;
+    private final FeedbackDetailQueryRepository feedbackDetailQueryRepository;
 
     public PageResponse<FeedbackListItemResponse> getFeedbacks(FeedbackListQuery query) {
         Pageable pageable = PageRequest.of(query.page(), query.size());
@@ -47,6 +54,24 @@ public class FeedbackQueryService {
                 .toList();
 
         return PageResponse.from(feedbackPage, content);
+    }
+
+    public FeedbackDetailResponse getFeedbackDetail(UUID userId, Long feedbackId) {
+        // ID와 사용자 ID를 함께 조회해 다른 사용자의 피드백 존재 여부를 노출하지 않는다
+        Feedback feedback = feedbackDetailQueryRepository.findFeedback(feedbackId, userId)
+                .orElseThrow(() -> new CustomException(LearningErrorCode.FEEDBACK_NOT_FOUND));
+
+        ExecutionSnapshot firstExecution = feedbackDetailQueryRepository
+                .findFirstExecution(feedback.getPositionId());
+        List<DiagnosisResult> diagnosisResults = feedbackDetailQueryRepository.findDiagnoses(feedbackId);
+        List<FeedbackResource> feedbackResources = feedbackDetailQueryRepository.findActiveResources(feedbackId);
+
+        return FeedbackDetailResponse.from(
+                feedback,
+                firstExecution,
+                diagnosisResults,
+                feedbackResources
+        );
     }
 
     private Map<UUID, StockInfo> findStockInfo(List<Feedback> feedbacks) {
