@@ -6,10 +6,11 @@ import org.springframework.http.HttpStatus;
 
 @Getter
 @RequiredArgsConstructor
-public enum LearningErrorCode implements  ErrorCode{
+public enum LearningErrorCode implements ErrorCode {
 
-    //아래 예시를 에러상황에 맞게 고치고 복사해서 사용하면 됩니다.
-    EXAMPLE_ERROR_CODE(HttpStatus.NOT_FOUND, "예시)존재 하지 않습니다");
+    INVALID_FEEDBACK_TYPE(HttpStatus.BAD_REQUEST, "지원하지 않는 피드백 종류입니다."),
+    INVALID_FEEDBACK_STATUS(HttpStatus.BAD_REQUEST, "지원하지 않는 피드백 상태입니다."),
+    INVALID_PAGE_REQUEST(HttpStatus.BAD_REQUEST, "페이지 번호와 크기를 확인해주세요.");
 
     private final HttpStatus httpStatus;
     private final String message;
