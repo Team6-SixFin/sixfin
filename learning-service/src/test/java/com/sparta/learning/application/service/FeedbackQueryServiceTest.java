@@ -2,13 +2,22 @@ package com.sparta.learning.application.service;
 
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.sparta.learning.application.dto.query.FeedbackListQuery;
+import com.sparta.learning.application.dto.response.FeedbackDetailResponse;
 import com.sparta.learning.application.dto.response.FeedbackListItemResponse;
+import com.sparta.learning.domain.entity.DiagnosisResult;
 import com.sparta.learning.domain.entity.ExecutionSnapshot;
 import com.sparta.learning.domain.entity.Feedback;
+import com.sparta.learning.domain.entity.FeedbackResource;
+import com.sparta.learning.domain.entity.LearningResource;
+import com.sparta.learning.domain.model.DiagnosisStatus;
 import com.sparta.learning.domain.model.FeedbackStatus;
 import com.sparta.learning.domain.model.FeedbackType;
+import com.sparta.learning.domain.model.TradeType;
+import com.sparta.learning.global.exception.CustomException;
+import com.sparta.learning.global.exception.LearningErrorCode;
 import com.sparta.learning.global.response.PageResponse;
 import com.sparta.learning.infrastructure.persistence.repository.ExecutionSnapshotRepository;
+import com.sparta.learning.infrastructure.persistence.repository.FeedbackDetailQueryRepository;
 import com.sparta.learning.infrastructure.persistence.repository.FeedbackQueryRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -22,10 +31,12 @@ import org.springframework.data.domain.Pageable;
 
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -48,13 +59,17 @@ class FeedbackQueryServiceTest {
     @Mock
     private ExecutionSnapshotRepository executionSnapshotRepository;
 
+    @Mock
+    private FeedbackDetailQueryRepository feedbackDetailQueryRepository;
+
     private FeedbackQueryService feedbackQueryService;
 
     @BeforeEach
     void setUp() {
         feedbackQueryService = new FeedbackQueryService(
                 feedbackQueryRepository,
-                executionSnapshotRepository
+                executionSnapshotRepository,
+                feedbackDetailQueryRepository
         );
     }
 
@@ -127,6 +142,63 @@ class FeedbackQueryServiceTest {
         verifyNoInteractions(executionSnapshotRepository);
     }
 
+    // 상세 조회 시 피드백과 연결된 진단, 근거 체결, 교육 자료를 하나의 응답으로 조립하는지 확인
+    @Test
+    void returnsFeedbackDetail() {
+        Feedback feedback = createDetailFeedback();
+        ExecutionSnapshot execution = createExecutionSnapshot();
+        DiagnosisResult diagnosis = mock(DiagnosisResult.class);
+        FeedbackResource feedbackResource = mock(FeedbackResource.class);
+        LearningResource learningResource = mock(LearningResource.class);
+
+        when(diagnosis.getId()).thenReturn(201L);
+        when(diagnosis.getRuleCode()).thenReturn("HIGH_PRICE_CHASING");
+        when(diagnosis.getResult()).thenReturn(DiagnosisStatus.WARNING);
+        when(diagnosis.getMetrics()).thenReturn(
+                JsonNodeFactory.instance.objectNode().put("highRatio", 99.29)
+        );
+        when(diagnosis.getEvidence()).thenReturn(
+                JsonNodeFactory.instance.objectNode().put("message", "최근 고점 부근에서 매수했습니다.")
+        );
+        when(diagnosis.getExecutionSnapshot()).thenReturn(execution);
+
+        when(feedbackResource.getLearningResource()).thenReturn(learningResource);
+        when(feedbackResource.getRecommendationReason()).thenReturn("고점 추격 매수 습관을 점검하는 자료입니다.");
+        when(learningResource.getId()).thenReturn(301L);
+        when(learningResource.getTitle()).thenReturn("추격 매수를 피하는 방법");
+        when(learningResource.getUrl()).thenReturn("https://youtube.com/watch?v=example");
+        when(learningResource.getChannelName()).thenReturn("투자교육 채널");
+        when(learningResource.getThumbnailUrl()).thenReturn("https://img.youtube.com/example.jpg");
+
+        when(feedbackDetailQueryRepository.findFeedback(101L, USER_ID)).thenReturn(Optional.of(feedback));
+        when(feedbackDetailQueryRepository.findFirstExecution(POSITION_ID)).thenReturn(execution);
+        when(feedbackDetailQueryRepository.findDiagnoses(101L)).thenReturn(List.of(diagnosis));
+        when(feedbackDetailQueryRepository.findActiveResources(101L)).thenReturn(List.of(feedbackResource));
+
+        FeedbackDetailResponse result = feedbackQueryService.getFeedbackDetail(USER_ID, 101L);
+
+        assertThat(result.feedbackId()).isEqualTo(101L);
+        assertThat(result.stockSymbol()).isEqualTo("AAPL");
+        assertThat(result.feedbackContent().get("summary")).isEqualTo("손절 계획을 설정했습니다.");
+        assertThat(result.diagnoses()).hasSize(1);
+        assertThat(result.diagnoses().getFirst().message()).isEqualTo("최근 고점 부근에서 매수했습니다.");
+        assertThat(result.evidences()).hasSize(1);
+        assertThat(result.evidences().getFirst().executionId()).isEqualTo(execution.getExecutionId());
+        assertThat(result.resources()).hasSize(1);
+        assertThat(result.resources().getFirst().resourceType()).isEqualTo("VIDEO");
+    }
+
+    // 존재하지 않거나 다른 사용자의 피드백은 동일하게 404 오류로 처리하는지 확인
+    @Test
+    void rejectsMissingOrUnownedFeedback() {
+        when(feedbackDetailQueryRepository.findFeedback(101L, USER_ID)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> feedbackQueryService.getFeedbackDetail(USER_ID, 101L))
+                .isInstanceOf(CustomException.class)
+                .satisfies(exception -> assertThat(((CustomException) exception).getErrorCode())
+                        .isEqualTo(LearningErrorCode.FEEDBACK_NOT_FOUND));
+    }
+
     private Feedback createFeedback() {
         Feedback feedback = mock(Feedback.class);
         when(feedback.getId()).thenReturn(101L);
@@ -140,5 +212,34 @@ class FeedbackQueryServiceTest {
         when(feedback.getCreatedAt()).thenReturn(OffsetDateTime.parse("2026-08-31T10:00:00+09:00"));
         when(feedback.getCompletedAt()).thenReturn(OffsetDateTime.parse("2026-08-31T10:00:05+09:00"));
         return feedback;
+    }
+
+    private Feedback createDetailFeedback() {
+        Feedback feedback = mock(Feedback.class);
+        when(feedback.getId()).thenReturn(101L);
+        when(feedback.getPositionId()).thenReturn(POSITION_ID);
+        when(feedback.getFeedbackType()).thenReturn(FeedbackType.ENTRY_FEEDBACK);
+        when(feedback.getStatus()).thenReturn(FeedbackStatus.COMPLETED);
+        when(feedback.getContent()).thenReturn(
+                JsonNodeFactory.instance.objectNode().put("summary", "손절 계획을 설정했습니다.")
+        );
+        when(feedback.getCreatedAt()).thenReturn(OffsetDateTime.parse("2026-08-31T10:00:00+09:00"));
+        when(feedback.getCompletedAt()).thenReturn(OffsetDateTime.parse("2026-08-31T10:00:05+09:00"));
+        return feedback;
+    }
+
+    private ExecutionSnapshot createExecutionSnapshot() {
+        ExecutionSnapshot execution = mock(ExecutionSnapshot.class);
+        when(execution.getExecutionId()).thenReturn(
+                UUID.fromString("7c9e6679-7425-40de-944b-e07fc1f90ae7")
+        );
+        when(execution.getStockSymbol()).thenReturn("AAPL");
+        when(execution.getStockName()).thenReturn("Apple Inc.");
+        when(execution.getTradeType()).thenReturn(TradeType.BUY);
+        when(execution.getQuantity()).thenReturn(10);
+        when(execution.getExecutedPrice()).thenReturn(new java.math.BigDecimal("183.1700"));
+        when(execution.getPlannedStopLossPrice()).thenReturn(new java.math.BigDecimal("175.0000"));
+        when(execution.getExecutedAt()).thenReturn(OffsetDateTime.parse("2026-08-31T10:00:00+09:00"));
+        return execution;
     }
 }

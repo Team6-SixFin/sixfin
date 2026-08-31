@@ -1,6 +1,7 @@
 package com.sparta.learning.presentation.controller;
 
 import com.sparta.learning.application.dto.query.FeedbackListQuery;
+import com.sparta.learning.application.dto.response.FeedbackDetailResponse;
 import com.sparta.learning.application.dto.response.FeedbackListItemResponse;
 import com.sparta.learning.application.service.FeedbackQueryService;
 import com.sparta.learning.domain.model.FeedbackStatus;
@@ -18,6 +19,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -101,5 +103,37 @@ class FeedbackQueryControllerTest {
                         .param("status", "PROCESSING"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_FEEDBACK_STATUS"));
+    }
+
+    // 상세 API가 공통 성공 wrapper 없이 피드백 상세 데이터를 직접 반환하는지 확인
+    @Test
+    void getsFeedbackDetail() throws Exception {
+        FeedbackDetailResponse response = new FeedbackDetailResponse(
+                101L,
+                POSITION_ID,
+                "AAPL",
+                "Apple Inc.",
+                FeedbackType.ENTRY_FEEDBACK,
+                FeedbackStatus.COMPLETED,
+                Map.of("summary", "손절 계획을 설정했습니다."),
+                List.of(),
+                List.of(),
+                List.of(),
+                OffsetDateTime.parse("2026-08-31T10:00:00+09:00"),
+                OffsetDateTime.parse("2026-08-31T10:00:05+09:00")
+        );
+        when(feedbackQueryService.getFeedbackDetail(USER_ID, 101L)).thenReturn(response);
+
+        mockMvc.perform(get("/api/feedbacks/101")
+                        .header("X-User-Id", USER_ID))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.feedbackId").value(101))
+                .andExpect(jsonPath("$.stockSymbol").value("AAPL"))
+                .andExpect(jsonPath("$.feedbackContent.summary").value("손절 계획을 설정했습니다."))
+                .andExpect(jsonPath("$.diagnoses").isArray())
+                .andExpect(jsonPath("$.code").doesNotExist())
+                .andExpect(jsonPath("$.data").doesNotExist());
+
+        verify(feedbackQueryService).getFeedbackDetail(USER_ID, 101L);
     }
 }
