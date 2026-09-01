@@ -2,9 +2,7 @@ package com.sparta.trading.application.service;
 
 import com.sparta.trading.domain.entity.ClockStatus;
 import com.sparta.trading.domain.entity.MarketClock;
-import com.sparta.trading.domain.entity.PriceCandles;
 import com.sparta.trading.domain.repository.MarketClockRepository;
-import com.sparta.trading.domain.repository.PriceCandlesRepository;
 import com.sparta.trading.global.exception.CustomException;
 import com.sparta.trading.global.exception.TradingErrorCode;
 import lombok.RequiredArgsConstructor;
@@ -25,7 +23,7 @@ import java.time.Instant;
 public class MarketClockCommandService {
 
     private final MarketClockRepository marketClockRepository;
-    private final PriceCandlesRepository priceCandlesRepository;
+    private final CurrentSeqProvider currentSeqProvider;
     private final Clock clock;
 
     @Transactional
@@ -33,7 +31,8 @@ public class MarketClockCommandService {
         MarketClock marketClock = getClockForUpdate();
         Instant now = clock.instant();
         long seq = marketClock.currentSeq(now);
-        marketClock.reanchor(seq, now, marketTimeAt(seq), marketClock.getSpeedFactor(), ClockStatus.RUNNING);
+        Instant marketTime = currentSeqProvider.marketTimeAt(seq);
+        marketClock.reanchor(seq, now, marketTime, marketClock.getSpeedFactor(), ClockStatus.RUNNING);
         return marketClock;
     }
 
@@ -42,7 +41,8 @@ public class MarketClockCommandService {
         MarketClock marketClock = getClockForUpdate();
         Instant now = clock.instant();
         long seq = marketClock.currentSeq(now);
-        marketClock.reanchor(seq, now, marketTimeAt(seq), marketClock.getSpeedFactor(), ClockStatus.STOPPED);
+        Instant marketTime = currentSeqProvider.marketTimeAt(seq);
+        marketClock.reanchor(seq, now, marketTime, marketClock.getSpeedFactor(), ClockStatus.STOPPED);
         return marketClock;
     }
 
@@ -55,7 +55,8 @@ public class MarketClockCommandService {
         MarketClock marketClock = getClockForUpdate();
         Instant now = clock.instant();
         long seq = marketClock.currentSeq(now);
-        marketClock.reanchor(seq, now, marketTimeAt(seq), newSpeedFactor, marketClock.getStatus());
+        Instant marketTime = currentSeqProvider.marketTimeAt(seq);
+        marketClock.reanchor(seq, now, marketTime, newSpeedFactor, marketClock.getStatus());
         return marketClock;
     }
 
@@ -75,7 +76,8 @@ public class MarketClockCommandService {
         }
 
         Instant now = clock.instant();
-        marketClock.reanchor(targetSeq, now, marketTimeAt(targetSeq), marketClock.getSpeedFactor(), ClockStatus.STOPPED);
+        Instant marketTime = currentSeqProvider.marketTimeAt(targetSeq);
+        marketClock.reanchor(targetSeq, now, marketTime, marketClock.getSpeedFactor(), ClockStatus.STOPPED);
         return marketClock;
     }
 
@@ -84,9 +86,4 @@ public class MarketClockCommandService {
                 .orElseThrow(() -> new CustomException(TradingErrorCode.MARKET_CLOCK_NOT_FOUND));
     }
 
-    private Instant marketTimeAt(long seq) {
-        return priceCandlesRepository.findFirstBySeq(seq)
-                .map(PriceCandles::getMarketTime)
-                .orElseThrow(() -> new CustomException(TradingErrorCode.PRICE_CANDLE_NOT_FOUND_FOR_SEQ));
-    }
 }
