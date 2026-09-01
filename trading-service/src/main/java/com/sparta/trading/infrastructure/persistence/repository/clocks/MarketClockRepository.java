@@ -1,4 +1,4 @@
-package com.sparta.trading.domain.repository;
+package com.sparta.trading.infrastructure.persistence.repository.clocks;
 
 import com.sparta.trading.domain.entity.MarketClock;
 import jakarta.persistence.LockModeType;
