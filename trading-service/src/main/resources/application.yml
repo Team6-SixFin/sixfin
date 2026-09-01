@@ -13,15 +13,14 @@ server:
   port: 19093
 
 eureka:
-   client:
+  client:
     service-url:
       defaultZone: http://localhost:19090/eureka/
 
 management:
-   tracing:
-     sampling:
+  tracing:
+    sampling:
       probability: 1.0
-     export:
-       zipkin:
-         endpoint: http://localhost:9411/api/v1/spans
-
+    export:
+      zipkin:
+        endpoint: http://localhost:9411/api/v1/spans
