@@ -2,9 +2,7 @@ package com.sparta.trading.application.service;
 
 import com.sparta.trading.domain.entity.ClockStatus;
 import com.sparta.trading.domain.entity.MarketClock;
-import com.sparta.trading.domain.entity.PriceCandles;
 import com.sparta.trading.domain.repository.MarketClockRepository;
-import com.sparta.trading.domain.repository.PriceCandlesRepository;
 import com.sparta.trading.global.exception.CustomException;
 import com.sparta.trading.global.exception.TradingErrorCode;
 import org.junit.jupiter.api.DisplayName;
@@ -31,7 +29,7 @@ class MarketClockCommandServiceTest {
     private MarketClockRepository marketClockRepository;
 
     @Mock
-    private PriceCandlesRepository priceCandlesRepository;
+    private CurrentSeqProvider currentSeqProvider;
 
     @Mock
     private Clock clock;
@@ -58,12 +56,7 @@ class MarketClockCommandServiceTest {
     }
 
     private void givenCandleAt(long seq) {
-        PriceCandles candle = PriceCandles.builder()
-                .stockId(1L)
-                .seq(seq)
-                .marketTime(BASE_TIME.plusSeconds(seq * 60))
-                .build();
-        when(priceCandlesRepository.findFirstBySeq(seq)).thenReturn(Optional.of(candle));
+        when(currentSeqProvider.marketTimeAt(seq)).thenReturn(BASE_TIME.plusSeconds(seq * 60));
     }
 
     @Test
@@ -214,7 +207,7 @@ class MarketClockCommandServiceTest {
         MarketClock marketClock = clockOf(0L, BASE_TIME, 1, ClockStatus.STOPPED);
         givenClock(marketClock);
         when(clock.instant()).thenReturn(BASE_TIME);
-        when(priceCandlesRepository.findFirstBySeq(0L)).thenReturn(Optional.empty());
+        when(currentSeqProvider.marketTimeAt(0L)).thenThrow(new CustomException(TradingErrorCode.PRICE_CANDLE_NOT_FOUND_FOR_SEQ));
 
         CustomException exception = assertThrows(CustomException.class, () -> service.start());
 
