@@ -8,5 +8,5 @@ import org.springframework.data.domain.Pageable;
 
 // QueryDSL 전용 커스텀 인터페이스
 public interface UserRepositoryCustom {
-
+    Page<User> searchUsers(UserSearchCondition condition, Pageable pageable);
 }
