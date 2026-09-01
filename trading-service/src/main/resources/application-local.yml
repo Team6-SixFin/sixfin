@@ -1,6 +1,6 @@
 spring:
   datasource:
-    url: jdbc:postgresql://${DB_HOST:localhost}:5432/sixfin?currentSchema=trading_service
+    url: jdbc:postgresql://localhost:5432/sixfin?currentSchema=trading_service
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
 
