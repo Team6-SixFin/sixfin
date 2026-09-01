@@ -64,3 +64,19 @@ CREATE TABLE IF NOT EXISTS p_price_candles (
 
 -- 리플레이 스케줄러가 "현재 seq 이하만" 조회할 때 사용 (candles P1 API도 동일)
 CREATE INDEX IF NOT EXISTS idx_price_candle_seq ON p_price_candles (seq);
+
+-- ----------------------------------------
+-- 계좌
+-- ----------------------------------------
+CREATE TABLE IF NOT EXISTS trading_service.p_accounts (
+    id              UUID            PRIMARY KEY,
+    user_id         UUID            NOT NULL,
+    cash_balance    NUMERIC(19, 4)  NOT NULL,
+    initial_deposit NUMERIC(19, 4)  NOT NULL,
+    currency        VARCHAR(3)         NOT NULL,
+    created_at      TIMESTAMPTZ     NOT NULL,
+    created_by      UUID            NOT NULL,
+    updated_at      TIMESTAMPTZ,
+    updated_by      UUID,
+    CONSTRAINT uk_accounts_user_id UNIQUE (user_id)
+    );
