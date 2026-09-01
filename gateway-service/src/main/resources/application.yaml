@@ -4,3 +4,50 @@ server:
 spring:
   application:
     name: gateway-service
+  data:
+    redis:
+      host: ${SPRING_REDIS_HOST:localhost}
+      port: ${SPRING_REDIS_PORT:6379}
+  cloud:
+    gateway:
+      discovery:
+        locator:
+          enabled: true # Eureka 연동으로 dynamic routing 활성화
+      routes:
+        # 1. User Service - 회원가입/로그인 (인증 필터 제외)
+        - id: user-service-auth
+          uri: lb://user-service
+          predicates:
+            - Path=/api/auth/**
+
+        # 2. User Service - 일반 유저 조회/수정/탈퇴 (JWT 인증 필터 적용)
+        - id: user-service
+          uri: lb://user-service
+          predicates:
+            - Path=/api/users/**
+          filters:
+            - JwtAuthenticationFilter
+
+        # 3. Trading Service - 시세, 계좌자산, 매매, 내부, 관리자 전체 라우팅
+        - id: trading-service
+          uri: lb://trading-service
+          predicates:
+            - Path=/api/trading/**
+          filters:
+            - JwtAuthenticationFilter
+
+        # 4. Learning Service - 피드백, 진단/리포트, 미션, 학습 콘텐츠, 통계/랭킹 전체 라우팅
+        - id: learning-service
+          uri: lb://learning-service
+          predicates:
+            - Path=/api/learnings/**, /api/feedbacks/**, /api/reports/**, /api/missions/**, /api/contents/**, /api/stats/**, /api/rankings/**
+          filters:
+            - JwtAuthenticationFilter
+
+jwt:
+  secret: ${JWT_SECRET}
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:19090/eureka/
