@@ -1,8 +1,33 @@
+configurations {
+    // 루트 subprojects에서 공통으로 주입되는 WebMVC(Servlet) 라이브러리를 게이트웨이에서 제외
+    // (Spring Cloud Gateway는 Reactive/WebFlux 기반이므로 WebMVC와 충돌함)
+    all {
+        exclude group: 'org.springframework.boot', module: 'spring-boot-starter-web'
+    }
+}
+
+dependencyManagement {
+    imports {
+        mavenBom "org.springframework.cloud:spring-cloud-dependencies:2023.0.0"
+    }
+}
 
 dependencies {
-    implementation 'org.springframework.boot:spring-boot-starter-actuator'
-    implementation 'org.springframework.cloud:spring-cloud-starter-gateway-server-webmvc'
+    // Reactive 기반 Spring Cloud Gateway & Eureka Client
+    implementation 'org.springframework.cloud:spring-cloud-starter-gateway'
     implementation 'org.springframework.cloud:spring-cloud-starter-netflix-eureka-client'
-    testImplementation 'org.springframework.boot:spring-boot-starter-actuator-test'
+
+    // Actuator
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+
+    // Redis (Reactive)
+    implementation 'org.springframework.boot:spring-boot-starter-data-redis-reactive'
+
+    // JWT 라이브러리
+    implementation 'io.jsonwebtoken:jjwt-api:0.12.6'
+    runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.12.6'
+    runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.12.6'
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
