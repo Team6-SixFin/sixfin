@@ -1,6 +1,6 @@
 spring:
   datasource:
-    url: jdbc:postgresql://localhost:5432/sixfin?currentSchema=trading_service
+    url: jdbc:postgresql://${DB_HOST:localhost}:5432/sixfin?currentSchema=trading_service
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
 
@@ -11,3 +11,6 @@ spring:
       hibernate:
         format_sql: true
     show-sql: true
+
+market-data:
+  csv-dir: ${MARKET_DATA_DIR:../tools/market-data-collector/out}

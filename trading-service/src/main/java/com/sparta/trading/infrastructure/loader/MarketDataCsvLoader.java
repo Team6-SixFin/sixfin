@@ -8,7 +8,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
-import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
@@ -27,13 +26,12 @@ import java.util.Map;
 
 /**
  * Yahoo Finance 수집 스크립트(tools/market-data-collector)가 만든 CSV를 읽어 DB에 적재한다.
- * Profile("init"): init 프로필로 기동했을 때만 동작하며, 이미 종목 데이터가 있으면 건너뛴다(멱등).
+ * 이미 종목 데이터가 있으면 건너뛴다(멱등) — 별도 프로필 없이 기동 시마다 이 체크만 거친다.
  * 대량 캔들 데이터는 IDENTITY PK의 JPA 배치 insert 제약을 피하기 위해 JdbcTemplate으로 직접 적재한다.
  * stocks은 우선 20 종목 뿐이라 JPA 사용
  */
 @Slf4j
 @Component
-@Profile("init")
 @RequiredArgsConstructor
 public class MarketDataCsvLoader implements ApplicationRunner {
 
