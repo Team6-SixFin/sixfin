@@ -1,2 +1,0 @@
-market-data:
-  csv-dir: ${MARKET_DATA_DIR:../tools/market-data-collector/out}
