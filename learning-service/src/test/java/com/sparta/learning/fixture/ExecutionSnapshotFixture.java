@@ -57,6 +57,47 @@ public final class ExecutionSnapshotFixture {
                 .build();
     }
 
+    // 매수가를 직접 지정한 최초 체결
+    public static ExecutionSnapshot buyAt(BigDecimal executedPrice){
+        return builder()
+                .tradeType(TradeType.BUY)
+                .newPosition(true)
+                .plannedStopLossPrice(STOP_LOSS_PRICE)
+                .executedPrice(executedPrice)
+                .positionAveragePrice(executedPrice)
+                .build();
+    }
+
+    // 20일 최고가를 직접 지정한 최초 체결
+    public static ExecutionSnapshot buyWithRecent20dHigh(BigDecimal recent20dHigh) {
+        return builder()
+                .tradeType(TradeType.BUY)
+                .newPosition(true)
+                .plannedStopLossPrice(STOP_LOSS_PRICE)
+                .recent20dHigh(recent20dHigh)
+                .build();
+    }
+
+    // 최근 5거래일 수익률을 직접 지정한 최초 체결. 단기 급등 판정 검증에 사용한다
+    public static ExecutionSnapshot buyWithRecent5dReturnRate(BigDecimal recent5dReturnRate) {
+        return builder()
+                .tradeType(TradeType.BUY)
+                .newPosition(true)
+                .plannedStopLossPrice(STOP_LOSS_PRICE)
+                .recent5dReturnRate(recent5dReturnRate)
+                .build();
+    }
+
+    // 매도가와 계획 손절가를 직접 지정한 매도 체결
+    public static ExecutionSnapshot sellAt(BigDecimal executedPrice, BigDecimal plannedStopLossPrice) {
+        return builder()
+                .tradeType(TradeType.SELL)
+                .newPosition(false)
+                .plannedStopLossPrice(plannedStopLossPrice)
+                .executedPrice(executedPrice)
+                .build();
+    }
+
     //판정에 쓰이지 않는 필드를 기본값으로 채웁니다.
     // 저장까지 검증하는 테스트에서는 별도로 채워야 함 (TODO)
     private static ExecutionSnapshot.ExecutionSnapshotBuilder builder() {
