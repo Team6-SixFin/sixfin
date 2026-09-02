@@ -77,14 +77,6 @@ public class TradingAdminQueryService {
             }
         }
 
-        LocalDateTime fromDateTime = tradingAdminSearchOrderQuery.from() != null
-                ? LocalDateTime.ofInstant(tradingAdminSearchOrderQuery.from(), ZoneId.of("UTC"))
-                : null;
-
-        LocalDateTime toDateTime = tradingAdminSearchOrderQuery.to() != null
-                ? LocalDateTime.ofInstant(tradingAdminSearchOrderQuery.to(), ZoneId.of("UTC"))
-                : null;
-
 
         //심벌
         Long targetStockId = null;
@@ -110,8 +102,6 @@ public class TradingAdminQueryService {
                 tradingAdminSearchOrderQuery,
                 targetStockId,
                 targetAccountIds,
-                fromDateTime,
-                toDateTime,
                 pageable);
         List<Orders> orderList = orders.getContent();
 

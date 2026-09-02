@@ -22,7 +22,7 @@ public record TradigAdminOrderResponseDto(UUID orderId,
                                           BigDecimal plannedStopLossPrice,
                                           Instant marketTime,
                                           Long candleSeq,
-                                          LocalDateTime createdAt) {
+                                          Instant createdAt) {
 
 
 
