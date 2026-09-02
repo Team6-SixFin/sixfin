@@ -2,10 +2,12 @@ package com.sparta.trading.application.service;
 
 import com.sparta.trading.application.dto.query.TradingAdminSearchOrderQuery;
 import com.sparta.trading.application.dto.query.TradingSearchAccountsQuery;
+import com.sparta.trading.application.dto.result.TradingAdminOrderQueryResult;
 import com.sparta.trading.domain.entity.Accounts;
 import com.sparta.trading.domain.entity.Orders;
 import com.sparta.trading.domain.repository.accounts.TradingAccountsQueryRepository;
 import com.sparta.trading.domain.repository.order.TradingOrderQueryRepository;
+import com.sparta.trading.global.response.PageResponse;
 import com.sparta.trading.presentation.dto.response.TradigAdminOrderResponseDto;
 import com.sparta.trading.presentation.dto.response.TradingAccountsResponseDto;
 import lombok.RequiredArgsConstructor;
@@ -27,7 +29,7 @@ import java.util.stream.Collectors;
 @Transactional
 public class TradingAdminQueryService {
 
-    private final TradingAccountsQueryRepository adminQueryRepository;
+    private final TradingAccountsQueryRepository tradingAccountsQueryRepository;
     private final TradingOrderQueryRepository tradingOrderQueryRepository;
 
     public Page<TradingAccountsResponseDto> search(TradingSearchAccountsQuery tradingSearchAccountsQuery) {
@@ -41,15 +43,15 @@ public class TradingAdminQueryService {
                 Sort.by(Sort.Direction.DESC, sort)
         );
 
-        Page<Accounts> accounts = adminQueryRepository.search(
+        Page<Accounts> accounts = tradingAccountsQueryRepository.search(
                 tradingSearchAccountsQuery.userId(),
         pageable);
 
         return accounts.map((TradingAccountsResponseDto::from));
     }
 
-    public Page<TradigAdminOrderResponseDto> searchOrder(TradingAdminSearchOrderQuery tradingAdminSearchOrderQuery) {
-        
+    public TradingAdminOrderQueryResult searchOrder(TradingAdminSearchOrderQuery tradingAdminSearchOrderQuery) {
+
         int page = tradingAdminSearchOrderQuery.page();
         int size = tradingAdminSearchOrderQuery.size();
         String sort = tradingAdminSearchOrderQuery.sort();
@@ -59,9 +61,7 @@ public class TradingAdminQueryService {
                 size,
                 Sort.by(Sort.Direction.DESC, sort)
         );
-        Page<Orders> orders = tradingOrderQueryRepository.searchOrder(
-             pageable
-        );
+        Page<Orders> orders = tradingOrderQueryRepository.searchOrder(pageable);
 
         List<Orders> orderList = orders.getContent();
 
@@ -72,15 +72,21 @@ public class TradingAdminQueryService {
                 .toList();
 
 
-        Map<UUID, UUID> accountUserMap = adminQueryRepository.findAllById(accountIds).stream()
+        Map<UUID, UUID> accountUserMap = tradingAccountsQueryRepository.findAllById(accountIds).stream()
                 .collect(Collectors.toMap(Accounts::getId, Accounts::getUserId));
 
-        return orders.map(order -> {
+        long filledCount = orderList.stream().filter(o -> "FILLED".equals(o.getStatus())).count();
+        long rejectedCount = orderList.stream().filter(o -> "REJECTED".equals(o.getStatus())).count();
 
-            String symbol = String.valueOf(order.getStockId());
+        Map<String, Long> summary = Map.of(
+                "filledCount", filledCount,
+                "rejectedCount", rejectedCount
+        );
+
+        Page<TradigAdminOrderResponseDto> responsePage = orders.map(order -> {
+            String symbol = String.valueOf(order.getStockId()); // Stock 테이블 조회로 대체 권장
             UUID userId = accountUserMap.get(order.getAccountId());
 
-            // DTO 생성자 직접 호출하여 리턴
             return new TradigAdminOrderResponseDto(
                     order.getId(),
                     order.getRequestId(),
@@ -99,5 +105,7 @@ public class TradingAdminQueryService {
                     order.getCreatedAt()
             );
         });
+
+        return new TradingAdminOrderQueryResult(summary, responsePage);
     }
 }
