@@ -1,5 +1,6 @@
 package com.sparta.trading.application.service;
 
+import com.sparta.trading.domain.entity.ClockStatus;
 import com.sparta.trading.domain.entity.MarketClock;
 import com.sparta.trading.domain.entity.PriceCandles;
 import com.sparta.trading.infrastructure.persistence.repository.clocks.MarketClockRepository;
@@ -12,7 +13,10 @@ import org.springframework.stereotype.Component;
 import java.time.Clock;
 import java.time.Instant;
 
-/** 락 없이 조회만 하는 쪽(GET API, QuoteReader)이 공용으로 쓰는 시계 조회 로직. */
+/**
+ * GET API, QuoteReader가 공용으로 쓰는 시계 조회 로직.
+ * end_seq 도달을 감지하면 AUTO_STOP 전이를 트리거한다({@link MarketClockCommandService#autoStopIfReached()}).
+ */
 @Component
 @RequiredArgsConstructor
 public class CurrentSeqProvider {
@@ -21,6 +25,7 @@ public class CurrentSeqProvider {
 
     private final MarketClockRepository marketClockRepository;
     private final PriceCandlesRepository priceCandlesRepository;
+    private final MarketClockCommandService marketClockCommandService;
     private final Clock clock;
 
     /**
@@ -37,7 +42,11 @@ public class CurrentSeqProvider {
      * 주로 getClock()과 함께 사용.
      */
     public long currentSeq(MarketClock marketClock) {
-        return marketClock.currentSeq(clock.instant());
+        long seq = marketClock.currentSeq(clock.instant());
+        if (marketClock.getStatus() == ClockStatus.RUNNING && seq >= marketClock.getEndSeq()) {
+            marketClockCommandService.autoStopIfReached();
+        }
+        return seq;
     }
 
     /**
