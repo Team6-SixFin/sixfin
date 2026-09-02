@@ -1,4 +1,4 @@
-package com.sparta.trading.application.dto.command;
+package com.sparta.trading.presentation.dto.response;
 
 import com.sparta.trading.domain.entity.ClockStatus;
 import com.sparta.trading.domain.entity.MarketClock;

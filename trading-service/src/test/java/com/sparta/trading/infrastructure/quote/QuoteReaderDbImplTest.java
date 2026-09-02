@@ -94,7 +94,7 @@ class QuoteReaderDbImplTest {
     @DisplayName("read: 단일 종목 조회 시 캔들 값이 그대로 매핑된 Quote를 반환한다")
     void read_returnsQuoteMappedFromCandle() {
         Stocks aapl = stockOf("AAPL");
-        when(stocksRepository.findStockIdBySymbolIn(List.of("AAPL"))).thenReturn(List.of(1L));
+        when(stocksRepository.findIdBySymbolIn(List.of("AAPL"))).thenReturn(List.of(1L));
         MarketClock marketClock = clockOf(ClockStatus.RUNNING);
         givenCurrentSeq(marketClock, 100L);
         when(currentSeqProvider.now()).thenReturn(BASE_TIME.plusSeconds(100));
@@ -116,7 +116,7 @@ class QuoteReaderDbImplTest {
     void readAll_mapsEachQuoteToCorrectSymbol() {
         Stocks aapl = stockOf("AAPL");
         Stocks msft = stockOf("MSFT");
-        when(stocksRepository.findStockIdBySymbolIn(List.of("AAPL", "MSFT"))).thenReturn(List.of(1L, 2L));
+        when(stocksRepository.findIdBySymbolIn(List.of("AAPL", "MSFT"))).thenReturn(List.of(1L, 2L));
         MarketClock marketClock = clockOf(ClockStatus.RUNNING);
         givenCurrentSeq(marketClock, 100L);
         when(currentSeqProvider.now()).thenReturn(BASE_TIME.plusSeconds(100));
@@ -136,7 +136,7 @@ class QuoteReaderDbImplTest {
     void readAll_computesCurrentSeqOnlyOnce() {
         Stocks aapl = stockOf("AAPL");
         Stocks msft = stockOf("MSFT");
-        when(stocksRepository.findStockIdBySymbolIn(List.of("AAPL", "MSFT"))).thenReturn(List.of(1L, 2L));
+        when(stocksRepository.findIdBySymbolIn(List.of("AAPL", "MSFT"))).thenReturn(List.of(1L, 2L));
         MarketClock marketClock = clockOf(ClockStatus.RUNNING);
         givenCurrentSeq(marketClock, 100L);
         when(currentSeqProvider.now()).thenReturn(BASE_TIME.plusSeconds(100));
@@ -152,7 +152,7 @@ class QuoteReaderDbImplTest {
     @DisplayName("readAll: 일부 종목만 현재 seq에 데이터가 있으면 나머지는 조용히 빠진다")
     void readAll_silentlyDropsSymbolsMissingAtCurrentSeq() {
         Stocks aapl = stockOf("AAPL");
-        when(stocksRepository.findStockIdBySymbolIn(List.of("AAPL", "NEWCO"))).thenReturn(List.of(1L, 2L));
+        when(stocksRepository.findIdBySymbolIn(List.of("AAPL", "NEWCO"))).thenReturn(List.of(1L, 2L));
         MarketClock marketClock = clockOf(ClockStatus.RUNNING);
         givenCurrentSeq(marketClock, 100L);
         when(currentSeqProvider.now()).thenReturn(BASE_TIME.plusSeconds(100));
@@ -169,7 +169,7 @@ class QuoteReaderDbImplTest {
     @Test
     @DisplayName("readAll: 존재하지 않는 심볼이 섞이면 STOCK_NOT_FOUND")
     void readAll_throwsWhenSymbolDoesNotExist() {
-        when(stocksRepository.findStockIdBySymbolIn(List.of("AAPL", "NOPE"))).thenReturn(List.of(1L));
+        when(stocksRepository.findIdBySymbolIn(List.of("AAPL", "NOPE"))).thenReturn(List.of(1L));
 
         CustomException exception = assertThrows(CustomException.class,
                 () -> quoteReader.readAll(List.of("AAPL", "NOPE")));
@@ -180,7 +180,7 @@ class QuoteReaderDbImplTest {
     @Test
     @DisplayName("read: 유효한 종목이지만 현재 seq에 캔들이 없으면 PRICE_CANDLE_NOT_FOUND_FOR_SEQ")
     void read_throwsWhenNoCandleAtCurrentSeq() {
-        when(stocksRepository.findStockIdBySymbolIn(List.of("NEWCO"))).thenReturn(List.of(2L));
+        when(stocksRepository.findIdBySymbolIn(List.of("NEWCO"))).thenReturn(List.of(2L));
         MarketClock marketClock = clockOf(ClockStatus.RUNNING);
         givenCurrentSeq(marketClock, 100L);
         when(priceCandlesRepository.findAllBySeqAndStockIdIn(100L, List.of(2L))).thenReturn(List.of());
@@ -193,7 +193,7 @@ class QuoteReaderDbImplTest {
     @Test
     @DisplayName("readAll: 요청한 종목 전부 현재 seq에 데이터가 없으면 PRICE_CANDLE_NOT_FOUND_FOR_SEQ")
     void readAll_throwsWhenNoRequestedSymbolHasDataAtCurrentSeq() {
-        when(stocksRepository.findStockIdBySymbolIn(List.of("A", "B"))).thenReturn(List.of(1L, 2L));
+        when(stocksRepository.findIdBySymbolIn(List.of("A", "B"))).thenReturn(List.of(1L, 2L));
         MarketClock marketClock = clockOf(ClockStatus.RUNNING);
         givenCurrentSeq(marketClock, 100L);
         when(priceCandlesRepository.findAllBySeqAndStockIdIn(100L, List.of(1L, 2L))).thenReturn(List.of());
@@ -207,7 +207,7 @@ class QuoteReaderDbImplTest {
     @Test
     @DisplayName("readAll: 빈 심볼 리스트로 호출하면 PRICE_CANDLE_NOT_FOUND_FOR_SEQ (조회 결과가 없는 것으로 취급됨)")
     void readAll_throwsWhenSymbolListIsEmpty() {
-        when(stocksRepository.findStockIdBySymbolIn(List.of())).thenReturn(List.of());
+        when(stocksRepository.findIdBySymbolIn(List.of())).thenReturn(List.of());
         MarketClock marketClock = clockOf(ClockStatus.RUNNING);
         givenCurrentSeq(marketClock, 100L);
         when(priceCandlesRepository.findAllBySeqAndStockIdIn(100L, List.of())).thenReturn(List.of());
@@ -220,7 +220,7 @@ class QuoteReaderDbImplTest {
     @Test
     @DisplayName("readAll: market_clock 행이 없으면 MARKET_CLOCK_NOT_FOUND가 전파된다")
     void readAll_propagatesMarketClockNotFound() {
-        when(stocksRepository.findStockIdBySymbolIn(List.of("AAPL"))).thenReturn(List.of(1L));
+        when(stocksRepository.findIdBySymbolIn(List.of("AAPL"))).thenReturn(List.of(1L));
         when(currentSeqProvider.getClock())
                 .thenThrow(new CustomException(TradingErrorCode.MARKET_CLOCK_NOT_FOUND));
 
