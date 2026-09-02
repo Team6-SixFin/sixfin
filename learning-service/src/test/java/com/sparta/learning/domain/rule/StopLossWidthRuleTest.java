@@ -21,18 +21,44 @@ public class StopLossWidthRuleTest {
     private static final BigDecimal WIDTH_15_PERCENT = new BigDecimal("155.6945");
     private static final BigDecimal WIDTH_3_PERCENT = new BigDecimal("155.6945");
 
-    // 손절가가 없으면 폭을 계산할 수 없다
+    // ENTRY 단계의 최초 매수는 모두 판정 대상이다
     @Test
-    void 손절가가_없으면_판정하지_않는다(){
-        var snapshot = ExecutionSnapshotFixture.firstBuyWithoutStopLoss();
-
-        assertThat(rule.supports(snapshot)).isFalse();
+    void 최초_매수는_모두_적용_대상이다(){
+        assertThat(rule.supports(ExecutionSnapshotFixture.firstBuyWithStopLoss())).isTrue();
+        assertThat(rule.supports(ExecutionSnapshotFixture.firstBuyWithoutStopLoss())).isTrue();
     }
 
+    // 손절가가 없으면 폭을 계산할 수 없다
+    // 규칙이 실행되지 않은 것과 구분할 수 있도록 판정하지 않았다는 이력을 남긴다
     @Test
-    void 손절가가_있어야_판정한다(){
-        var snapshot = ExecutionSnapshotFixture.firstBuyWithStopLoss();
-        assertThat(rule.supports(snapshot)).isTrue();
+    void 손절가가_없으면_NOT_APPLICABLE(){
+        var snapshot = ExecutionSnapshotFixture.firstBuyWithoutStopLoss();
+
+        DiagnosisResult result = rule.diagnose(snapshot);
+
+        assertThat(result.getResult()).isEqualTo(DiagnosisStatus.NOT_APPLICABLE);
+    }
+
+    // 측정하지 못했으므로 측정값과 기준값을 비워 둔다
+    @Test
+    void 판정하지_않으면_측정값과_기준값이_비어_있다(){
+        var snapshot = ExecutionSnapshotFixture.firstBuyWithoutStopLoss();
+
+        DiagnosisResult result = rule.diagnose(snapshot);
+
+        assertThat(result.getMetricValue()).isNull();
+        assertThat(result.getThresholdValue()).isNull();
+        assertThat(result.getMetrics().has("stopLossWidthRate")).isFalse();
+    }
+
+    // 조회 API가 evidence.message를 그대로 응답에 내보내므로 비면 안 된다
+    @Test
+    void 판정하지_않아도_근거_문구가_담긴다(){
+        var snapshot = ExecutionSnapshotFixture.firstBuyWithoutStopLoss();
+
+        DiagnosisResult result = rule.diagnose(snapshot);
+
+        assertThat(result.getEvidence().get("message").asText()).isNotBlank();
     }
 
     @Test

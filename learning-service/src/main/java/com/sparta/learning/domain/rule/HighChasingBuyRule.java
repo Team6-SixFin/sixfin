@@ -29,18 +29,24 @@ public class HighChasingBuyRule implements DiagnosisRule{
         return RuleCode.HIGH_CHASING_BUY;
     }
 
-    // 20일 최고가가 있어야 비율을 계산할 수 있다
+    // ENTRY 단계의 최초 매수는 모두 판정 대상이다
     @Override
     public boolean supports(ExecutionSnapshot snapshot) {
-        BigDecimal recent20High = snapshot.getRecent20dHigh();
-        return recent20High != null && recent20High.compareTo(BigDecimal.ZERO) > 0;
+        return true;
     }
 
     @Override
     public DiagnosisResult diagnose(ExecutionSnapshot snapshot){
+        // 20일 최고가는 시세 조회 시점 정보라 값이 없을 수 있다
+        // 비율 계산의 분모이므로 0 이하도 판정 대상에서 제외한다
+        BigDecimal recent20High = snapshot.getRecent20dHigh();
+        if (recent20High == null || recent20High.compareTo(BigDecimal.ZERO) <= 0) {
+            return notApplicable(snapshot);
+        }
+
         BigDecimal highPriceRatio = calculateHighPriceRatio(
           snapshot.getExecutedPrice(),
-          snapshot.getRecent20dHigh()
+          recent20High
         );
         boolean chasing = highPriceRatio.compareTo(HIGH_PRICE_RATIO_THRESHOLD) >= 0;
 
@@ -57,6 +63,29 @@ public class HighChasingBuyRule implements DiagnosisRule{
                 .thresholdValue(HIGH_PRICE_RATIO_THRESHOLD)
                 .metrics(buildMetrics(snapshot, highPriceRatio))
                 .evidence(buildEvidence(highPriceRatio, chasing))
+                .build();
+    }
+
+    // 판정하지 못했다는 이력을 남긴다
+    // 측정하지 못했으므로 metricValue와 thresholdValue는 비워 둔다
+    private DiagnosisResult notApplicable(ExecutionSnapshot snapshot) {
+        ObjectNode metrics = JsonNodeFactory.instance.objectNode();
+        metrics.put("executedPrice", snapshot.getExecutedPrice());
+
+        ObjectNode evidence = JsonNodeFactory.instance.objectNode();
+        evidence.put("message", "최근 20일 최고가 정보가 없어 고점 대비 매수 위치를 판정하지 않았습니다.");
+
+        return DiagnosisResult.builder()
+                .diagnosisKey(DiagnosisKey.of(getRuleCode(), RULE_VERSION, snapshot.getExecutionId()))
+                .userId(snapshot.getUserId())
+                .positionId(snapshot.getPositionId())
+                .executionSnapshot(snapshot)
+                .diagnosisPhase(getRuleCode().getDiagnosisPhase())
+                .ruleCode(getRuleCode().name())
+                .ruleVersion(RULE_VERSION)
+                .result(DiagnosisStatus.NOT_APPLICABLE)
+                .metrics(metrics)
+                .evidence(evidence)
                 .build();
     }
 

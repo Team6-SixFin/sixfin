@@ -25,16 +25,21 @@ public class ShortTermSurgeBuyRule implements DiagnosisRule {
         return RuleCode.SHORT_TERM_SURGE_BUY;
     }
 
-    // 5거래일 수익률은 시세 조회 시점 정보라 값이 없을 수 있다
-    // 음수(하락)도 정상적인 판정 대상이므로 null만 제외
+    // ENTRY 단계의 최초 매수는 모두 판정 대상이다
     @Override
     public boolean supports(ExecutionSnapshot snapshot) {
-        return snapshot.getRecent5dReturnRate() != null;
+        return true;
     }
 
     @Override
     public DiagnosisResult diagnose(ExecutionSnapshot snapshot) {
+        // 5거래일 수익률은 시세 조회 시점 정보라 값이 없을 수 있다
+        // 음수(하락)는 정상적인 판정 대상이므로 제외하지 않는다
         BigDecimal returnRate = snapshot.getRecent5dReturnRate();
+        if (returnRate == null) {
+            return notApplicable(snapshot);
+        }
+
         boolean surged = returnRate.compareTo(SURGE_RATE_THRESHOLD) >= 0; // 10퍼센트 이상 급증했는지
 
         return DiagnosisResult.builder()
@@ -50,6 +55,29 @@ public class ShortTermSurgeBuyRule implements DiagnosisRule {
                 .thresholdValue(SURGE_RATE_THRESHOLD)
                 .metrics(buildMetrics(snapshot, returnRate))
                 .evidence(buildEvidence(returnRate, surged))
+                .build();
+    }
+
+    // 판정하지 못했다는 이력을 남긴다
+    // 측정하지 못했으므로 metricValue와 thresholdValue는 비워 둔다
+    private DiagnosisResult notApplicable(ExecutionSnapshot snapshot) {
+        ObjectNode metrics = JsonNodeFactory.instance.objectNode();
+        metrics.put("executedPrice", snapshot.getExecutedPrice());
+
+        ObjectNode evidence = JsonNodeFactory.instance.objectNode();
+        evidence.put("message", "최근 5거래일 수익률 정보가 없어 단기 급등 여부를 판정하지 않았습니다.");
+
+        return DiagnosisResult.builder()
+                .diagnosisKey(DiagnosisKey.of(getRuleCode(), RULE_VERSION, snapshot.getExecutionId()))
+                .userId(snapshot.getUserId())
+                .positionId(snapshot.getPositionId())
+                .executionSnapshot(snapshot)
+                .diagnosisPhase(getRuleCode().getDiagnosisPhase())
+                .ruleCode(getRuleCode().name())
+                .ruleVersion(RULE_VERSION)
+                .result(DiagnosisStatus.NOT_APPLICABLE)
+                .metrics(metrics)
+                .evidence(evidence)
                 .build();
     }
 

@@ -22,18 +22,54 @@ class ShortTermSurgeBuyRuleTest {
     private static final BigDecimal DECLINE_RATE = new BigDecimal("-8.0000");
 
 
+    // ENTRY 단계의 최초 매수는 모두 판정 대상이다
     @Test
-    void 수익률이_없으면_판정하지_않는다() {
-        var snapshot = ExecutionSnapshotFixture.buyWithRecent5dReturnRate(null);
-
-        assertThat(rule.supports(snapshot)).isFalse();
+    void 최초_매수는_모두_적용_대상이다() {
+        assertThat(rule.supports(ExecutionSnapshotFixture.firstBuyWithStopLoss())).isTrue();
+        assertThat(rule.supports(ExecutionSnapshotFixture.buyWithRecent5dReturnRate(null))).isTrue();
     }
 
+    // 수익률이 없으면 급등 여부를 판정할 수 없다
+    // 규칙이 실행되지 않은 것과 구분할 수 있도록 판정하지 않았다는 이력을 남긴다
+    @Test
+    void 수익률이_없으면_NOT_APPLICABLE() {
+        var snapshot = ExecutionSnapshotFixture.buyWithRecent5dReturnRate(null);
+
+        DiagnosisResult result = rule.diagnose(snapshot);
+
+        assertThat(result.getResult()).isEqualTo(DiagnosisStatus.NOT_APPLICABLE);
+    }
+
+    // 측정하지 못했으므로 측정값과 기준값을 비워 둔다
+    @Test
+    void 판정하지_않으면_측정값과_기준값이_비어_있다() {
+        var snapshot = ExecutionSnapshotFixture.buyWithRecent5dReturnRate(null);
+
+        DiagnosisResult result = rule.diagnose(snapshot);
+
+        assertThat(result.getMetricValue()).isNull();
+        assertThat(result.getThresholdValue()).isNull();
+        assertThat(result.getMetrics().has("recent5dReturnRate")).isFalse();
+    }
+
+    // 조회 API가 evidence.message를 그대로 응답에 내보내므로 비면 안 된다
+    @Test
+    void 판정하지_않아도_근거_문구가_담긴다() {
+        var snapshot = ExecutionSnapshotFixture.buyWithRecent5dReturnRate(null);
+
+        DiagnosisResult result = rule.diagnose(snapshot);
+
+        assertThat(result.getEvidence().get("message").asText()).isNotBlank();
+    }
+
+    // 하락 이후 매수도 정상적인 판정 대상이므로 음수를 제외하지 않는다
     @Test
     void 수익률이_음수여도_판정한다() {
         var snapshot = ExecutionSnapshotFixture.buyWithRecent5dReturnRate(DECLINE_RATE);
 
-        assertThat(rule.supports(snapshot)).isTrue();
+        DiagnosisResult result = rule.diagnose(snapshot);
+
+        assertThat(result.getResult()).isEqualTo(DiagnosisStatus.PASS);
     }
 
     // 픽스처 기본 수익률 5.2000% = 10% 이상 급등이 아님

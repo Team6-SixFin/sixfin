@@ -23,27 +23,54 @@ class HighChasingBuyRuleTest {
     private static final BigDecimal PRICE_JUST_BELOW_99 = new BigDecimal("185.5000");
     private static final BigDecimal PRICE_AT_HIGH = new BigDecimal("187.4000");
 
-    // 20일 최고가가 없으면 비율을 계산할 수 없다
+    // ENTRY 단계의 최초 매수는 모두 판정 대상이다
     @Test
-    void 최고가가_없으면_판정하지_않는다() {
+    void 최초_매수는_모두_적용_대상이다() {
+        assertThat(rule.supports(ExecutionSnapshotFixture.firstBuyWithStopLoss())).isTrue();
+        assertThat(rule.supports(ExecutionSnapshotFixture.buyWithRecent20dHigh(null))).isTrue();
+    }
+
+    // 20일 최고가가 없으면 비율을 계산할 수 없다
+    // 규칙이 실행되지 않은 것과 구분할 수 있도록 판정하지 않았다는 이력을 남긴다
+    @Test
+    void 최고가가_없으면_NOT_APPLICABLE() {
         var snapshot = ExecutionSnapshotFixture.buyWithRecent20dHigh(null);
 
-        assertThat(rule.supports(snapshot)).isFalse();
+        DiagnosisResult result = rule.diagnose(snapshot);
+
+        assertThat(result.getResult()).isEqualTo(DiagnosisStatus.NOT_APPLICABLE);
     }
 
-    // 0으로 나누면 예외가 발생하므로 함께 제외한다
+    // 비율 계산의 분모이므로 0 이하도 판정 대상에서 제외한다
     @Test
-    void 최고가가_0이면_판정하지_않는다() {
+    void 최고가가_0이면_NOT_APPLICABLE() {
         var snapshot = ExecutionSnapshotFixture.buyWithRecent20dHigh(BigDecimal.ZERO);
 
-        assertThat(rule.supports(snapshot)).isFalse();
+        DiagnosisResult result = rule.diagnose(snapshot);
+
+        assertThat(result.getResult()).isEqualTo(DiagnosisStatus.NOT_APPLICABLE);
     }
 
+    // 측정하지 못했으므로 측정값과 기준값을 비워 둔다
     @Test
-    void 최고가가_있으면_판정한다() {
-        var snapshot = ExecutionSnapshotFixture.firstBuyWithStopLoss();
+    void 판정하지_않으면_측정값과_기준값이_비어_있다() {
+        var snapshot = ExecutionSnapshotFixture.buyWithRecent20dHigh(null);
 
-        assertThat(rule.supports(snapshot)).isTrue();
+        DiagnosisResult result = rule.diagnose(snapshot);
+
+        assertThat(result.getMetricValue()).isNull();
+        assertThat(result.getThresholdValue()).isNull();
+        assertThat(result.getMetrics().has("highPriceRatio")).isFalse();
+    }
+
+    // 조회 API가 evidence.message를 그대로 응답에 내보내므로 비면 안 된다
+    @Test
+    void 판정하지_않아도_근거_문구가_담긴다() {
+        var snapshot = ExecutionSnapshotFixture.buyWithRecent20dHigh(null);
+
+        DiagnosisResult result = rule.diagnose(snapshot);
+
+        assertThat(result.getEvidence().get("message").asText()).isNotBlank();
     }
 
     // 픽스처 기본 매수가 183.1700 / 최고가 187.4000 -> 약 97.74%

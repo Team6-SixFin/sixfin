@@ -28,13 +28,20 @@ public class StopLossWidthRule implements DiagnosisRule {
         return RuleCode.STOP_LOSS_WIDTH;
     }
 
+    // ENTRY 단계의 최초 매수는 모두 판정 대상이다
     @Override
     public boolean supports(ExecutionSnapshot snapshot) {
-        return snapshot.getPlannedStopLossPrice() != null;
+        return true;
     }
 
     @Override
     public DiagnosisResult diagnose(ExecutionSnapshot snapshot) {
+        // 손절가가 없으면 폭을 계산할 수 없다
+        // 손절가 미설정 자체는 STOP_LOSS_SET이 경고하므로 여기서는 판정하지 않은 사실만 남김
+        if (snapshot.getPlannedStopLossPrice() == null) {
+            return notApplicable(snapshot);
+        }
+
         BigDecimal widthRate = calculateWidthRate(
                 snapshot.getExecutedPrice(),
                 snapshot.getPlannedStopLossPrice()
@@ -57,6 +64,29 @@ public class StopLossWidthRule implements DiagnosisRule {
                 .thresholdValue(tooNarrow ? MIN_WIDTH_RATE : MAX_WIDTH_RATE)
                 .metrics(buildMetrics(snapshot, widthRate))
                 .evidence(buildEvidence(widthRate, tooNarrow, tooWide))
+                .build();
+    }
+
+    // 판정하지 못했다는 이력을 남긴다
+    // 측정하지 못했으므로 metricValue와 thresholdValue는 비워 둔다
+    private DiagnosisResult notApplicable(ExecutionSnapshot snapshot) {
+        ObjectNode metrics = JsonNodeFactory.instance.objectNode();
+        metrics.put("executedPrice", snapshot.getExecutedPrice());
+
+        ObjectNode evidence = JsonNodeFactory.instance.objectNode();
+        evidence.put("message", "계획 손절가가 없어 손절 폭을 판정하지 않았습니다.");
+
+        return DiagnosisResult.builder()
+                .diagnosisKey(DiagnosisKey.of(getRuleCode(), RULE_VERSION, snapshot.getExecutionId()))
+                .userId(snapshot.getUserId())
+                .positionId(snapshot.getPositionId())
+                .executionSnapshot(snapshot)
+                .diagnosisPhase(getRuleCode().getDiagnosisPhase())
+                .ruleCode(getRuleCode().name())
+                .ruleVersion(RULE_VERSION)
+                .result(DiagnosisStatus.NOT_APPLICABLE)
+                .metrics(metrics)
+                .evidence(evidence)
                 .build();
     }
 
