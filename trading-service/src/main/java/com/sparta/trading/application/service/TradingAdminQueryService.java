@@ -10,7 +10,6 @@ import com.sparta.trading.domain.repository.accounts.TradingAccountsQueryReposit
 import com.sparta.trading.domain.repository.order.TradingOrderQueryRepository;
 import com.sparta.trading.global.exception.CustomException;
 import com.sparta.trading.global.exception.GlobalErrorCode;
-import com.sparta.trading.global.response.PageResponse;
 import com.sparta.trading.infrastructure.persistence.repository.stocks.StocksRepository;
 import com.sparta.trading.presentation.dto.response.TradigAdminOrderResponseDto;
 import com.sparta.trading.presentation.dto.response.TradingAccountsResponseDto;
@@ -22,8 +21,6 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
-import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
