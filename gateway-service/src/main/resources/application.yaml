@@ -1,6 +1,89 @@
 server:
+  # 외부 요청이 가장 먼저 들어오는 Gateway 포트
   port: 19091
 
 spring:
+  config:
+    import: optional:file:.env[.properties]
   application:
+    # Eureka에 등록될 서비스 이름
     name: gateway-service
+
+  cloud:
+    gateway:
+      server:
+        webflux:
+          # Eureka 서비스 이름을 외부 URL에 노출하는 자동 라우팅은 사용하지 않음
+          discovery:
+            locator:
+              enabled: false
+              lower-case-service-id: true
+
+          # 외부 요청 경로와 내부 서비스를 직접 연결
+          routes:
+            # 1. User Service - 회원가입/로그인 (인증 필터 제외)
+            - id: user-service-auth
+              uri: lb://user-service
+              predicates:
+                - Path=/api/auth/**
+
+            # 2. User Service - 일반 유저 조회/수정/탈퇴 (JWT 인증 필터 적용)
+            - id: user-service
+              uri: lb://user-service
+              predicates:
+                - Path=/api/users/**
+              filters:
+                - JwtAuthenticationFilter
+
+            # 3. Trading Service - 시세, 계좌자산, 매매, 내부, 관리자 전체 라우팅
+            - id: trading-service
+              uri: lb://trading-service
+              predicates:
+                - Path=/api/trading/**
+              filters:
+                - JwtAuthenticationFilter
+
+            # 4. Learning Service - 피드백, 진단/리포트, 미션, 학습 콘텐츠, 통계/랭킹 전체 라우팅
+            - id: learning-service
+              uri: lb://learning-service
+              predicates:
+                - Path=/api/learnings/**, /api/feedbacks/**, /api/reports/**, /api/missions/**, /api/contents/**, /api/stats/**, /api/rankings/**
+              filters:
+                - JwtAuthenticationFilter
+
+jwt:
+  # user-service와 동일한 값이어야 서명 검증이 성립한다
+  secret: ${JWT_SECRET}
+  whitelist:
+    - /api/v1/auth/login
+    - /api/v1/auth/signup
+    - /actuator/health
+
+eureka:
+  client:
+    service-url:
+      # Gateway가 접속할 Eureka Server 주소
+      defaultZone: http://localhost:19090/eureka/
+
+  instance:
+    # 호스트명 대신 IP 주소를 Eureka에 등록
+    prefer-ip-address: true
+    instance-id: ${spring.application.name}:${server.port}
+
+management:
+  tracing:
+    sampling:
+      probability: 1.0
+  endpoints:
+    web:
+      exposure:
+        # 상태 확인용 Actuator 엔드포인트 공개
+        include: health,info,gateway
+  endpoint:
+    gateway:
+      # Gateway 라우트 조회만 허용
+      # 운영에서도 unrestricted보다 read-only가 안전
+      access: read-only
+    health:
+      # 상세 상태 정보 표시
+      show-details: always
