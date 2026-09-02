@@ -2,15 +2,34 @@ spring:
   application:
     name: user-service
   profiles:
-    active: local
+    active: ${SPRING_PROFILES_ACTIVE:local}
+  datasource:
+    url: ${LEARNING_DB_URL:jdbc:postgresql://localhost:5432/${POSTGRES_DB:sixfin}}
+    username: ${POSTGRES_USER}
+    password: ${POSTGRES_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: ${JPA_DDL_AUTO:update}
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
 
 server:
-  port: 19092
+  port: ${SERVER_PORT:19092}
 
 eureka:
-   client:
+  client:
     service-url:
+      # Gateway가 접속할 Eureka Server 주소
       defaultZone: http://localhost:19090/eureka/
+
+  instance:
+    # 호스트명 대신 IP 주소를 Eureka에 등록
+    prefer-ip-address: true
+    instance-id: ${spring.application.name}:${server.port}
 
 management:
    tracing:
@@ -18,4 +37,9 @@ management:
       probability: 1.0
      export:
        zipkin:
-         endpoint: http://localhost:9411/api/v1/spans
+         endpoint: ${ZIPKIN_ENDPOINT:http://localhost:9411/api/v1/spans}
+
+jwt:
+  secret: ${JWT_SECRET}
+  access-expiration: 1800000 # 30분
+  refresh-expiration: 1209600000 # 14일
