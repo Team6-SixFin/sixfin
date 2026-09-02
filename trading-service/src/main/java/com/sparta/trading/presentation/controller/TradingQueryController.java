@@ -1,7 +1,11 @@
 package com.sparta.trading.presentation.controller;
 
+import com.sparta.trading.application.dto.query.MarketClockResponse;
 import com.sparta.trading.application.service.TradingQueryService;
+import com.sparta.trading.domain.entity.MarketClock;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -16,12 +20,16 @@ public class TradingQueryController {
     private final TradingQueryService tradingQueryService;
 
 /**
- * 작성자 :
- * 최초 작성일 :
- * 최종 수정일 :
+ * 작성자 : 김준서
+ * 최초 작성일 : 08/31
+ * 최종 수정일 : 08/31
  * 기능 :
  * 설명 :
  * @Param:
  **/
+    @GetMapping("/market/clock")
+    public MarketClockResponse getClock() {
+        return tradingQueryService.getClock();
+    }
 
 }
