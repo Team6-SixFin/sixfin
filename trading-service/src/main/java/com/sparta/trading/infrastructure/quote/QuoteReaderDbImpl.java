@@ -37,7 +37,7 @@ public class QuoteReaderDbImpl implements QuoteReader {
      */
     @Override
     public List<Quote> readAll(List<String> symbolList) {
-        List<Long> stockIdList = stocksRepository.findStockIdBySymbolIn(symbolList);
+        List<Long> stockIdList = stocksRepository.findIdBySymbolIn(symbolList);
         if (stockIdList.size() != symbolList.size()) {
             throw new CustomException(TradingErrorCode.STOCK_NOT_FOUND);
         }
