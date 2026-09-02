@@ -15,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.util.UUID;
 
 /**
  * market_clock의 유일한 쓰기 경로. start/stop/speed/reset이 전부 reanchor() 한 곳으로 수렴한다.
@@ -30,27 +31,27 @@ public class MarketClockCommandService {
     private final Clock clock;
 
     @Transactional
-    public MarketClock start() {
+    public MarketClock start(UUID userId) {
         MarketClock marketClock = getClockForUpdate();
         Instant now = clock.instant();
         long seq = marketClock.currentSeq(now);
         Instant marketTime = marketTimeAt(seq);
-        marketClock.reanchor(seq, now, marketTime, marketClock.getSpeedFactor(), ClockStatus.RUNNING);
+        marketClock.reanchor(seq, now, marketTime, marketClock.getSpeedFactor(), ClockStatus.RUNNING, userId);
         return marketClock;
     }
 
     @Transactional
-    public MarketClock stop() {
+    public MarketClock stop(UUID userId) {
         MarketClock marketClock = getClockForUpdate();
         Instant now = clock.instant();
         long seq = marketClock.currentSeq(now);
         Instant marketTime = marketTimeAt(seq);
-        marketClock.reanchor(seq, now, marketTime, marketClock.getSpeedFactor(), ClockStatus.STOPPED);
+        marketClock.reanchor(seq, now, marketTime, marketClock.getSpeedFactor(), ClockStatus.STOPPED, userId);
         return marketClock;
     }
 
     @Transactional
-    public MarketClock changeSpeed(int newSpeedFactor) {
+    public MarketClock changeSpeed(int newSpeedFactor, UUID userId) {
         if (newSpeedFactor < 1) {
             throw new CustomException(TradingErrorCode.MARKET_CLOCK_INVALID_SPEED);
         }
@@ -59,12 +60,12 @@ public class MarketClockCommandService {
         Instant now = clock.instant();
         long seq = marketClock.currentSeq(now);
         Instant marketTime = marketTimeAt(seq);
-        marketClock.reanchor(seq, now, marketTime, newSpeedFactor, marketClock.getStatus());
+        marketClock.reanchor(seq, now, marketTime, newSpeedFactor, marketClock.getStatus(), userId);
         return marketClock;
     }
 
     @Transactional
-    public MarketClock reset(long targetSeq) {
+    public MarketClock reset(long targetSeq, UUID userId) {
         MarketClock marketClock = getClockForUpdate();
 
         if (marketClock.getStatus() != ClockStatus.STOPPED) {
@@ -80,7 +81,7 @@ public class MarketClockCommandService {
 
         Instant now = clock.instant();
         Instant marketTime = marketTimeAt(targetSeq);
-        marketClock.reanchor(targetSeq, now, marketTime, marketClock.getSpeedFactor(), ClockStatus.STOPPED);
+        marketClock.reanchor(targetSeq, now, marketTime, marketClock.getSpeedFactor(), ClockStatus.STOPPED, userId);
         return marketClock;
     }
 
@@ -98,7 +99,7 @@ public class MarketClockCommandService {
         }
 
         Instant marketTime = marketTimeAt(marketClock.getEndSeq());
-        marketClock.reanchor(marketClock.getEndSeq(), now, marketTime, marketClock.getSpeedFactor(), ClockStatus.STOPPED);
+        marketClock.reanchor(marketClock.getEndSeq(), now, marketTime, marketClock.getSpeedFactor(), ClockStatus.STOPPED, null);
     }
 
     private Instant marketTimeAt(long seq) {

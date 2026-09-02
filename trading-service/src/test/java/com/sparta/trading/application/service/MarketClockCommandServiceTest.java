@@ -17,6 +17,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Optional;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -26,6 +27,7 @@ import static org.mockito.Mockito.when;
 class MarketClockCommandServiceTest {
 
     private static final Instant BASE_TIME = Instant.parse("2026-08-03T13:30:00Z");
+    private static final UUID ADMIN_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
     @Mock
     private MarketClockRepository marketClockRepository;
@@ -74,11 +76,12 @@ class MarketClockCommandServiceTest {
         when(clock.instant()).thenReturn(startedAt);
         givenCandleAt(0L);
 
-        MarketClock result = service.start();
+        MarketClock result = service.start(ADMIN_ID);
 
         assertThat(result.getAnchorSeq()).isEqualTo(0L);
         assertThat(result.getAnchorAt()).isEqualTo(startedAt);
         assertThat(result.getStatus()).isEqualTo(ClockStatus.RUNNING);
+        assertThat(result.getUpdatedBy()).isEqualTo(ADMIN_ID);
     }
 
     @Test
@@ -100,10 +103,11 @@ class MarketClockCommandServiceTest {
         when(clock.instant()).thenReturn(stoppedAt);
         givenCandleAt(1100L);
 
-        MarketClock result = service.stop();
+        MarketClock result = service.stop(ADMIN_ID);
 
         assertThat(result.getAnchorSeq()).isEqualTo(1100L);
         assertThat(result.getStatus()).isEqualTo(ClockStatus.STOPPED);
+        assertThat(result.getUpdatedBy()).isEqualTo(ADMIN_ID);
     }
 
     @Test
@@ -127,7 +131,7 @@ class MarketClockCommandServiceTest {
         when(clock.instant()).thenReturn(resumedAt);
         givenCandleAt(1100L);
 
-        service.start();
+        service.start(ADMIN_ID);
         long seqRightAfterResume = marketClock.currentSeq(resumedAt);
         long seqFiveSecondsAfterResume = marketClock.currentSeq(resumedAt.plusSeconds(5));
 
@@ -144,10 +148,11 @@ class MarketClockCommandServiceTest {
         when(clock.instant()).thenReturn(changedAt);
         givenCandleAt(10L);
 
-        service.changeSpeed(10);
+        service.changeSpeed(10, ADMIN_ID);
 
         assertThat(marketClock.getAnchorSeq()).isEqualTo(10L);
         assertThat(marketClock.getSpeedFactor()).isEqualTo(10);
+        assertThat(marketClock.getUpdatedBy()).isEqualTo(ADMIN_ID);
         long seqFiveSecondsLater = marketClock.currentSeq(changedAt.plusSeconds(5));
         assertThat(seqFiveSecondsLater).isEqualTo(60L); // 10 + 5초 × 10배속
     }
@@ -161,10 +166,11 @@ class MarketClockCommandServiceTest {
         when(clock.instant()).thenReturn(resetAt);
         givenCandleAt(200L);
 
-        MarketClock result = service.reset(200L);
+        MarketClock result = service.reset(200L, ADMIN_ID);
 
         assertThat(result.getAnchorSeq()).isEqualTo(200L);
         assertThat(result.getStatus()).isEqualTo(ClockStatus.STOPPED);
+        assertThat(result.getUpdatedBy()).isEqualTo(ADMIN_ID);
     }
 
     @Test
@@ -173,7 +179,7 @@ class MarketClockCommandServiceTest {
         MarketClock marketClock = clockOf(1000L, BASE_TIME, 1, ClockStatus.RUNNING);
         givenClock(marketClock);
 
-        CustomException exception = assertThrows(CustomException.class, () -> service.reset(200L));
+        CustomException exception = assertThrows(CustomException.class, () -> service.reset(200L, ADMIN_ID));
 
         assertThat(exception.getErrorCode()).isEqualTo(TradingErrorCode.MARKET_CLOCK_RUNNING);
     }
@@ -184,7 +190,7 @@ class MarketClockCommandServiceTest {
         MarketClock marketClock = clockOf(1000L, BASE_TIME, 1, ClockStatus.STOPPED);
         givenClock(marketClock);
 
-        CustomException exception = assertThrows(CustomException.class, () -> service.reset(99999L));
+        CustomException exception = assertThrows(CustomException.class, () -> service.reset(99999L, ADMIN_ID));
 
         assertThat(exception.getErrorCode()).isEqualTo(TradingErrorCode.MARKET_CLOCK_SEQ_OUT_OF_RANGE);
     }
@@ -192,7 +198,7 @@ class MarketClockCommandServiceTest {
     @Test
     @DisplayName("speed: 1 미만의 배속은 거부된다")
     void changeSpeed_rejectedWhenBelowOne() {
-        CustomException exception = assertThrows(CustomException.class, () -> service.changeSpeed(0));
+        CustomException exception = assertThrows(CustomException.class, () -> service.changeSpeed(0, ADMIN_ID));
 
         assertThat(exception.getErrorCode()).isEqualTo(TradingErrorCode.MARKET_CLOCK_INVALID_SPEED);
     }
@@ -202,7 +208,7 @@ class MarketClockCommandServiceTest {
     void start_failsWhenClockRowMissing() {
         when(marketClockRepository.findForUpdate()).thenReturn(Optional.empty());
 
-        CustomException exception = assertThrows(CustomException.class, () -> service.start());
+        CustomException exception = assertThrows(CustomException.class, () -> service.start(ADMIN_ID));
 
         assertThat(exception.getErrorCode()).isEqualTo(TradingErrorCode.MARKET_CLOCK_NOT_FOUND);
     }
@@ -215,7 +221,7 @@ class MarketClockCommandServiceTest {
         when(clock.instant()).thenReturn(BASE_TIME);
         when(priceCandlesRepository.findFirstBySeq(0L)).thenReturn(Optional.empty());
 
-        CustomException exception = assertThrows(CustomException.class, () -> service.start());
+        CustomException exception = assertThrows(CustomException.class, () -> service.start(ADMIN_ID));
 
         assertThat(exception.getErrorCode()).isEqualTo(TradingErrorCode.PRICE_CANDLE_NOT_FOUND_FOR_SEQ);
     }
@@ -244,6 +250,7 @@ class MarketClockCommandServiceTest {
         assertThat(marketClock.getAnchorSeq()).isEqualTo(7393L);
         assertThat(marketClock.getAnchorAt()).isEqualTo(checkedAt);
         assertThat(marketClock.getStatus()).isEqualTo(ClockStatus.STOPPED);
+        assertThat(marketClock.getUpdatedBy()).isNull(); // 시스템 자동 전이라 사람으로 귀속시키지 않음
     }
 
     @Test

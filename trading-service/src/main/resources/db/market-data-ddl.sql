@@ -95,8 +95,12 @@ CREATE TABLE IF NOT EXISTS trading_service.p_market_clock (
     speed_factor    INT  NOT NULL,
     cache_refresh_interval_ms        INT NOT NULL,
     status          VARCHAR(20)     NOT NULL,
-    updated_at      TIMESTAMPTZ     NOT NULL
+    updated_at      TIMESTAMPTZ     NOT NULL,
+    updated_by      UUID
 );
+
+-- 이미 p_market_clock을 만들어둔 로컬 DB에서도 이 파일을 재실행하면 컬럼이 추가되도록
+ALTER TABLE trading_service.p_market_clock ADD COLUMN IF NOT EXISTS updated_by UUID;
 
 -- ----------------------------------------
 -- 계좌

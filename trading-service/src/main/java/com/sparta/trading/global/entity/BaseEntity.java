@@ -4,8 +4,10 @@ import jakarta.persistence.Column;
 import jakarta.persistence.EntityListeners;
 import jakarta.persistence.MappedSuperclass;
 import lombok.Getter;
+import org.springframework.data.annotation.CreatedBy;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedBy;
+import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.time.LocalDateTime;
@@ -20,12 +22,14 @@ public class BaseEntity {
     @Column(updatable = false)
     private LocalDateTime createdAt;
 
+    @CreatedBy
     @Column(updatable = false)
     private UUID createdBy;
 
-    @LastModifiedBy
+    @LastModifiedDate
     private LocalDateTime updatedAt;
 
+    @LastModifiedBy
     private UUID updatedBy;
 
     private LocalDateTime deletedAt;
@@ -35,5 +39,9 @@ public class BaseEntity {
     public void markDeleted(UUID deletedBy){
         this.deletedAt = LocalDateTime.now();
         this.deletedBy = deletedBy;
+    }
+
+    public boolean isDeleted() {
+        return this.deletedAt != null;
     }
 }
