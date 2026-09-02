@@ -3,4 +3,14 @@ server:
 
 spring:
   application:
-    name: eureka-service
+    name: eureka-server
+
+eureka:
+  instance:
+    hostname: localhost
+  client:
+    # 단일 서버 구축이므로 자기 자신 등록 및 레지스트리 가져오기 비활성화
+    register-with-eureka: false
+    fetch-registry: false
+    service-url:
+      defaultZone: ${EUREKA_DEFAULT_ZONE:http://localhost:19090/eureka/}
