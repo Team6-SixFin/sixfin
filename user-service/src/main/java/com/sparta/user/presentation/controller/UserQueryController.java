@@ -18,7 +18,7 @@ import java.util.UUID;
  * - 성공 응답 Wrapping 제거 및 HTTP Status + 순수 데이터 반환
  */
 @RestController
-@RequestMapping("api/users")
+@RequestMapping("/api/users")
 @RequiredArgsConstructor
 public class UserQueryController {
 
