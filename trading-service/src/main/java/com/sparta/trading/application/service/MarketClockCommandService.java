@@ -2,7 +2,7 @@ package com.sparta.trading.application.service;
 
 import com.sparta.trading.domain.entity.ClockStatus;
 import com.sparta.trading.domain.entity.MarketClock;
-import com.sparta.trading.domain.repository.MarketClockRepository;
+import com.sparta.trading.infrastructure.persistence.repository.clocks.MarketClockRepository;
 import com.sparta.trading.global.exception.CustomException;
 import com.sparta.trading.global.exception.TradingErrorCode;
 import lombok.RequiredArgsConstructor;

@@ -1,9 +1,7 @@
 package com.sparta.trading.infrastructure.loader;
 
-import com.sparta.trading.domain.entity.PriceCandles;
 import com.sparta.trading.domain.entity.Stocks;
-import com.sparta.trading.domain.repository.PriceCandlesRepository;
-import com.sparta.trading.domain.repository.StocksRepository;
+import com.sparta.trading.infrastructure.persistence.repository.stocks.StocksRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.ApplicationArguments;
