@@ -21,9 +21,15 @@ server:
   port: ${SERVER_PORT:19092}
 
 eureka:
-   client:
+  client:
     service-url:
-      defaultZone: ${EUREKA_DEFAULT_ZONE:http://localhost:19090/eureka/}
+      # Gateway가 접속할 Eureka Server 주소
+      defaultZone: http://localhost:19090/eureka/
+
+  instance:
+    # 호스트명 대신 IP 주소를 Eureka에 등록
+    prefer-ip-address: true
+    instance-id: ${spring.application.name}:${server.port}
 
 management:
    tracing:
