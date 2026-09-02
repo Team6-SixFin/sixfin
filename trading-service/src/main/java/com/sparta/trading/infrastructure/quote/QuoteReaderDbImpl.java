@@ -39,6 +39,7 @@ public class QuoteReaderDbImpl implements QuoteReader {
     public List<Quote> readAll(List<String> symbolList) {
         List<Long> stockIdList = stocksRepository.findIdBySymbolIn(symbolList);
         if (stockIdList.size() != symbolList.size()) {
+            // todo 목록 중에서 없는 항목은 따로 알려주기
             throw new CustomException(TradingErrorCode.STOCK_NOT_FOUND);
         }
 
