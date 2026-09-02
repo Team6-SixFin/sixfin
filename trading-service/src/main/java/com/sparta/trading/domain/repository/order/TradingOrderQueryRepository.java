@@ -15,7 +15,5 @@ public interface TradingOrderQueryRepository {
             TradingAdminSearchOrderQuery query,
             Long stockId,
             List<UUID> accountIds,
-            LocalDateTime from,
-            LocalDateTime to,
             Pageable pageable);
 }

@@ -24,15 +24,13 @@ public class TradingOrderQueryRepositoryImpl implements TradingOrderQueryReposit
             TradingAdminSearchOrderQuery query,
             Long stockId,
             List<UUID> accountIds,
-            LocalDateTime from,
-            LocalDateTime to,
             Pageable pageable) {
         return orderJpaRepository.searchOrder(stockId,
                 accountIds,
                 query.side(),
                 query.status(),
-                from,
-                to,
+                query.from(),
+                query.to(),
                 pageable);
     }
 }
