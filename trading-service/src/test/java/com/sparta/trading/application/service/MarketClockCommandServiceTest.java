@@ -2,6 +2,8 @@ package com.sparta.trading.application.service;
 
 import com.sparta.trading.domain.entity.ClockStatus;
 import com.sparta.trading.domain.entity.MarketClock;
+import com.sparta.trading.domain.entity.PriceCandles;
+import com.sparta.trading.infrastructure.persistence.repository.candles.PriceCandlesRepository;
 import com.sparta.trading.infrastructure.persistence.repository.clocks.MarketClockRepository;
 import com.sparta.trading.global.exception.CustomException;
 import com.sparta.trading.global.exception.TradingErrorCode;
@@ -29,7 +31,7 @@ class MarketClockCommandServiceTest {
     private MarketClockRepository marketClockRepository;
 
     @Mock
-    private CurrentSeqProvider currentSeqProvider;
+    private PriceCandlesRepository priceCandlesRepository;
 
     @Mock
     private Clock clock;
@@ -56,7 +58,11 @@ class MarketClockCommandServiceTest {
     }
 
     private void givenCandleAt(long seq) {
-        when(currentSeqProvider.marketTimeAt(seq)).thenReturn(BASE_TIME.plusSeconds(seq * 60));
+        PriceCandles candle = PriceCandles.builder()
+                .seq(seq)
+                .marketTime(BASE_TIME.plusSeconds(seq * 60))
+                .build();
+        when(priceCandlesRepository.findFirstBySeq(seq)).thenReturn(Optional.of(candle));
     }
 
     @Test
@@ -207,7 +213,7 @@ class MarketClockCommandServiceTest {
         MarketClock marketClock = clockOf(0L, BASE_TIME, 1, ClockStatus.STOPPED);
         givenClock(marketClock);
         when(clock.instant()).thenReturn(BASE_TIME);
-        when(currentSeqProvider.marketTimeAt(0L)).thenThrow(new CustomException(TradingErrorCode.PRICE_CANDLE_NOT_FOUND_FOR_SEQ));
+        when(priceCandlesRepository.findFirstBySeq(0L)).thenReturn(Optional.empty());
 
         CustomException exception = assertThrows(CustomException.class, () -> service.start());
 
@@ -222,5 +228,47 @@ class MarketClockCommandServiceTest {
         long seqFarInFuture = marketClock.currentSeq(BASE_TIME.plusSeconds(100));
 
         assertThat(seqFarInFuture).isEqualTo(7393L); // endSeq로 클램프, 절대 넘지 않음
+    }
+
+    @Test
+    @DisplayName("autoStop: RUNNING 중 end_seq에 도달하면 STOPPED로 전이하고 앵커를 end_seq에 고정한다")
+    void autoStopIfReached_stopsAtEndSeqWhenReached() {
+        MarketClock marketClock = clockOf(7390L, BASE_TIME, 100, ClockStatus.RUNNING);
+        givenClock(marketClock);
+        Instant checkedAt = BASE_TIME.plusSeconds(100);
+        when(clock.instant()).thenReturn(checkedAt);
+        givenCandleAt(7393L);
+
+        service.autoStopIfReached();
+
+        assertThat(marketClock.getAnchorSeq()).isEqualTo(7393L);
+        assertThat(marketClock.getAnchorAt()).isEqualTo(checkedAt);
+        assertThat(marketClock.getStatus()).isEqualTo(ClockStatus.STOPPED);
+    }
+
+    @Test
+    @DisplayName("autoStop: 아직 end_seq에 도달하지 않았으면 아무 것도 하지 않는다")
+    void autoStopIfReached_noopWhenNotReached() {
+        MarketClock marketClock = clockOf(0L, BASE_TIME, 1, ClockStatus.RUNNING);
+        givenClock(marketClock);
+        when(clock.instant()).thenReturn(BASE_TIME.plusSeconds(5));
+
+        service.autoStopIfReached();
+
+        assertThat(marketClock.getAnchorSeq()).isEqualTo(0L);
+        assertThat(marketClock.getStatus()).isEqualTo(ClockStatus.RUNNING);
+    }
+
+    @Test
+    @DisplayName("autoStop: 이미 STOPPED면 아무 것도 하지 않는다 (멱등)")
+    void autoStopIfReached_noopWhenAlreadyStopped() {
+        MarketClock marketClock = clockOf(7393L, BASE_TIME, 100, ClockStatus.STOPPED);
+        givenClock(marketClock);
+        when(clock.instant()).thenReturn(BASE_TIME.plusSeconds(100));
+
+        service.autoStopIfReached();
+
+        assertThat(marketClock.getAnchorAt()).isEqualTo(BASE_TIME);
+        assertThat(marketClock.getStatus()).isEqualTo(ClockStatus.STOPPED);
     }
 }
