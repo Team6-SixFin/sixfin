@@ -21,35 +21,35 @@ spring:
 
           # 외부 요청 경로와 내부 서비스를 직접 연결
           routes:
-          # 1. User Service - 회원가입/로그인 (인증 필터 제외)
-          - id: user-service-auth
-            uri: lb://user-service
-            predicates:
-              - Path=/api/auth/**
+            # 1. User Service - 회원가입/로그인 (인증 필터 제외)
+            - id: user-service-auth
+              uri: lb://user-service
+              predicates:
+                - Path=/api/auth/**
 
-          # 2. User Service - 일반 유저 조회/수정/탈퇴 (JWT 인증 필터 적용)
-          - id: user-service
-            uri: lb://user-service
-            predicates:
-              - Path=/api/users/**
-            filters:
-              - JwtAuthenticationFilter
+            # 2. User Service - 일반 유저 조회/수정/탈퇴 (JWT 인증 필터 적용)
+            - id: user-service
+              uri: lb://user-service
+              predicates:
+                - Path=/api/users/**
+              filters:
+                - JwtAuthenticationFilter
 
-          # 3. Trading Service - 시세, 계좌자산, 매매, 내부, 관리자 전체 라우팅
-          - id: trading-service
-            uri: lb://trading-service
-            predicates:
-              - Path=/api/trading/**
-            filters:
-              - JwtAuthenticationFilter
+            # 3. Trading Service - 시세, 계좌자산, 매매, 내부, 관리자 전체 라우팅
+            - id: trading-service
+              uri: lb://trading-service
+              predicates:
+                - Path=/api/trading/**
+              filters:
+                - JwtAuthenticationFilter
 
-          # 4. Learning Service - 피드백, 진단/리포트, 미션, 학습 콘텐츠, 통계/랭킹 전체 라우팅
-          - id: learning-service
-            uri: lb://learning-service
-            predicates:
-              - Path=/api/learnings/**, /api/feedbacks/**, /api/reports/**, /api/missions/**, /api/contents/**, /api/stats/**, /api/rankings/**
-            filters:
-              - JwtAuthenticationFilter
+            # 4. Learning Service - 피드백, 진단/리포트, 미션, 학습 콘텐츠, 통계/랭킹 전체 라우팅
+            - id: learning-service
+              uri: lb://learning-service
+              predicates:
+                - Path=/api/learnings/**, /api/feedbacks/**, /api/reports/**, /api/missions/**, /api/contents/**, /api/stats/**, /api/rankings/**
+              filters:
+                - JwtAuthenticationFilter
 
 jwt:
   # user-service와 동일한 값이어야 서명 검증이 성립한다
