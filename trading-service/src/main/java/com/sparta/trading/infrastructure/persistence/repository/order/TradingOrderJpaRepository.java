@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -26,7 +27,7 @@ import java.util.UUID;
                               @Param("accountIds") List<UUID> accountIds,
                               @Param("side") String side,
                               @Param("status") String status,
-                              @Param("from") Instant from,
-                              @Param("to") Instant to,
+                              @Param("from") LocalDateTime from,
+                              @Param("to") LocalDateTime to,
                               Pageable pageable);
  }

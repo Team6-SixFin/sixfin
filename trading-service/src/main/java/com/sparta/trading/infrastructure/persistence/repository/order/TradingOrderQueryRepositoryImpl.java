@@ -9,6 +9,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -23,13 +24,15 @@ public class TradingOrderQueryRepositoryImpl implements TradingOrderQueryReposit
             TradingAdminSearchOrderQuery query,
             Long stockId,
             List<UUID> accountIds,
+            LocalDateTime from,
+            LocalDateTime to,
             Pageable pageable) {
         return orderJpaRepository.searchOrder(stockId,
                 accountIds,
                 query.side(),
                 query.status(),
-                query.from(),
-                query.to(),
+                from,
+                to,
                 pageable);
     }
 }
