@@ -1,4 +1,4 @@
-package com.sparta.trading.domain.repository;
+package com.sparta.trading.infrastructure.persistence.repository.candles;
 
 import com.sparta.trading.domain.entity.PriceCandles;
 import org.springframework.data.jpa.repository.JpaRepository;

@@ -1,4 +1,4 @@
-package com.sparta.trading.domain.repository;
+package com.sparta.trading.infrastructure.persistence.repository.stocks;
 
 import com.sparta.trading.domain.entity.Stocks;
 import org.springframework.data.jpa.repository.JpaRepository;
