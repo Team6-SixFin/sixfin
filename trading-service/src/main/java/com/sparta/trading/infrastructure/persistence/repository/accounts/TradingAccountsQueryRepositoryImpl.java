@@ -5,8 +5,10 @@ import com.sparta.trading.domain.repository.accounts.TradingAccountsQueryReposit
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.SearchResults;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.UUID;
 
 @Repository
@@ -18,5 +20,10 @@ public class TradingAccountsQueryRepositoryImpl implements TradingAccountsQueryR
     @Override
     public Page<Accounts> search(UUID userId, Pageable pageable) {
         return tradingAccountsJpaRepository.search(userId,pageable);
+    }
+
+    @Override
+    public List<Accounts> findAllById(List<UUID> accountIds) {
+        return tradingAccountsJpaRepository.findAllById(accountIds);
     }
 }
