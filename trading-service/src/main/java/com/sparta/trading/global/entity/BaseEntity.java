@@ -10,7 +10,7 @@ import org.springframework.data.annotation.LastModifiedBy;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.UUID;
 
 @Getter
@@ -20,24 +20,24 @@ public class BaseEntity {
 
     @CreatedDate
     @Column(updatable = false)
-    private LocalDateTime createdAt;
+    private Instant createdAt;
 
     @CreatedBy
     @Column(updatable = false)
     private UUID createdBy;
 
     @LastModifiedDate
-    private LocalDateTime updatedAt;
+    private Instant updatedAt;
 
     @LastModifiedBy
     private UUID updatedBy;
 
-    private LocalDateTime deletedAt;
+    private Instant deletedAt;
 
     private UUID deletedBy;
 
     public void markDeleted(UUID deletedBy){
-        this.deletedAt = LocalDateTime.now();
+        this.deletedAt = Instant.now();
         this.deletedBy = deletedBy;
     }
 
