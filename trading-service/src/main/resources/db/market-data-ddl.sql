@@ -71,16 +71,20 @@ CREATE TABLE IF NOT EXISTS trading_service.p_price_candles (
 -- ----------------------------------------
 CREATE TABLE IF NOT EXISTS trading_service.p_orders (
     id          UUID PRIMARY KEY,
-    created_at  TIMESTAMP,
+    created_at  TIMESTAMPTZ,
     created_by  UUID,
-    updated_at  TIMESTAMP,
+    updated_at  TIMESTAMPTZ,
     updated_by  UUID,
-    deleted_at  TIMESTAMP,
+    deleted_at  TIMESTAMPTZ,
     deleted_by  UUID
 );
 
 -- 리플레이 스케줄러가 "현재 seq 이하만" 조회할 때 사용 (candles P1 API도 동일)
 CREATE INDEX IF NOT EXISTS idx_price_candle_seq ON trading_service.p_price_candles (seq);
+ALTER TABLE trading_service.p_orders
+    ALTER COLUMN created_at TYPE TIMESTAMPTZ USING created_at AT TIME ZONE 'UTC',
+    ALTER COLUMN updated_at TYPE TIMESTAMPTZ USING updated_at AT TIME ZONE 'UTC',
+    ALTER COLUMN deleted_at TYPE TIMESTAMPTZ USING deleted_at AT TIME ZONE 'UTC';
 
 -- ----------------------------------------
 -- 시계
@@ -95,8 +99,12 @@ CREATE TABLE IF NOT EXISTS trading_service.p_market_clock (
     speed_factor    INT  NOT NULL,
     cache_refresh_interval_ms        INT NOT NULL,
     status          VARCHAR(20)     NOT NULL,
-    updated_at      TIMESTAMPTZ     NOT NULL
+    updated_at      TIMESTAMPTZ     NOT NULL,
+    updated_by      UUID
 );
+
+-- 이미 p_market_clock을 만들어둔 로컬 DB에서도 이 파일을 재실행하면 컬럼이 추가되도록
+ALTER TABLE trading_service.p_market_clock ADD COLUMN IF NOT EXISTS updated_by UUID;
 
 -- ----------------------------------------
 -- 계좌

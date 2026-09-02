@@ -9,6 +9,7 @@ import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.UUID;
 
 /** 전 종목이 공유하는 단일 행 가상 시계. currentSeq()로 재생 위치를 계산하고, reanchor()로 상태를 갱신한다. */
 @Getter
@@ -50,6 +51,10 @@ public class MarketClock {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
+    /** 마지막으로 상태를 바꾼 사용자. null이면 시스템에 의한 자동 전이. */
+    @Column(name = "updated_by")
+    private UUID updatedBy;
+
     @Builder
     private MarketClock(Integer id, Long anchorSeq, Instant anchorAt, Instant anchorMarketTime,
                          Long startSeq, Long endSeq, Integer speedFactor, Integer cacheRefreshIntervalMs,
@@ -67,12 +72,13 @@ public class MarketClock {
 
     /** 앵커 상태를 갱신한다. newAnchorSeq는 호출자가 계산해서 전달한다. */
     public void reanchor(long newAnchorSeq, Instant now, Instant newAnchorMarketTime,
-                          int newSpeedFactor, ClockStatus newStatus) {
+                          int newSpeedFactor, ClockStatus newStatus, UUID updatedBy) {
         this.anchorSeq = Math.clamp(newAnchorSeq, startSeq, endSeq);
         this.anchorAt = now;
         this.anchorMarketTime = newAnchorMarketTime;
         this.speedFactor = newSpeedFactor;
         this.status = newStatus;
+        this.updatedBy = updatedBy;
     }
 
     /** 지금 이 순간의 재생 위치. STOPPED면 앵커 값, RUNNING이면 경과 시간만큼 전진한 값을 end_seq 이내로 반환한다. */
