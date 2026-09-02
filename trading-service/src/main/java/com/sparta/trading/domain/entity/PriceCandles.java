@@ -10,6 +10,8 @@ import org.hibernate.annotations.CreationTimestamp;
 import java.math.BigDecimal;
 import java.time.Instant;
 
+import static jakarta.persistence.FetchType.LAZY;
+
 @Getter
 @Entity
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
@@ -25,8 +27,9 @@ public class PriceCandles {
     @Column(name = "id")
     private Long id;
 
-    @Column(name = "stock_id", nullable = false)
-    private Long stockId;
+    @JoinColumn(name = "stock_id", nullable = false)
+    @ManyToOne(fetch = LAZY)
+    private Stocks stock;
 
     @Column(name = "seq", nullable = false)
     private Long seq;
@@ -63,10 +66,10 @@ public class PriceCandles {
     private Instant createdAt;
 
     @Builder
-    private PriceCandles(Long stockId, Long seq, Instant marketTime, BigDecimal openPrice, BigDecimal highPrice,
+    private PriceCandles(Stocks stock, Long seq, Instant marketTime, BigDecimal openPrice, BigDecimal highPrice,
                           BigDecimal lowPrice, BigDecimal closePrice, Long volume,
                           BigDecimal recent20dHigh, BigDecimal recent20dLow, BigDecimal recent5dReturn) {
-        this.stockId = stockId;
+        this.stock = stock;
         this.seq = seq;
         this.marketTime = marketTime;
         this.openPrice = openPrice;
