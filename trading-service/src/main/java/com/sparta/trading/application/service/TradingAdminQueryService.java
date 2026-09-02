@@ -64,7 +64,33 @@ public class TradingAdminQueryService {
                 size,
                 Sort.by(Sort.Direction.DESC, sort)
         );
-        Page<Orders> orders = tradingOrderQueryRepository.searchOrder(pageable);
+
+        //검색 조건 처리
+        //심벌
+        Long targetStockId = null;
+        if(tradingAdminSearchOrderQuery.symbol() != null){
+            targetStockId = stocksRepository.findBySymbol(tradingAdminSearchOrderQuery.symbol())
+                    .map(Stocks::getId)
+                    .orElse(-1L);   //검색 조건에 없으면 -1을 주어 검색이 되지 않도록 처리
+        }
+
+        // 유저 Id
+        List<UUID> targetAccountIds = null;
+        if (tradingAdminSearchOrderQuery.userId() != null) {
+            List<Accounts> userAccounts = tradingAccountsQueryRepository.findAllByUserId(tradingAdminSearchOrderQuery.userId());
+            if (userAccounts.isEmpty()) {
+                targetAccountIds = List.of(UUID.randomUUID()); // 해당 유저의 계좌가 없으면 결과 없음 처리
+            } else {
+                targetAccountIds = userAccounts.stream().map(Accounts::getId).toList();
+            }
+        }
+
+
+        Page<Orders> orders = tradingOrderQueryRepository.searchOrder(
+                tradingAdminSearchOrderQuery,
+                targetStockId,
+                targetAccountIds,
+                pageable);
         List<Orders> orderList = orders.getContent();
 
         //유저 아이디와 심벌 가져오기

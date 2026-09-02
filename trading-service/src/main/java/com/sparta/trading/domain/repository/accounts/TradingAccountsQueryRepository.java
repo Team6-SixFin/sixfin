@@ -12,4 +12,6 @@ public interface TradingAccountsQueryRepository {
 
     //어드민 - 주문 목록 전체조회에서 accountId를 통해 userId를 찾는 쿼리
     List<Accounts> findAllById(List<UUID> accountIds);
+
+    List<Accounts> findAllByUserId(UUID uuid);
 }

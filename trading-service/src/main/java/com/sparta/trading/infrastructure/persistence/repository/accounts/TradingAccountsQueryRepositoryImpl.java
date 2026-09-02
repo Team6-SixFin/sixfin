@@ -26,4 +26,9 @@ public class TradingAccountsQueryRepositoryImpl implements TradingAccountsQueryR
     public List<Accounts> findAllById(List<UUID> accountIds) {
         return tradingAccountsJpaRepository.findAllById(accountIds);
     }
+
+    @Override
+    public List<Accounts> findAllByUserId(UUID userId) {
+        return tradingAccountsJpaRepository.findAllByUserId(userId);
+    }
 }
