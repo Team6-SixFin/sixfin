@@ -44,7 +44,8 @@ public class TradingQueryService {
         MarketClock marketClock = currentSeqProvider.getClock();
         long currentSeq = currentSeqProvider.currentSeq(marketClock);
         Instant currentMarketTime = currentSeqProvider.marketTimeAt(currentSeq);
-        return MarketClockResponse.of(marketClock, currentSeq, currentMarketTime);
+        Instant now = currentSeqProvider.now();
+        return MarketClockResponse.of(marketClock, currentSeq, currentMarketTime, marketClock.effectiveStatus(now));
     }
 
     public PageResponse<TradingStockSearchResponse> searchStocks(Pageable pageable) {
