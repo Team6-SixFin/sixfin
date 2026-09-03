@@ -8,6 +8,6 @@ import java.util.Map;
 
 public record TradingAdminExecutionQueryResult(
         Map<String, BigDecimal> summary,
-        Page<TradingAdminExecutionResponseDto> dto
+        Page<TradingAdminExecutionResponseDto> page
 ) {
 }

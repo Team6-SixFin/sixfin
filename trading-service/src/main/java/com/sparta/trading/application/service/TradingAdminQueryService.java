@@ -6,15 +6,18 @@ import com.sparta.trading.application.dto.query.TradingSearchAccountsQuery;
 import com.sparta.trading.application.dto.result.TradingAdminExecutionQueryResult;
 import com.sparta.trading.application.dto.result.TradingAdminOrderQueryResult;
 import com.sparta.trading.domain.entity.Accounts;
+import com.sparta.trading.domain.entity.Executions;
 import com.sparta.trading.domain.entity.Orders;
 import com.sparta.trading.domain.entity.Stocks;
 import com.sparta.trading.domain.repository.accounts.TradingAccountsQueryRepository;
+import com.sparta.trading.domain.repository.execution.TradingExecutionQueryRepository;
 import com.sparta.trading.domain.repository.order.TradingOrderQueryRepository;
 import com.sparta.trading.global.exception.CustomException;
 import com.sparta.trading.global.exception.GlobalErrorCode;
 import com.sparta.trading.infrastructure.persistence.repository.stocks.StocksRepository;
 import com.sparta.trading.presentation.dto.response.TradigAdminOrderResponseDto;
 import com.sparta.trading.presentation.dto.response.TradingAccountsResponseDto;
+import com.sparta.trading.presentation.dto.response.TradingAdminExecutionResponseDto;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -23,6 +26,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -36,6 +40,7 @@ public class TradingAdminQueryService {
 
     private final TradingAccountsQueryRepository tradingAccountsQueryRepository;
     private final TradingOrderQueryRepository tradingOrderQueryRepository;
+    private final TradingExecutionQueryRepository tradingExecutionQueryRepository;
     private final StocksRepository stocksRepository;
 
     public Page<TradingAccountsResponseDto> search(TradingSearchAccountsQuery tradingSearchAccountsQuery) {
@@ -158,7 +163,7 @@ public class TradingAdminQueryService {
     }
 
     //체결 전체 조회
-    public TradingAdminOrderQueryResult searchExecuation(TradingAdminSearchExecutionQuery tradingExecutionQuery) {
+    public TradingAdminExecutionQueryResult searchExecuation(TradingAdminSearchExecutionQuery tradingExecutionQuery) {
 
         int page = tradingExecutionQuery.page();
         int size = tradingExecutionQuery.size();
@@ -177,6 +182,67 @@ public class TradingAdminQueryService {
             }
         }
 
-        return null;
+        //심벌
+        Long targetStockId = null;
+        if(tradingExecutionQuery.symbol() != null){
+            targetStockId = stocksRepository.findBySymbol(tradingExecutionQuery.symbol())
+                    .map(Stocks::getId)
+                    .orElse(-1L);   //검색 조건에 없으면 -1을 주어 검색이 되지 않도록 처리
+        }
+
+        //조회
+        Page<Executions> executions = tradingExecutionQueryRepository.searchExecution(
+                tradingExecutionQuery,
+                targetStockId,
+                pageable
+        );
+        List<Executions> list = executions.getContent();
+
+        //심벌 가져오기
+        List<Long> stockIds = list.stream()
+                .map(Executions::getStockId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+
+        Map<Long, String> stockSymbolMap = stocksRepository.findAllById(stockIds).stream()
+                .collect(Collectors.toMap(Stocks::getId,Stocks::getSymbol));
+
+        //summary 계산
+        BigDecimal totalAmount = list.stream()
+                .map(Executions::getExecutedAmount)
+                .reduce(BigDecimal.ZERO,BigDecimal::add);
+
+        BigDecimal totalRealizedProfit = list.stream()
+                .map(Executions::getRealizedProfit)
+                .reduce(BigDecimal.ZERO,BigDecimal::add);
+
+        Map<String, BigDecimal> summary = Map.of(
+                "totalAmoumnt" ,totalAmount,
+                "totalRealizedProfit",totalRealizedProfit
+        );
+
+        Page<TradingAdminExecutionResponseDto> responsePage = executions.map(execution ->{
+            String symbol = stockSymbolMap.get(execution.getStockId());
+
+            return new TradingAdminExecutionResponseDto(
+                    execution.getId(),
+                    execution.getOrderId(),
+                    execution.getPositionId(),
+                    execution.getUserId(),
+                    symbol,
+                    execution.getSide(),
+                    execution.getExecutedPrice(),
+                    execution.getExecutedQuantity(),
+                    execution.getExecutedAmount(),
+                    execution.getAvgEntyPriceAtExecuation(),
+                    execution.getRealizedProfit(),
+                    execution.getCandleSeq(),
+                    execution.getMarketTime(),
+                    execution.getCreatedAt()
+            );
+        });
+
+        return new TradingAdminExecutionQueryResult(summary,responsePage);
     }
 }

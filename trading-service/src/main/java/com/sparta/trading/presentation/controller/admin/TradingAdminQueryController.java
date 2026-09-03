@@ -3,6 +3,7 @@ package com.sparta.trading.presentation.controller.admin;
 import com.sparta.trading.application.dto.query.TradingAdminSearchExecutionQuery;
 import com.sparta.trading.application.dto.query.TradingAdminSearchOrderQuery;
 import com.sparta.trading.application.dto.query.TradingSearchAccountsQuery;
+import com.sparta.trading.application.dto.result.TradingAdminExecutionQueryResult;
 import com.sparta.trading.application.dto.result.TradingAdminOrderQueryResult;
 import com.sparta.trading.application.service.TradingAdminQueryService;
 import com.sparta.trading.domain.entity.Accounts;
@@ -106,8 +107,8 @@ public class TradingAdminQueryController {
             @RequestParam(required = false) Integer page,
             @RequestParam(required = false) Integer size
     ){
-        TradingAdminOrderQueryResult result = tradingAdminQueryService.searchExecuation(
+        TradingAdminExecutionQueryResult result = tradingAdminQueryService.searchExecuation(
              new TradingAdminSearchExecutionQuery(userId, positionId, symbol, side,from,to,sort,page,size));
-        return null;
+        return PageResponse.of(result.summary(),result.page());
     }
 }
