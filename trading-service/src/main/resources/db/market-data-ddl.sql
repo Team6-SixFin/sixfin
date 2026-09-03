@@ -121,3 +121,29 @@ CREATE TABLE IF NOT EXISTS trading_service.p_accounts (
     updated_by      UUID,
     CONSTRAINT uk_accounts_user_id UNIQUE (user_id)
     );
+
+-- ----------------------------------------
+--체결
+-- ----------------------------------------
+    CREATE TABLE trading_service.p_executions (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        order_id UUID NOT NULL UNIQUE,
+        position_id UUID NOT NULL,
+        user_id UUID NOT NULL,
+        stock_id BIGINT NOT NULL,
+        side VARCHAR(10) NOT NULL,
+        executed_price NUMERIC(19, 4) NOT NULL,
+        executed_quantity INTEGER NOT NULL,
+        executed_amount NUMERIC(19, 4) GENERATED ALWAYS AS (executed_price * executed_quantity) STORED NOT NULL,
+        avg_entry_price_at_execution NUMERIC(19, 4),
+        realized_profit NUMERIC(19, 4),
+        candle_seq BIGINT NOT NULL,
+        market_time TIMESTAMPTZ NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+
+    -- INDEX 생성
+    CREATE INDEX idx_p_executions_order_id ON trading_service.p_executions(order_id);
+    CREATE INDEX idx_p_executions_position_id ON trading_service.p_executions(position_id);
+    CREATE INDEX idx_p_executions_user_id ON trading_service.p_executions(user_id);
+    CREATE INDEX idx_p_executions_stock_id ON trading_service.p_executions(stock_id);

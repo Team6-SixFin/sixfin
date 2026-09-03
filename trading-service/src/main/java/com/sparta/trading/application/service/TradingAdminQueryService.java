@@ -1,7 +1,9 @@
 package com.sparta.trading.application.service;
 
+import com.sparta.trading.application.dto.query.TradingAdminSearchExecutionQuery;
 import com.sparta.trading.application.dto.query.TradingAdminSearchOrderQuery;
 import com.sparta.trading.application.dto.query.TradingSearchAccountsQuery;
+import com.sparta.trading.application.dto.result.TradingAdminExecutionQueryResult;
 import com.sparta.trading.application.dto.result.TradingAdminOrderQueryResult;
 import com.sparta.trading.domain.entity.Accounts;
 import com.sparta.trading.domain.entity.Orders;
@@ -70,7 +72,6 @@ public class TradingAdminQueryService {
         );
 
         //검색 조건 처리
-
         if (tradingAdminSearchOrderQuery.from() != null && tradingAdminSearchOrderQuery.to() != null) {
             if (tradingAdminSearchOrderQuery.from().isAfter(tradingAdminSearchOrderQuery.to())) {
                 throw new CustomException(GlobalErrorCode.INVALID_REQUEST,"from이 to보다 이후일 수 없습니다.");
@@ -167,5 +168,28 @@ public class TradingAdminQueryService {
         });
 
         return new TradingAdminOrderQueryResult(summary, responsePage);
+    }
+
+    //체결 전체 조회
+    public TradingAdminOrderQueryResult searchExecuation(TradingAdminSearchExecutionQuery tradingExecutionQuery) {
+
+        int page = tradingExecutionQuery.page();
+        int size = tradingExecutionQuery.size();
+        String sort = tradingExecutionQuery.sort();
+
+        Pageable pageable = PageRequest.of(
+                page,
+                size,
+                Sort.by(Sort.Direction.DESC, sort)
+        );
+
+        //검색 조건 처리
+        if (tradingExecutionQuery.from() != null && tradingExecutionQuery.to() != null) {
+            if (tradingExecutionQuery.from().isAfter(tradingExecutionQuery.to())) {
+                throw new CustomException(GlobalErrorCode.INVALID_REQUEST,"from이 to보다 이후일 수 없습니다.");
+            }
+        }
+
+        return null;
     }
 }

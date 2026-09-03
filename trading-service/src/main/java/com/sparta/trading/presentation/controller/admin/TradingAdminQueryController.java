@@ -1,5 +1,6 @@
 package com.sparta.trading.presentation.controller.admin;
 
+import com.sparta.trading.application.dto.query.TradingAdminSearchExecutionQuery;
 import com.sparta.trading.application.dto.query.TradingAdminSearchOrderQuery;
 import com.sparta.trading.application.dto.query.TradingSearchAccountsQuery;
 import com.sparta.trading.application.dto.result.TradingAdminOrderQueryResult;
@@ -8,6 +9,7 @@ import com.sparta.trading.domain.entity.Accounts;
 import com.sparta.trading.global.response.PageResponse;
 import com.sparta.trading.presentation.dto.response.TradigAdminOrderResponseDto;
 import com.sparta.trading.presentation.dto.response.TradingAccountsResponseDto;
+import com.sparta.trading.presentation.dto.response.TradingAdminExecutionResponseDto;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -83,4 +85,29 @@ public class TradingAdminQueryController {
         return PageResponse.of(result.summary(),result.page());
     }
 
+
+    /**
+     * 작성자 :
+     * 최초 작성일 :26-09-02
+     * 최종 수정일 :
+     * 기능 :
+     * 설명 :
+     * @Param:
+     **/
+    @GetMapping("/executions")
+    public PageResponse<TradingAdminExecutionResponseDto> searchExecutions(
+            @RequestParam(required = false) UUID userId,
+            @RequestParam(required = false) UUID positionId,
+            @RequestParam(required = false) String symbol,
+            @RequestParam(required = false) String side,
+            @RequestParam(required = false) Instant from,
+            @RequestParam(required = false) Instant to,
+            @RequestParam(required = false) String sort,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size
+    ){
+        TradingAdminOrderQueryResult result = tradingAdminQueryService.searchExecuation(
+             new TradingAdminSearchExecutionQuery(userId, positionId, symbol, side,from,to,sort,page,size));
+        return null;
+    }
 }
