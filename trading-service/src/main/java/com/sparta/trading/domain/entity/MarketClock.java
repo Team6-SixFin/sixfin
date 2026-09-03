@@ -88,11 +88,16 @@ public class MarketClock {
         }
         long elapsedSeconds = Duration.between(anchorAt, now).getSeconds();
         long computed = anchorSeq + elapsedSeconds * speedFactor;
-        return Math.min(computed, endSeq);
+        return Math.clamp(computed, anchorSeq, endSeq);
     }
 
     /** 현재 위치가 종료 seq에 도달했는지 반환한다. */
     public boolean reachedEnd(Instant now) {
         return currentSeq(now) >= endSeq;
+    }
+
+    /** DB에 저장된 status 대신, 지금 시점 기준으로 실제로 맞는 상태를 계산해 반환한다. */
+    public ClockStatus effectiveStatus(Instant now) {
+        return reachedEnd(now) ? ClockStatus.STOPPED : status;
     }
 }
