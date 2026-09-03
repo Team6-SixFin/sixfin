@@ -24,6 +24,11 @@ eureka:
     service-url:
       defaultZone: http://localhost:19090/eureka/
 
+  instance:
+    # 호스트명 대신 IP 주소를 Eureka에 등록
+    prefer-ip-address: true
+    instance-id: ${spring.application.name}:${server.port}
+
 management:
   tracing:
     sampling:
