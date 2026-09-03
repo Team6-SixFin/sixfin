@@ -142,6 +142,7 @@ CREATE TABLE IF NOT EXISTS trading_service.p_cash_ledgers (
 
 CREATE INDEX IF NOT EXISTS idx_cash_ledgers_account_id
     ON trading_service.p_cash_ledgers (account_id);
+
 -- ----------------------------------------
 --체결
 -- ----------------------------------------
