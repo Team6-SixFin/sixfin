@@ -3,6 +3,8 @@ package com.sparta.learning.infrastructure.ai;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sparta.learning.application.dto.response.AiFeedbackResponse;
 import com.sparta.learning.application.port.AiClientPort;
+import com.sparta.learning.global.exception.CustomException;
+import com.sparta.learning.global.exception.LearningErrorCode;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.messages.Message;
@@ -49,7 +51,7 @@ public class GeminiAiAdapter implements AiClientPort {
             return objectMapper.readValue(responseJson, AiFeedbackResponse.class);
         } catch (Exception e) {
             log.error("AI 호출 또는 JSON 파싱 실패", e);
-            throw new RuntimeException("AI 피드백 생성 중 오류 발생", e);
+            throw new CustomException(LearningErrorCode.AI_RESPONSE_GENERATION_FAILED);
         }
     }
 }
