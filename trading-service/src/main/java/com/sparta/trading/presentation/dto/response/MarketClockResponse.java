@@ -14,14 +14,14 @@ public record MarketClockResponse (
         ClockStatus status,
         Instant updatedAt
 ) {
-    public static MarketClockResponse of(MarketClock clock, Long currentSeq, Instant currentMarketTime) {
+    public static MarketClockResponse of(MarketClock clock, Long currentSeq, Instant currentMarketTime, ClockStatus effectiveStatus) {
         return new MarketClockResponse(
                 currentSeq,
                 currentMarketTime,
                 clock.getStartSeq(),
                 clock.getEndSeq(),
                 clock.getSpeedFactor(),
-                clock.getStatus(),
+                effectiveStatus,
                 clock.getUpdatedAt()
         );
     }
