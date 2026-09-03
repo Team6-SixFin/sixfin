@@ -14,7 +14,19 @@ public class TradingExecutionsQueryRepositoryImpl implements TradingExecutionQue
     private final TradingExecutionsJpaRepository tradingExecutionsJpaRepository;
 
     @Override
-    public Page<Executions> searchExecution(TradingAdminSearchExecutionQuery tradingExecutionQuery, Long targetStockId, Pageable pageable) {
-        return tradingExecutionsJpaRepository.searchExexution(tradingExecutionQuery, targetStockId,pageable);
+    public Page<Executions> searchExecution(
+            TradingAdminSearchExecutionQuery query,
+            Long targetStockId,
+            Pageable pageable
+    ) {
+        return tradingExecutionsJpaRepository.searchExecution(
+                query.userId(),
+                query.positionId(),
+                targetStockId,
+                query.side(),
+                query.from(),
+                query.to(),
+                pageable
+        );
     }
 }
