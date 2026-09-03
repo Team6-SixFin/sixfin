@@ -13,7 +13,7 @@ import java.util.UUID;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/trading/accounts")
-public class AccountQueryController {
+public class AssetQueryController {
 
     private static final String USER_ID_HEADER = "X-User-Id";
 

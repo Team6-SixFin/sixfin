@@ -21,7 +21,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @ExtendWith(MockitoExtension.class)
-class AccountQueryControllerTest {
+class AssetQueryControllerTest {
 
     @Mock
     private AccountQueryService accountQueryService;
@@ -30,7 +30,7 @@ class AccountQueryControllerTest {
 
     @BeforeEach
     void setUp() {
-        mockMvc = MockMvcBuilders.standaloneSetup(new AccountQueryController(accountQueryService)).build();
+        mockMvc = MockMvcBuilders.standaloneSetup(new AssetQueryController(accountQueryService)).build();
     }
 
     @Test
