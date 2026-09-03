@@ -15,6 +15,7 @@ public class WebMvcConfig implements WebMvcConfigurer {
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
         registry.addInterceptor(adminAuthorizationInterceptor)
-                .addPathPatterns("/api/trading/internal/**");
+                .addPathPatterns("/api/trading/internal/**")
+                .addPathPatterns("/api/trading/admin/**");
     }
 }

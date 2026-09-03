@@ -41,9 +41,6 @@ public class TradingAdminQueryController {
      * 설명 :
      * @Param: userId, sort, page, size
      **/
-    /*ToDO
-    * 유저 권한 기능이 생기면 인가 기능 추가할것
-    * */
     @GetMapping("/accounts")
     public PageResponse<TradingAccountsResponseDto> searchAll(
             @RequestParam(required = false) UUID userId,
