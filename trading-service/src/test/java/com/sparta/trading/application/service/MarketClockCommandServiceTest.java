@@ -237,6 +237,36 @@ class MarketClockCommandServiceTest {
     }
 
     @Test
+    @DisplayName("시계가 역행해도(now < anchorAt) seq는 앵커 아래로 내려가지 않는다")
+    void currentSeq_neverGoesBelowAnchorSeq() {
+        MarketClock marketClock = clockOf(1000L, BASE_TIME, 10, ClockStatus.RUNNING);
+
+        long seqWhenClockWentBackwards = marketClock.currentSeq(BASE_TIME.minusSeconds(50));
+
+        assertThat(seqWhenClockWentBackwards).isEqualTo(1000L);
+    }
+
+    @Test
+    @DisplayName("effectiveStatus: 아직 도달 전이면 저장된 status를 그대로 쓴다")
+    void effectiveStatus_returnsStoredStatusWhenNotReached() {
+        MarketClock marketClock = clockOf(0L, BASE_TIME, 1, ClockStatus.RUNNING);
+
+        ClockStatus status = marketClock.effectiveStatus(BASE_TIME.plusSeconds(5));
+
+        assertThat(status).isEqualTo(ClockStatus.RUNNING);
+    }
+
+    @Test
+    @DisplayName("effectiveStatus: RUNNING인데 이미 end_seq에 도달했으면 DB 전이 여부와 무관하게 STOPPED로 계산한다")
+    void effectiveStatus_computesStoppedWhenReachedEvenIfStoredStatusIsStillRunning() {
+        MarketClock marketClock = clockOf(7390L, BASE_TIME, 100, ClockStatus.RUNNING);
+
+        ClockStatus status = marketClock.effectiveStatus(BASE_TIME.plusSeconds(100));
+
+        assertThat(status).isEqualTo(ClockStatus.STOPPED);
+    }
+
+    @Test
     @DisplayName("autoStop: RUNNING 중 end_seq에 도달하면 STOPPED로 전이하고 앵커를 end_seq에 고정한다")
     void autoStopIfReached_stopsAtEndSeqWhenReached() {
         MarketClock marketClock = clockOf(7390L, BASE_TIME, 100, ClockStatus.RUNNING);

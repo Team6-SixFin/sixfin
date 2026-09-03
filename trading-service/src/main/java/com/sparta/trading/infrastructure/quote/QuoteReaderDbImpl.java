@@ -12,6 +12,7 @@ import com.sparta.trading.global.exception.TradingErrorCode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
+import java.time.Instant;
 import java.util.List;
 
 /** DB만 사용하는 QuoteReader 구현. Redis 캐싱 구현체와 나란히 두고 설정으로 스위치할 예정. */
@@ -52,22 +53,23 @@ public class QuoteReaderDbImpl implements QuoteReader {
             throw new CustomException(TradingErrorCode.PRICE_CANDLE_NOT_FOUND_FOR_SEQ);
         }
 
+        Instant now = currentSeqProvider.now();
         return candles.stream()
-                .map(candle -> toQuote(candle, candle.getStock().getSymbol(), marketClock))
+                .map(candle -> toQuote(candle, candle.getStock().getSymbol(), marketClock, now))
                 .toList();
     }
 
-    private Quote toQuote(PriceCandles candle, String symbol, MarketClock marketClock) {
+    private Quote toQuote(PriceCandles candle, String symbol, MarketClock marketClock, Instant now) {
         return new Quote(
                 symbol,
                 candle.getClosePrice(),
                 candle.getSeq(),
                 candle.getMarketTime(),
-                marketClock.getStatus(),
+                marketClock.effectiveStatus(now),
                 candle.getRecent20dHigh(),
                 candle.getRecent20dLow(),
                 candle.getRecent5dReturn(),
-                currentSeqProvider.now(),
+                now,
                 candle.getStock().getId(),
                 candle.getStock().getName()
         );
