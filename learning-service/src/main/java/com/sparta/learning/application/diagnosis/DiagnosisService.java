@@ -3,6 +3,7 @@ package com.sparta.learning.application.diagnosis;
 import com.sparta.learning.domain.entity.DiagnosisResult;
 import com.sparta.learning.domain.entity.ExecutionSnapshot;
 import com.sparta.learning.domain.model.DiagnosisPhase;
+import com.sparta.learning.domain.rule.DiagnosisContext;
 import com.sparta.learning.domain.rule.DiagnosisRule;
 import com.sparta.learning.infrastructure.persistence.repository.DiagnosisResultRepository;
 import lombok.RequiredArgsConstructor;
@@ -29,13 +30,14 @@ public class DiagnosisService {
     public List<DiagnosisResult> diagnose(ExecutionSnapshot snapshot){
         DiagnosisPhase phase = DiagnosisPhase.from(snapshot);
 
-        // 1차: 거래 시점에 해당하는 규칙만 고름
-        // 2차: 같은 시점이라도 적용 대상인지 확인함 (supports)
-        List<DiagnosisResult> results = rules.stream()
-                .filter(rule -> rule.getRuleCode().getDiagnosisPhase() == phase)
-                .filter(rule -> rule.supports(snapshot))
-                .map(rule -> rule.diagnose(snapshot))
-                .toList();
+        // 규칙은 도메인 계층이라 DB를 조회할 수 없으므로 이전 진단을 미리 담아 전달한다
+        // 규칙 실행 전에 한 번만 조회해 모든 규칙이 같은 시점의 데이터를 보게 한다
+        DiagnosisContext context = DiagnosisContext.ofExecution(
+                snapshot,
+                diagnosisResultRepository.findByPositionIdOrderByIdAsc(snapshot.getPositionId())
+        );
+
+        List<DiagnosisResult> results = execute(context, phase);
 
         if(results.isEmpty()){
             return List.of();
@@ -48,6 +50,16 @@ public class DiagnosisService {
         }
 
         return diagnosisResultRepository.saveAll(newResults);
+    }
+
+    // 1차: 거래 시점에 해당하는 규칙만 고름
+    // 2차: 같은 시점이라도 적용 대상인지 확인함 (supports)
+    private List<DiagnosisResult> execute(DiagnosisContext context, DiagnosisPhase phase){
+        return rules.stream()
+                .filter(rule -> rule.getRuleCode().getDiagnosisPhase() == phase)
+                .filter(rule -> rule.supports(context))
+                .map(rule -> rule.diagnose(context))
+                .toList();
     }
 
 
