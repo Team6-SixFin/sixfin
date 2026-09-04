@@ -31,12 +31,14 @@ public class HighChasingBuyRule implements DiagnosisRule{
 
     // ENTRY 단계의 최초 매수는 모두 판정 대상이다
     @Override
-    public boolean supports(ExecutionSnapshot snapshot) {
+    public boolean supports(DiagnosisContext context) {
         return true;
     }
 
     @Override
-    public DiagnosisResult diagnose(ExecutionSnapshot snapshot){
+    public DiagnosisResult diagnose(DiagnosisContext context){
+        ExecutionSnapshot snapshot = context.executionSnapshot();
+
         // 20일 최고가는 시세 조회 시점 정보라 값이 없을 수 있다
         // 비율 계산의 분모이므로 0 이하도 판정 대상에서 제외한다
         BigDecimal recent20High = snapshot.getRecent20dHigh();

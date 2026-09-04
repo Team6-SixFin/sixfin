@@ -27,12 +27,14 @@ public class ShortTermSurgeBuyRule implements DiagnosisRule {
 
     // ENTRY 단계의 최초 매수는 모두 판정 대상이다
     @Override
-    public boolean supports(ExecutionSnapshot snapshot) {
+    public boolean supports(DiagnosisContext context) {
         return true;
     }
 
     @Override
-    public DiagnosisResult diagnose(ExecutionSnapshot snapshot) {
+    public DiagnosisResult diagnose(DiagnosisContext context) {
+        ExecutionSnapshot snapshot = context.executionSnapshot();
+
         // 5거래일 수익률은 시세 조회 시점 정보라 값이 없을 수 있다
         // 음수(하락)는 정상적인 판정 대상이므로 제외하지 않는다
         BigDecimal returnRate = snapshot.getRecent5dReturnRate();
