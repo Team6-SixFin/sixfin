@@ -14,6 +14,7 @@ import com.sparta.trading.domain.repository.order.TradingOrderQueryRepository;
 import com.sparta.trading.domain.repository.outboxEvent.TradingOutboxEventsQueryRepository;
 import com.sparta.trading.global.exception.CustomException;
 import com.sparta.trading.global.exception.GlobalErrorCode;
+import com.sparta.trading.global.util.PageableUtil;
 import com.sparta.trading.infrastructure.persistence.repository.stocks.StocksRepository;
 import com.sparta.trading.presentation.dto.response.TradigAdminOrderResponseDto;
 import com.sparta.trading.presentation.dto.response.TradingAccountsResponseDto;
@@ -44,14 +45,10 @@ public class TradingAdminQueryService {
     private final StocksRepository stocksRepository;
 
     public Page<TradingAccountsResponseDto> search(TradingSearchAccountsQuery tradingSearchAccountsQuery) {
-        int page = tradingSearchAccountsQuery.page();
-        int size = tradingSearchAccountsQuery.size();
-        String sort = tradingSearchAccountsQuery.sort();
-
-        Pageable pageable = PageRequest.of(
-                page,
-                size,
-                Sort.by(Sort.Direction.DESC, sort)
+        Pageable pageable = PageableUtil.createDescPageable(
+                tradingSearchAccountsQuery.page(),
+                tradingSearchAccountsQuery.size(),
+                tradingSearchAccountsQuery.sort()
         );
 
         Page<Accounts> accounts = tradingAccountsQueryRepository.search(
@@ -63,23 +60,14 @@ public class TradingAdminQueryService {
 
     public TradingAdminOrderQueryResult searchOrder(TradingAdminSearchOrderQuery tradingAdminSearchOrderQuery) {
 
-        int page = tradingAdminSearchOrderQuery.page();
-        int size = tradingAdminSearchOrderQuery.size();
-        String sort = tradingAdminSearchOrderQuery.sort();
-
-        Pageable pageable = PageRequest.of(
-                page,
-                size,
-                Sort.by(Sort.Direction.DESC, sort)
+        Pageable pageable = PageableUtil.createDescPageable(
+                tradingAdminSearchOrderQuery.page(),
+                tradingAdminSearchOrderQuery.size(),
+                tradingAdminSearchOrderQuery.sort()
         );
 
         //검색 조건 처리
-        if (tradingAdminSearchOrderQuery.from() != null && tradingAdminSearchOrderQuery.to() != null) {
-            if (tradingAdminSearchOrderQuery.from().isAfter(tradingAdminSearchOrderQuery.to())) {
-                throw new CustomException(GlobalErrorCode.INVALID_REQUEST,"from이 to보다 이후일 수 없습니다.");
-            }
-        }
-
+        validateDateRange(tradingAdminSearchOrderQuery.from(),tradingAdminSearchOrderQuery.to());
 
         //심벌
         Long targetStockId = null;
@@ -165,22 +153,14 @@ public class TradingAdminQueryService {
     //체결 전체 조회
     public TradingAdminExecutionQueryResult searchExecuation(TradingAdminSearchExecutionQuery tradingExecutionQuery) {
 
-        int page = tradingExecutionQuery.page();
-        int size = tradingExecutionQuery.size();
-        String sort = tradingExecutionQuery.sort();
-
-        Pageable pageable = PageRequest.of(
-                page,
-                size,
-                Sort.by(Sort.Direction.DESC, sort)
+        Pageable pageable = PageableUtil.createDescPageable(
+                tradingExecutionQuery.page(),
+                tradingExecutionQuery.size(),
+                tradingExecutionQuery.sort()
         );
 
         //검색 조건 처리
-        if (tradingExecutionQuery.from() != null && tradingExecutionQuery.to() != null) {
-            if (tradingExecutionQuery.from().isAfter(tradingExecutionQuery.to())) {
-                throw new CustomException(GlobalErrorCode.INVALID_REQUEST,"from이 to보다 이후일 수 없습니다.");
-            }
-        }
+        validateDateRange(tradingExecutionQuery.from(),tradingExecutionQuery.to());
 
         //심벌
         Long targetStockId = null;
@@ -248,23 +228,14 @@ public class TradingAdminQueryService {
 
     public TradingAdminOutboxEventQueryResult searchOutbox(TradingAdminSearchOutboxEventQurey tradingAdminSearchOutboxEventQurey){
 
-        int page = tradingAdminSearchOutboxEventQurey.page();
-        int size = tradingAdminSearchOutboxEventQurey.size();
-        String sort = tradingAdminSearchOutboxEventQurey.sort();
-
-        Pageable pageable = PageRequest.of(
-                page,
-                size,
-                Sort.by(Sort.Direction.DESC, sort)
+        Pageable pageable = PageableUtil.createDescPageable(
+                tradingAdminSearchOutboxEventQurey.page(),
+                tradingAdminSearchOutboxEventQurey.size(),
+                tradingAdminSearchOutboxEventQurey.sort()
         );
 
-        //todo - from to 설정은 공통을 묶어서 함수로 처리해도 될것 같음
         //검색 조건 처리
-        if (tradingAdminSearchOutboxEventQurey.from() != null && tradingAdminSearchOutboxEventQurey.to() != null) {
-            if (tradingAdminSearchOutboxEventQurey.from().isAfter(tradingAdminSearchOutboxEventQurey.to())) {
-                throw new CustomException(GlobalErrorCode.INVALID_REQUEST,"from이 to보다 이후일 수 없습니다.");
-            }
-        }
+        validateDateRange(tradingAdminSearchOutboxEventQurey.from(),tradingAdminSearchOutboxEventQurey.to());
 
         //조회
         Page<OutboxEvents> outboxEvents = tradingOutboxEventsQueryRepository.searchOutbox(
@@ -278,8 +249,7 @@ public class TradingAdminQueryService {
         long failedCount = outboxEventsList.stream().filter(o -> "FAILED".equals(o.getStatus())).count();
 
         Instant oldestPendingAt = outboxEventsList.stream()
-                .filter(o -> "PENDING".equals(o.getStatus()))
-                .map(OutboxEvents::getCreatedAt)
+                .map(OutboxEvents::getOccurredAt)
                 .min(Comparator.naturalOrder())
                 .orElse(null);
 
@@ -288,7 +258,11 @@ public class TradingAdminQueryService {
         summary.put("failedCount", failedCount);
         summary.put("oldestPendingAt", oldestPendingAt);
 
+        boolean includePayload = Boolean.TRUE.equals(tradingAdminSearchOutboxEventQurey.includePayload());
+
+
         Page<TradingAdminOutboxEventResponseDto> responseDtoPage = outboxEvents.map(outboxEvent ->{
+            Object payloadValue = includePayload ? outboxEvent.getPayload() : null;
            return new TradingAdminOutboxEventResponseDto(
                    outboxEvent.getId(),
                    outboxEvent.getEventId(),
@@ -300,7 +274,7 @@ public class TradingAdminQueryService {
                    outboxEvent.getStatus(),
                    outboxEvent.getRetryCount(),
                    outboxEvent.getLastError(),
-                   outboxEvent.getPayload(),
+                   payloadValue,
                    outboxEvent.getOccurredAt(),
                    outboxEvent.getPublishedAt(),
                    0L                   //어디서 가져오는지 전혀 모름
@@ -309,4 +283,13 @@ public class TradingAdminQueryService {
 
         return new TradingAdminOutboxEventQueryResult(summary,responseDtoPage);
     }
+
+
+    //날짜 검증
+    public static void validateDateRange(Instant from, Instant to) {
+        if (from != null && to != null && from.isAfter(to)) {
+            throw new CustomException(GlobalErrorCode.INVALID_REQUEST, "from이 to보다 이후일 수 없습니다.");
+        }
+    }
+
 }

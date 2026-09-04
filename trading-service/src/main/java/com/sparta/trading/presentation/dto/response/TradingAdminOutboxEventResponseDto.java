@@ -1,6 +1,7 @@
 package com.sparta.trading.presentation.dto.response;
 
-import java.math.BigDecimal;
+import com.fasterxml.jackson.annotation.JsonRawValue;
+
 import java.time.Instant;
 import java.util.UUID;
 
@@ -12,9 +13,10 @@ public record TradingAdminOutboxEventResponseDto(
         String aggergateType,
         UUID aggergateId,
         String partitionKey,
-        String status,
+        Enum status,
         Integer retryCount,
         String lastError,
+        @JsonRawValue
         Object payload,
         Instant occurredAt,
         Instant publishedAt,
