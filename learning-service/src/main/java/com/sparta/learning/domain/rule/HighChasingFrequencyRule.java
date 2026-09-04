@@ -10,8 +10,7 @@ import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 
-// 포지션 전체에서 고점 추격 매수가 반복됐는지 진단
-// 매수마다 판정한 HIGH_CHASING_BUY 결과를 집계한다
+// 포지션 전체에서 고점 추격 매수가 반복됐는지 진단 (매수 시점마다 판정한 고점 추격 결과를 집계)
 @Component
 public class HighChasingFrequencyRule implements DiagnosisRule {
 
@@ -39,8 +38,11 @@ public class HighChasingFrequencyRule implements DiagnosisRule {
 
         // 매수 시점마다 이미 판정한 결과를 센다
         // 스냅샷에는 매수별 20일 최고가가 없어 다시 계산할 수도 없다
-        long chasingCount = context.countPreviousResults(
-                RuleCode.HIGH_CHASING_BUY, DiagnosisStatus.WARNING);
+        //
+        // 최초 매수는 HIGH_CHASING_BUY, 추가 매수는 REPEATED_HIGH_CHASING_BUY로 서로 다른 규칙이 기록하므로 둘을 합산해야 실제 고점 매수 횟수가 된다
+        long chasingCount =
+                context.countPreviousResults(RuleCode.HIGH_CHASING_BUY, DiagnosisStatus.WARNING)
+                        + context.countPreviousResults(RuleCode.REPEATED_HIGH_CHASING_BUY, DiagnosisStatus.WARNING);
         boolean repeated = chasingCount >= FREQUENCY_THRESHOLD;
 
         return DiagnosisResult.builder()

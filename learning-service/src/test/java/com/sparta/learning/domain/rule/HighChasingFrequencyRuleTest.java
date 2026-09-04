@@ -11,6 +11,7 @@ import com.sparta.learning.fixture.DiagnosisResultFixture;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -59,6 +60,36 @@ class HighChasingFrequencyRuleTest {
 
         assertThat(result.getResult()).isEqualTo(DiagnosisStatus.PASS);
         assertThat(result.getMetricValue()).isEqualByComparingTo(BigDecimal.ZERO);
+    }
+
+    // 최초 매수는 HIGH_CHASING_BUY, 추가 매수는 REPEATED_HIGH_CHASING_BUY로 기록된다
+    // HIGH_CHASING_BUY만 세면 ENTRY 규칙 특성상 최대 1건이라 3회 기준에 도달할 수 없다
+    @Test
+    void 최초_매수와_추가_매수_경고를_함께_센다() {
+        List<DiagnosisResult> previous = List.of(
+                DiagnosisResultFixture.of(RuleCode.HIGH_CHASING_BUY, DiagnosisStatus.WARNING),
+                DiagnosisResultFixture.of(RuleCode.REPEATED_HIGH_CHASING_BUY, DiagnosisStatus.WARNING),
+                DiagnosisResultFixture.of(RuleCode.REPEATED_HIGH_CHASING_BUY, DiagnosisStatus.WARNING)
+        );
+
+        DiagnosisResult result = rule.diagnose(
+                DiagnosisContextFixture.ofClosed(ClosedPositionSnapshotFixture.closedWithStopLoss(), previous));
+
+        assertThat(result.getResult()).isEqualTo(DiagnosisStatus.WARNING);
+        assertThat(result.getMetricValue()).isEqualByComparingTo(new BigDecimal("3"));
+    }
+
+    // 최초 매수가 고점이 아니어도 추가 매수만으로 기준에 도달할 수 있다
+    @Test
+    void 추가_매수_경고만으로도_기준에_도달한다() {
+        DiagnosisResult result = rule.diagnose(
+                DiagnosisContextFixture.ofClosed(
+                        ClosedPositionSnapshotFixture.closedWithStopLoss(),
+                        DiagnosisResultFixture.listOf(
+                                RuleCode.REPEATED_HIGH_CHASING_BUY, DiagnosisStatus.WARNING, 3)));
+
+        assertThat(result.getResult()).isEqualTo(DiagnosisStatus.WARNING);
+        assertThat(result.getMetricValue()).isEqualByComparingTo(new BigDecimal("3"));
     }
 
     // 다른 규칙의 결과나 PASS는 세면 안 된다
@@ -144,12 +175,17 @@ class HighChasingFrequencyRuleTest {
         assertThat(first).isEqualTo("CLOSE:" + snapshot.getPositionId() + ":HIGH_CHASING_FREQUENCY:v1");
     }
 
+    // 최초 매수 1건 + 추가 매수 나머지로 구성한다
+    // 실제 흐름에서도 HIGH_CHASING_BUY는 최대 1건이고 나머지는 REPEATED가 기록한다
     private DiagnosisContext context(int chasingCount) {
+        List<DiagnosisResult> previous = new ArrayList<>();
+        if (chasingCount > 0) {
+            previous.add(DiagnosisResultFixture.of(RuleCode.HIGH_CHASING_BUY, DiagnosisStatus.WARNING));
+            previous.addAll(DiagnosisResultFixture.listOf(
+                    RuleCode.REPEATED_HIGH_CHASING_BUY, DiagnosisStatus.WARNING, chasingCount - 1));
+        }
         return DiagnosisContextFixture.ofClosed(
-                ClosedPositionSnapshotFixture.closedWithStopLoss(),
-                DiagnosisResultFixture.listOf(
-                        RuleCode.HIGH_CHASING_BUY, DiagnosisStatus.WARNING, chasingCount)
-        );
+                ClosedPositionSnapshotFixture.closedWithStopLoss(), previous);
     }
 
     private String messageOf(DiagnosisResult result) {
