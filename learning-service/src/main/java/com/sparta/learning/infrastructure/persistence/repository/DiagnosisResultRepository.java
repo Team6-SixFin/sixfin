@@ -15,4 +15,7 @@ public interface DiagnosisResultRepository extends JpaRepository<DiagnosisResult
     // 같은 포지션의 이전 진단 결과를 저장 순서대로 조회한다
     // 반복 여부와 위반 건수를 판정하는 규칙이 사용하며, DiagnosisContext에 담아 전달한다
     List<DiagnosisResult> findByPositionIdOrderByIdAsc(UUID positionId);
+
+    // Ai 피드백 생성을 위한 진단 결과 조회용
+    List<DiagnosisResult> findAllByPositionId(UUID positionId);
 }
