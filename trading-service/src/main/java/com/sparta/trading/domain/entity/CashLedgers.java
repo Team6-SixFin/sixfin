@@ -87,4 +87,20 @@ public class CashLedgers {
                 .balanceAfter(account.getCashBalance())
                 .build();
     }
+
+    public static CashLedgers buy(Accounts account, UUID executionId,
+                                  BigDecimal spentAmount, BigDecimal balanceAfter) {
+        Objects.requireNonNull(executionId, "executionId must not be null");
+        if (spentAmount.signum() <= 0) {
+            throw new IllegalArgumentException("spentAmount must be positive");
+        }
+
+        return CashLedgers.builder()
+                .account(account)
+                .executionId(executionId)
+                .txType(CashLedgerTxType.BUY)
+                .amount(spentAmount.negate())
+                .balanceAfter(balanceAfter)
+                .build();
+    }
 }
