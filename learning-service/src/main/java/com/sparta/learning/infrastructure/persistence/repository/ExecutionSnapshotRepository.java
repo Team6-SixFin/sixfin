@@ -13,4 +13,6 @@ public interface ExecutionSnapshotRepository extends JpaRepository<ExecutionSnap
     List<ExecutionSnapshot> findByPositionIdInOrderByExecutedAtAsc(Collection<UUID> positionIds);
 
     Optional<ExecutionSnapshot> findFirstByPositionIdAndUserIdOrderByExecutedAtAscIdAsc(UUID positionId, UUID userId);
+
+    Optional<ExecutionSnapshot> findByConsumedEventEventId(UUID eventId);
 }
