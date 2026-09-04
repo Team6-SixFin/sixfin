@@ -15,8 +15,9 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-// 추가 매수에서 고점 추격이 반복됐는지 판정하는 규칙을 검증합니다.
-// 기준: 이번 매수가 20일 최고가의 99% 이상이고 이전 매수에도 같은 경고가 있으면 WARNING
+// 추가 매수가 고점 부근에서 이뤄졌는지 판정하는 규칙을 검증합니다.
+// 기준: 이번 매수가 20일 최고가의 99% 이상이면 WARNING
+// 이전 경고 유무는 판정 조건이 아니라 근거 문구와 metrics에만 반영됩니다
 class RepeatedHighChasingBuyRuleTest {
 
     private final RepeatedHighChasingBuyRule rule = new RepeatedHighChasingBuyRule();
@@ -48,13 +49,28 @@ class RepeatedHighChasingBuyRuleTest {
         assertThat(result.getResult()).isEqualTo(DiagnosisStatus.WARNING);
     }
 
-    // 이번이 처음이면 반복이 아님
+    // 이전 경고를 판정 조건에 넣으면 최초 매수가 고점이 아니었을 때
+    // 이후 추가 매수가 모두 고점이어도 판정되지 않는 구간이 생긴다
     @Test
-    void 이전_경고가_없으면_PASS() {
+    void 이전_경고가_없어도_고점이면_WARNING() {
         DiagnosisResult result = rule.diagnose(
                 DiagnosisContextFixture.of(ExecutionSnapshotFixture.buyAt(PRICE_AT_HIGH)));
 
-        assertThat(result.getResult()).isEqualTo(DiagnosisStatus.PASS);
+        assertThat(result.getResult()).isEqualTo(DiagnosisStatus.WARNING);
+    }
+
+    // 이전 REPEATED 경고도 반복 근거로 본다
+    // 최초 매수가 고점이 아니어도 추가 매수부터 연쇄가 이어져야 한다
+    @Test
+    void 이전_추가_매수_경고도_반복_근거가_된다() {
+        List<DiagnosisResult> previous = List.of(
+                DiagnosisResultFixture.of(RuleCode.REPEATED_HIGH_CHASING_BUY, DiagnosisStatus.WARNING));
+
+        DiagnosisResult result = rule.diagnose(
+                DiagnosisContextFixture.of(ExecutionSnapshotFixture.buyAt(PRICE_AT_HIGH), previous));
+
+        assertThat(result.getResult()).isEqualTo(DiagnosisStatus.WARNING);
+        assertThat(result.getMetrics().get("chasedBefore").asBoolean()).isTrue();
     }
 
     @Test
@@ -84,6 +100,7 @@ class RepeatedHighChasingBuyRuleTest {
     }
 
     // 이전 진단 중 다른 규칙이나 PASS는 반복 근거가 아니다
+    // 판정은 이번 매수만 보므로 WARNING이지만 chasedBefore는 false여야 한다
     @Test
     void 다른_규칙과_다른_판정은_반복으로_보지_않는다() {
         List<DiagnosisResult> previous = List.of(
@@ -95,7 +112,7 @@ class RepeatedHighChasingBuyRuleTest {
         DiagnosisResult result = rule.diagnose(
                 DiagnosisContextFixture.of(ExecutionSnapshotFixture.buyAt(PRICE_AT_HIGH), previous));
 
-        assertThat(result.getResult()).isEqualTo(DiagnosisStatus.PASS);
+        assertThat(result.getMetrics().get("chasedBefore").asBoolean()).isFalse();
     }
 
     // 20일 최고가가 없으면 비율을 계산할 수 없다
@@ -146,9 +163,9 @@ class RepeatedHighChasingBuyRuleTest {
         assertThat(result.getMetrics().get("chasedBefore").asBoolean()).isTrue();
     }
 
-    // 반복 / 이번만 고점 / 고점과 거리 있음은 전할 내용이 다르다
+    // 반복 / 이번이 처음 / 고점과 거리 있음은 판정이 같아도 전할 내용이 다르다
     @Test
-    void 판정_결과에_따라_다른_근거_문구가_담긴다() {
+    void 반복_여부에_따라_다른_근거_문구가_담긴다() {
         String repeated = messageOf(rule.diagnose(
                 DiagnosisContextFixture.of(ExecutionSnapshotFixture.buyAt(PRICE_AT_HIGH), CHASED_BEFORE)));
         String firstTime = messageOf(rule.diagnose(

@@ -12,7 +12,9 @@ import org.springframework.stereotype.Component;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 
-// 추가 매수에서도 고점 추격이 반복됐는지 진단
+// 추가 매수가 고점 부근에서 이뤄졌는지 진단
+// HIGH_CHASING_BUY와 같은 기준을 쓰되 최초 매수가 아닌 추가 매수를 판정한다
+// 이전에도 경고가 있었는지는 판정 조건이 아니라 사용자에게 전할 맥락으로만 사용한다
 @Component
 public class RepeatedHighChasingBuyRule implements DiagnosisRule {
 
@@ -47,13 +49,17 @@ public class RepeatedHighChasingBuyRule implements DiagnosisRule {
         }
 
         BigDecimal highPriceRatio = calculateHighPriceRatio(snapshot.getExecutedPrice(), recent20High);
-        boolean chasingNow = highPriceRatio.compareTo(HIGH_PRICE_RATIO_THRESHOLD) >= 0;
 
-        // 이전 매수에 같은 경고가 있어야 반복임
-        // 몇 번인지는 CLOSE의 HIGH_CHASING_FREQUENCY가 집계하므로 여기서는 유무만 본다
+        // 이번 매수가 고점 부근이면 경고한다
+        // 이전 경고 유무를 조건에 넣으면 최초 매수가 고점이 아니었을 때
+        // 이후 추가 매수가 모두 고점이어도 판정되지 않는 구간이 생긴다
+        boolean chasing = highPriceRatio.compareTo(HIGH_PRICE_RATIO_THRESHOLD) >= 0;
+
+        // 반복 여부는 판정 조건이 아니라 사용자에게 전할 맥락으로만 사용한다
         boolean chasedBefore = context.hasPreviousResult(
-                RuleCode.HIGH_CHASING_BUY, DiagnosisStatus.WARNING);
-        boolean repeated = chasingNow && chasedBefore;
+                RuleCode.HIGH_CHASING_BUY, DiagnosisStatus.WARNING)
+                || context.hasPreviousResult(
+                RuleCode.REPEATED_HIGH_CHASING_BUY, DiagnosisStatus.WARNING);
 
         return DiagnosisResult.builder()
                 .diagnosisKey(DiagnosisKey.of(getRuleCode(), RULE_VERSION, snapshot.getExecutionId()))
@@ -63,11 +69,11 @@ public class RepeatedHighChasingBuyRule implements DiagnosisRule {
                 .diagnosisPhase(getRuleCode().getDiagnosisPhase())
                 .ruleCode(getRuleCode().name())
                 .ruleVersion(RULE_VERSION)
-                .result(repeated ? DiagnosisStatus.WARNING : DiagnosisStatus.PASS)
+                .result(chasing ? DiagnosisStatus.WARNING : DiagnosisStatus.PASS)
                 .metricValue(highPriceRatio)
                 .thresholdValue(HIGH_PRICE_RATIO_THRESHOLD)
                 .metrics(buildMetrics(snapshot, highPriceRatio, chasedBefore))
-                .evidence(buildEvidence(highPriceRatio, chasingNow, chasedBefore))
+                .evidence(buildEvidence(highPriceRatio, chasing, chasedBefore))
                 .build();
     }
 
@@ -111,22 +117,23 @@ public class RepeatedHighChasingBuyRule implements DiagnosisRule {
         return metrics;
     }
 
-    private ObjectNode buildEvidence(BigDecimal highPriceRatio, boolean chasingNow, boolean chasedBefore) {
+    private ObjectNode buildEvidence(BigDecimal highPriceRatio, boolean chasing, boolean chasedBefore) {
         ObjectNode evidence = JsonNodeFactory.instance.objectNode();
-        evidence.put("message", buildMessage(highPriceRatio, chasingNow, chasedBefore));
+        evidence.put("message", buildMessage(highPriceRatio, chasing, chasedBefore));
         return evidence;
     }
 
-    private String buildMessage(BigDecimal highPriceRatio, boolean chasingNow, boolean chasedBefore) {
+    // 판정은 같은 WARNING이라도 반복인지 아닌지에 따라 전할 내용이 다르다
+    private String buildMessage(BigDecimal highPriceRatio, boolean chasing, boolean chasedBefore) {
         String ratioText = highPriceRatio.setScale(2, RoundingMode.HALF_UP).toPlainString();
 
-        if (chasingNow && chasedBefore) {
+        if (chasing && chasedBefore) {
             return "이번 추가 매수도 최근 20일 최고가의 " + ratioText + "% 수준입니다. "
                     + "고점 부근 매수가 반복되면 평균 단가가 높아져 손실 구간이 넓어집니다.";
         }
-        if (chasingNow) {
-            return "추가 매수가 최근 20일 최고가의 " + ratioText + "% 수준이지만 "
-                    + "이전 매수는 고점과 거리가 있었습니다.";
+        if (chasing) {
+            return "추가 매수가 최근 20일 최고가의 " + ratioText + "% 수준입니다. "
+                    + "고점 부근 매수는 손절 폭이 넓어지기 쉽습니다.";
         }
         return "추가 매수가 최근 20일 최고가의 " + ratioText + "% 수준으로 고점과 거리가 있습니다.";
     }
