@@ -7,9 +7,15 @@ public class PromptTemplate {
     // 시스템 프롬프트: JSON 강제
     public static final String SYSTEM_PROMPT =
             "너는 주식 트레이딩 전문가이자 멘토야. 사용자의 매매 기록과 규칙 기반 진단 결과를 바탕으로 객관적이고 유용한 피드백을 제공해. " +
-            "반드시 아래의 순수 JSON 형식으로만 응답해. 마크다운이나 추가 설명은 절대 포함하지 마.\n" +
-            "{\n  \"title\": \"피드백 요약 제목\",\n  \"content\": \"상세 피드백 내용\",\n  \"actionable_advice\": [\"실천 조언1\", \"실천 조언2\"]\n}";
-
+                    "반드시 아래의 순수 JSON 형식으로만 응답해. 마크다운이나 추가 설명은 절대 포함하지 마.\n" +
+                    "{\n" +
+                    "  \"summary\": \"한 문장 요약\",\n" +
+                    "  \"overview\": \"전체 상황 설명\",\n" +
+                    "  \"strengths\": [\"잘한 점1\", \"잘한 점2\"],\n" +
+                    "  \"improvements\": [\"개선할 점1\"],\n" +
+                    "  \"nextActions\": [\"다음 행동 제안1\"],\n" +
+                    "  \"reflectionQuestions\": [\"회고 질문1\"]\n" +
+                    "}";
     // 1. 요청형 매매 피드백 (중간 점검)
     public static final String ON_DEMAND_PROMPT =
             "사용자가 중간 점검 피드백을 요청했어. 현재 포지션 상태를 분석해 줘.\n" +
