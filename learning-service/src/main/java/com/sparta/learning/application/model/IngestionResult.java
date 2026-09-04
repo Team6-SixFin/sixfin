@@ -12,6 +12,11 @@ public record IngestionResult(
         return new IngestionResult(EventIngestionResult.DUPLICATE, null);
     }
 
+    // 체결 이벤트의 후속 진단이 실패한 경우 기존 스냅샷으로 진단만 다시 실행한다.
+    public static IngestionResult duplicate(ExecutionSnapshot executionSnapshot){
+        return new IngestionResult(EventIngestionResult.DUPLICATE, executionSnapshot);
+    }
+
     public static IngestionResult processed(ExecutionSnapshot executionSnapshot){
         return new IngestionResult(EventIngestionResult.PROCESSED, executionSnapshot);
     }
