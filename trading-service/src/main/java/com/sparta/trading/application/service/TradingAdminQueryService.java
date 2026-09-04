@@ -29,6 +29,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -263,7 +264,8 @@ public class TradingAdminQueryService {
 
         Page<TradingAdminOutboxEventResponseDto> responseDtoPage = outboxEvents.map(outboxEvent ->{
             Object payloadValue = includePayload ? outboxEvent.getPayload() : null;
-           return new TradingAdminOutboxEventResponseDto(
+            Long delayedSeconds = calculateDelayedSeconds(outboxEvent);
+            return new TradingAdminOutboxEventResponseDto(
                    outboxEvent.getId(),
                    outboxEvent.getEventId(),
                    outboxEvent.getEventType(),
@@ -277,7 +279,7 @@ public class TradingAdminQueryService {
                    payloadValue,
                    outboxEvent.getOccurredAt(),
                    outboxEvent.getPublishedAt(),
-                   0L                   //어디서 가져오는지 전혀 모름
+                   delayedSeconds
            );
         });
 
@@ -290,6 +292,26 @@ public class TradingAdminQueryService {
         if (from != null && to != null && from.isAfter(to)) {
             throw new CustomException(GlobalErrorCode.INVALID_REQUEST, "from이 to보다 이후일 수 없습니다.");
         }
+    }
+
+    //아웃박스 - delayedSecond 계산
+    private Long calculateDelayedSeconds(OutboxEvents outboxEvent) {
+        if (outboxEvent.getOccurredAt() == null) {
+            return 0L;
+        }
+
+        Instant now = Instant.now();
+
+        // PUBLISHED인 경우: publishedAt - occurredAt
+        if (OutboxStatus.PUBLISHED.equals(outboxEvent.getStatus())) {
+            if (outboxEvent.getPublishedAt() == null) {
+                return 0L;
+            }
+            return Duration.between(outboxEvent.getOccurredAt(), outboxEvent.getPublishedAt()).getSeconds();
+        }
+
+        // PENDING, FAILED인 경우: 현재 시간(now) - occurredAt
+        return Duration.between(outboxEvent.getOccurredAt(), now).getSeconds();
     }
 
 }
