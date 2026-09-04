@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.sparta.learning.application.exception.InvalidTradeEventException;
 import com.sparta.learning.application.model.EventIngestionResult;
+import com.sparta.learning.application.model.IngestionResult;
 import com.sparta.learning.domain.entity.ClosedPositionSnapshot;
 import com.sparta.learning.domain.entity.ConsumedEvent;
 import com.sparta.learning.domain.entity.ExecutionSnapshot;
@@ -81,9 +82,10 @@ class TradeEventIngestionServiceTest {
         TradingEventEnvelope event = readEnvelope("events/buy-executed-first.json");
         when(consumedEventRepository.existsByEventId(event.eventId())).thenReturn(true);
 
-        EventIngestionResult result = ingestionService.ingest(event);
+        IngestionResult result = ingestionService.ingest(event);
 
-        assertThat(result).isEqualTo(EventIngestionResult.DUPLICATE);
+        assertThat(result.status()).isEqualTo(EventIngestionResult.DUPLICATE);
+        assertThat(result.hasDiagnosisTarget()).isFalse();
         verify(consumedEventRepository, never()).save(any());
         verifyNoInteractions(snapshotMapper, executionSnapshotRepository, closedPositionSnapshotRepository);
     }
@@ -98,10 +100,13 @@ class TradeEventIngestionServiceTest {
                 .thenAnswer(invocation -> invocation.getArgument(0));
         when(snapshotMapper.toBuySnapshot(any(ConsumedEvent.class), any(TradingEventEnvelope.class)))
                 .thenReturn(snapshot);
+        when(executionSnapshotRepository.save(snapshot)).thenReturn(snapshot);
 
-        EventIngestionResult result = ingestionService.ingest(event);
+        IngestionResult result = ingestionService.ingest(event);
 
-        assertThat(result).isEqualTo(EventIngestionResult.PROCESSED);
+        assertThat(result.status()).isEqualTo(EventIngestionResult.PROCESSED);
+        // 후속 진단에 넘길 수 있도록 저장된 스냅샷을 그대로 담아야 한다
+        assertThat(result.executionSnapshot()).isSameAs(snapshot);
         verify(consumedEventRepository).save(any(ConsumedEvent.class));
         verify(executionSnapshotRepository).save(snapshot);
         verifyNoInteractions(closedPositionSnapshotRepository);
@@ -118,9 +123,11 @@ class TradeEventIngestionServiceTest {
         when(snapshotMapper.toClosedPositionSnapshot(any(ConsumedEvent.class), any(TradingEventEnvelope.class)))
                 .thenReturn(snapshot);
 
-        EventIngestionResult result = ingestionService.ingest(event);
+        IngestionResult result = ingestionService.ingest(event);
 
-        assertThat(result).isEqualTo(EventIngestionResult.PROCESSED);
+        assertThat(result.status()).isEqualTo(EventIngestionResult.PROCESSED);
+        // 포지션 종료는 ClosedPositionSnapshot이라 현재 진단 인터페이스로 처리할 수 없다
+        assertThat(result.hasDiagnosisTarget()).isFalse();
         verify(closedPositionSnapshotRepository).save(snapshot);
         verifyNoInteractions(executionSnapshotRepository);
     }
