@@ -20,6 +20,11 @@ public class AccountRepositoryImpl implements AccountRepository {
     }
 
     @Override
+    public Optional<Accounts> findByUserIdForUpdate(UUID userId) {
+        return accountJpaRepository.findByUserIdForUpdate(userId);
+    }
+
+    @Override
     public Accounts saveAndFlush(Accounts account) {
         return accountJpaRepository.saveAndFlush(account);
     }
