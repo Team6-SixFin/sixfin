@@ -69,7 +69,9 @@ public class QuoteReaderDbImpl implements QuoteReader {
                 candle.getRecent20dHigh(),
                 candle.getRecent20dLow(),
                 candle.getRecent5dReturn(),
-                now
+                now,
+                candle.getStock().getId(),
+                candle.getStock().getName()
         );
     }
 }
