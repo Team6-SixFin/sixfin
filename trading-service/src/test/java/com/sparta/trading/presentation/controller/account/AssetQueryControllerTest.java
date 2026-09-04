@@ -1,6 +1,7 @@
 package com.sparta.trading.presentation.controller.account;
 
 import com.sparta.trading.application.service.AccountQueryService;
+import com.sparta.trading.application.service.PortfolioQueryService;
 import com.sparta.trading.presentation.dto.response.AccountResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -25,12 +26,14 @@ class AssetQueryControllerTest {
 
     @Mock
     private AccountQueryService accountQueryService;
+    @Mock
+    private PortfolioQueryService portfolioQueryService;
 
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
-        mockMvc = MockMvcBuilders.standaloneSetup(new AssetQueryController(accountQueryService)).build();
+        mockMvc = MockMvcBuilders.standaloneSetup(new AssetQueryController(accountQueryService, portfolioQueryService)).build();
     }
 
     @Test
