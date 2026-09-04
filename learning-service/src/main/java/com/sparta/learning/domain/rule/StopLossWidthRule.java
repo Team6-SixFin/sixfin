@@ -30,12 +30,14 @@ public class StopLossWidthRule implements DiagnosisRule {
 
     // ENTRY 단계의 최초 매수는 모두 판정 대상이다
     @Override
-    public boolean supports(ExecutionSnapshot snapshot) {
+    public boolean supports(DiagnosisContext context) {
         return true;
     }
 
     @Override
-    public DiagnosisResult diagnose(ExecutionSnapshot snapshot) {
+    public DiagnosisResult diagnose(DiagnosisContext context) {
+        ExecutionSnapshot snapshot = context.executionSnapshot();
+
         // 손절가가 없으면 폭을 계산할 수 없다
         // 손절가 미설정 자체는 STOP_LOSS_SET이 경고하므로 여기서는 판정하지 않은 사실만 남김
         if (snapshot.getPlannedStopLossPrice() == null) {

@@ -23,12 +23,13 @@ public class StopLossSetRule implements DiagnosisRule {
 
     // ENTRY 단계에서는 추가 조건이 필요없다
     @Override
-    public boolean supports(ExecutionSnapshot snapshot){
+    public boolean supports(DiagnosisContext context){
         return true;
     }
 
     @Override
-    public DiagnosisResult diagnose(ExecutionSnapshot snapshot){
+    public DiagnosisResult diagnose(DiagnosisContext context){
+        ExecutionSnapshot snapshot = context.executionSnapshot();
         BigDecimal stopLossPrice = snapshot.getPlannedStopLossPrice();
         boolean hasStopLoss = stopLossPrice != null;
 
