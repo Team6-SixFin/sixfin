@@ -14,5 +14,14 @@ public record Quote(
         BigDecimal recent20dHigh,
         BigDecimal recent20dLow,
         BigDecimal recent5dReturn,
-        Instant updatedAt
-) {}
+        Instant updatedAt,
+        Long stockId,
+        String stockName
+) {
+    public Quote(String symbol, BigDecimal price, Long seq, Instant marketTime, ClockStatus clockStatus,
+                 BigDecimal recent20dHigh, BigDecimal recent20dLow, BigDecimal recent5dReturn,
+                 Instant updatedAt) {
+        this(symbol, price, seq, marketTime, clockStatus, recent20dHigh, recent20dLow,
+                recent5dReturn, updatedAt, null, null);
+    }
+}
