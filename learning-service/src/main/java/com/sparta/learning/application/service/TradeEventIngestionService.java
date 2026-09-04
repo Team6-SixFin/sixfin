@@ -73,12 +73,10 @@ public class TradeEventIngestionService {
                     executionSnapshotRepository.save(
                             snapshotMapper.toSellSnapshot(consumedEvent, event))
             );
-            // 포지션 종료는 현재 진단 인터페이스로 처리할 수 없다. CLOSE 규칙 구현 시 같이 정리하겠습니다.
-            case POSITION_CLOSED -> {
-                closedPositionSnapshotRepository.save(
-                        snapshotMapper.toClosedPositionSnapshot(consumedEvent, event));
-                yield IngestionResult.processedWithoutDiagnosis();
-            }
+            case POSITION_CLOSED -> IngestionResult.processed(
+                    closedPositionSnapshotRepository.save(
+                            snapshotMapper.toClosedPositionSnapshot(consumedEvent, event))
+            );
         };
     }
 

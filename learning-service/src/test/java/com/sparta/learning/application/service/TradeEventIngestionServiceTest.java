@@ -90,7 +90,7 @@ class TradeEventIngestionServiceTest {
 
         assertThat(result.status()).isEqualTo(EventIngestionResult.DUPLICATE);
         assertThat(result.executionSnapshot()).isSameAs(snapshot);
-        assertThat(result.hasDiagnosisTarget()).isTrue();
+        assertThat(result.hasExecutionTarget()).isTrue();
         verify(consumedEventRepository, never()).save(any());
         verify(executionSnapshotRepository, never()).save(any());
         verifyNoInteractions(snapshotMapper, closedPositionSnapshotRepository);
@@ -122,7 +122,9 @@ class TradeEventIngestionServiceTest {
         IngestionResult result = ingestionService.ingest(event);
 
         assertThat(result.status()).isEqualTo(EventIngestionResult.DUPLICATE);
-        assertThat(result.hasDiagnosisTarget()).isFalse();
+        // 이미 진단이 저장되어 있으므로 어느 쪽도 담지 않는다
+        assertThat(result.hasExecutionTarget()).isFalse();
+        assertThat(result.hasClosedPositionTarget()).isFalse();
         verify(consumedEventRepository, never()).save(any());
         verifyNoInteractions(snapshotMapper, executionSnapshotRepository, closedPositionSnapshotRepository);
     }
@@ -159,12 +161,15 @@ class TradeEventIngestionServiceTest {
                 .thenAnswer(invocation -> invocation.getArgument(0));
         when(snapshotMapper.toClosedPositionSnapshot(any(ConsumedEvent.class), any(TradingEventEnvelope.class)))
                 .thenReturn(snapshot);
+        when(closedPositionSnapshotRepository.save(snapshot)).thenReturn(snapshot);
 
         IngestionResult result = ingestionService.ingest(event);
 
         assertThat(result.status()).isEqualTo(EventIngestionResult.PROCESSED);
-        // 포지션 종료는 ClosedPositionSnapshot이라 현재 진단 인터페이스로 처리할 수 없다
-        assertThat(result.hasDiagnosisTarget()).isFalse();
+        // 포지션 종료는 CLOSE 진단 대상이므로 종료 스냅샷을 담는다
+        assertThat(result.hasClosedPositionTarget()).isTrue();
+        assertThat(result.closedPositionSnapshot()).isSameAs(snapshot);
+        assertThat(result.hasExecutionTarget()).isFalse();
         verify(closedPositionSnapshotRepository).save(snapshot);
         verifyNoInteractions(executionSnapshotRepository);
     }

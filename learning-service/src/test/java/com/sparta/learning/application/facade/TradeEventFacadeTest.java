@@ -3,6 +3,7 @@ package com.sparta.learning.application.facade;
 import com.sparta.learning.application.diagnosis.DiagnosisService;
 import com.sparta.learning.application.model.IngestionResult;
 import com.sparta.learning.application.service.TradeEventIngestionService;
+import com.sparta.learning.domain.entity.ClosedPositionSnapshot;
 import com.sparta.learning.domain.entity.ExecutionSnapshot;
 import com.sparta.learning.infrastructure.messaging.kafka.dto.TradingEventEnvelope;
 import org.junit.jupiter.api.Test;
@@ -18,6 +19,7 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -69,14 +71,29 @@ class TradeEventFacadeTest {
         verifyNoInteractions(diagnosisService);
     }
 
-    // 포지션 종료는 ClosedPositionSnapshot이라 현재 진단 인터페이스로 처리할 수 없다
+    // 포지션 종료는 체결이 아니라 포지션 전체를 판정하므로 다른 경로로 실행한다
     @Test
-    void 진단_대상이_아니면_진단을_실행하지_않는다() {
-        when(ingestionService.ingest(event)).thenReturn(IngestionResult.processedWithoutDiagnosis());
+    void 포지션_종료_이벤트는_CLOSE_진단을_실행한다() {
+        ClosedPositionSnapshot snapshot = mock(ClosedPositionSnapshot.class);
+        when(ingestionService.ingest(event)).thenReturn(IngestionResult.processed(snapshot));
 
         facade.handle(event);
 
-        verifyNoInteractions(diagnosisService);
+        verify(diagnosisService).diagnoseClose(snapshot);
+        verify(diagnosisService, never()).diagnose(any(ExecutionSnapshot.class));
+    }
+
+    // CLOSE 진단 실패도 체결 진단과 같은 이유로 Consumer까지 전파해 재처리되게 한다
+    @Test
+    void CLOSE_진단이_실패하면_예외를_밖으로_전파한다() {
+        ClosedPositionSnapshot snapshot = mock(ClosedPositionSnapshot.class);
+        when(ingestionService.ingest(event)).thenReturn(IngestionResult.processed(snapshot));
+        when(diagnosisService.diagnoseClose(any(ClosedPositionSnapshot.class)))
+                .thenThrow(new IllegalStateException("진단 실패"));
+
+        assertThatThrownBy(() -> facade.handle(event))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("진단 실패");
     }
 
     // 진단 실패를 Consumer까지 전파해야 offset이 커밋되지 않고 Kafka 재시도가 동작한다

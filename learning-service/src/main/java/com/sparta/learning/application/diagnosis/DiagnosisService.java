@@ -1,5 +1,6 @@
 package com.sparta.learning.application.diagnosis;
 
+import com.sparta.learning.domain.entity.ClosedPositionSnapshot;
 import com.sparta.learning.domain.entity.DiagnosisResult;
 import com.sparta.learning.domain.entity.ExecutionSnapshot;
 import com.sparta.learning.domain.model.DiagnosisPhase;
@@ -37,6 +38,24 @@ public class DiagnosisService {
                 diagnosisResultRepository.findByPositionIdOrderByIdAsc(snapshot.getPositionId())
         );
 
+        return runAndSave(context, phase, "executionId = " + snapshot.getExecutionId());
+    }
+
+    // 포지션 종료 시 해당하는 규칙을 실행해 진단 결과를 저장한다.
+    // 체결 하나가 아니라 포지션 전체가 대상이라 진단 키도 positionId로 만들어진다.
+    @Transactional
+    public List<DiagnosisResult> diagnoseClose(ClosedPositionSnapshot snapshot){
+        // CLOSE 규칙은 그동안 쌓인 진단 결과를 집계해 판정한다
+        DiagnosisContext context = DiagnosisContext.ofClosedPosition(
+                snapshot,
+                diagnosisResultRepository.findByPositionIdOrderByIdAsc(snapshot.getPositionId())
+        );
+
+        return runAndSave(context, DiagnosisPhase.CLOSE, "positionId = " + snapshot.getPositionId());
+    }
+
+    // 규칙 실행부터 저장까지의 흐름은 체결과 포지션 종료가 동일하다
+    private List<DiagnosisResult> runAndSave(DiagnosisContext context, DiagnosisPhase phase, String target){
         List<DiagnosisResult> results = execute(context, phase);
 
         if(results.isEmpty()){
@@ -45,7 +64,7 @@ public class DiagnosisService {
 
         List<DiagnosisResult> newResults = excludeAlreadySaved(results);
         if(newResults.isEmpty()){
-            log.info("이미 진단된 체결입니다. executionId = {}, phase = {}", snapshot.getExecutionId(), phase);
+            log.info("이미 진단된 대상입니다. {}, phase = {}", target, phase);
             return List.of();
         }
 
