@@ -1,137 +1,263 @@
 package com.sparta.learning.application.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sparta.learning.application.dto.request.AiFeedbackRequestDto;
 import com.sparta.learning.application.dto.response.AiFeedbackResponse;
 import com.sparta.learning.application.port.AiClientPort;
-import com.sparta.learning.domain.entity.ExecutionSnapshot;
-import com.sparta.learning.domain.entity.Feedback;
+import com.sparta.learning.domain.entity.*;
+import com.sparta.learning.domain.model.DiagnosisPhase;
+import com.sparta.learning.domain.model.DiagnosisStatus;
 import com.sparta.learning.domain.model.FeedbackType;
-import com.sparta.learning.infrastructure.persistence.repository.AiRequestRepository;
-import com.sparta.learning.infrastructure.persistence.repository.ExecutionSnapshotRepository;
-import com.sparta.learning.infrastructure.persistence.repository.FeedbackRepository;
+import com.sparta.learning.domain.model.TradeType;
+import com.sparta.learning.infrastructure.persistence.repository.*;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.TransactionStatus;
+import org.springframework.transaction.support.TransactionCallback;
+import org.springframework.transaction.support.TransactionTemplate;
 
+import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Consumer;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class LearningCommandServiceTest {
 
-    @Mock
-    private AiClientPort aiClientPort;
+    // @InjectMocks 대신 수동 주입을 사용합니다 (NPE 방지)
+    private LearningCommandService learningCommandService;
+
+    @Mock private AiClientPort aiClientPort;
+    @Mock private FeedbackRepository feedbackRepository;
+    @Mock private AiRequestRepository aiRequestRepository;
+    @Mock private ExecutionSnapshotRepository executionSnapshotRepository;
+    @Mock private DiagnosisResultRepository diagnosisResultRepository;
+    @Mock private ClosedPositionSnapshotRepository closedPositionSnapshotRepository;
+    @Mock private TransactionTemplate transactionTemplate;
 
     @Spy
     private ObjectMapper objectMapper = new ObjectMapper();
 
-    @Mock
-    private FeedbackRepository feedbackRepository;
+    private UUID positionId;
+    private UUID userId;
 
-    @Mock
-    private AiRequestRepository aiRequestRepository;
+    @BeforeEach
+    void setUp() {
+        positionId = UUID.randomUUID();
+        userId = UUID.randomUUID();
 
-    @Mock
-    private ExecutionSnapshotRepository executionSnapshotRepository;
-
-    @InjectMocks
-    private LearningCommandService learningCommandService;
-
-    @Test
-    @DisplayName("요청형 매매 피드백 생성 성공 테스트")
-    void createOnDemandFeedback_Success() {
-        // given
-        UUID positionId = UUID.randomUUID();
-        UUID userId = UUID.randomUUID();
-        UUID executionId = UUID.randomUUID();
-
-        ExecutionSnapshot mockSnapshot = ExecutionSnapshot.builder()
-                .executionId(executionId)
-                .positionId(positionId)
-                .userId(userId)
-                .executedAt(OffsetDateTime.now())
-                .build();
-
-        AiFeedbackResponse mockAiResponse = new AiFeedbackResponse(
-                "분석 완료",
-                "좋은 매매 타이밍이었습니다.",
-                List.of("지속 유지")
+        // 1. 수동 객체 주입 (생성자 파라미터 순서와 동일하게)
+        learningCommandService = new LearningCommandService(
+                aiClientPort,
+                objectMapper,
+                feedbackRepository,
+                aiRequestRepository,
+                executionSnapshotRepository,
+                diagnosisResultRepository,
+                closedPositionSnapshotRepository,
+                transactionTemplate
         );
 
-        given(executionSnapshotRepository.findFirstByPositionIdAndUserIdOrderByExecutedAtDescIdDesc(positionId, userId))
-                .willReturn(Optional.of(mockSnapshot));
-        given(feedbackRepository.findByFeedbackKey(anyString()))
-                .willReturn(Optional.empty());
-        given(feedbackRepository.save(any(Feedback.class)))
-                .willAnswer(invocation -> invocation.getArgument(0));
-        given(aiClientPort.requestAiFeedback(any(UUID.class), any(FeedbackType.class), anyString()))
-                .willReturn(mockAiResponse);
+        // 2. TransactionTemplate Mocking (트랜잭션 실행 우회)
+        lenient().when(transactionTemplate.execute(any())).thenAnswer(invocation -> {
+            TransactionCallback<?> callback = invocation.getArgument(0);
+            return callback.doInTransaction(mock(TransactionStatus.class));
+        });
+
+        lenient().doAnswer(invocation -> {
+            Consumer<TransactionStatus> action = invocation.getArgument(0);
+            action.accept(mock(TransactionStatus.class));
+            return null;
+        }).when(transactionTemplate).executeWithoutResult(any());
+    }
+
+    // =========================================================================
+    // 실제 프로젝트 엔티티 기반 Mock 데이터 생성 Helper 메서드
+    // =========================================================================
+    private ExecutionSnapshot createExecutionSnapshot(TradeType tradeType) {
+        return ExecutionSnapshot.builder()
+                .executionId(UUID.randomUUID())
+                .orderId(UUID.randomUUID())
+                .positionId(positionId)
+                .userId(userId)
+                .stockId(100L)
+                .stockSymbol("AAPL")
+                .stockName("Apple Inc.")
+                .tradeType(tradeType)
+                .quantity(10)
+                .executedPrice(BigDecimal.valueOf(150.0))
+                .positionQuantityAfter(tradeType == TradeType.BUY ? 10 : 0)
+                .positionAveragePrice(BigDecimal.valueOf(150.0))
+                .plannedStopLossPrice(BigDecimal.valueOf(140.0))
+                .investmentReason("테스트 투자 근거")
+                .recent20dHigh(BigDecimal.valueOf(160.0))
+                .recent20dLow(BigDecimal.valueOf(130.0))
+                .recent5dReturnRate(BigDecimal.valueOf(2.5))
+                .quoteAt(OffsetDateTime.now())
+                .executedAt(OffsetDateTime.now())
+                .build();
+    }
+
+    private DiagnosisResult createDiagnosisResult(DiagnosisPhase phase) {
+        return DiagnosisResult.builder()
+                .userId(userId)
+                .positionId(positionId)
+                .diagnosisPhase(phase)
+                .ruleCode("RULE_001")
+                .ruleVersion(1)
+                .result(DiagnosisStatus.PASS)
+                .metricValue(BigDecimal.valueOf(5.0))
+                .thresholdValue(BigDecimal.valueOf(3.0))
+                .metrics(objectMapper.createObjectNode())
+                .evidence(objectMapper.createObjectNode())
+                .build();
+    }
+
+    private ClosedPositionSnapshot createClosedPositionSnapshot() {
+        return ClosedPositionSnapshot.builder()
+                .positionId(positionId)
+                .userId(userId)
+                .stockId(100L)
+                .stockSymbol("AAPL")
+                .stockName("Apple Inc.")
+                .totalBoughtQuantity(10L)
+                .totalSoldQuantity(10L)
+                .averageEntryPrice(BigDecimal.valueOf(150.0))
+                .averageExitPrice(BigDecimal.valueOf(160.0))
+                .plannedStopLossPrice(BigDecimal.valueOf(140.0))
+                .realizedProfit(BigDecimal.valueOf(100.0))
+                .realizedReturnRate(BigDecimal.valueOf(6.66))
+                .openedAt(OffsetDateTime.now().minusDays(1))
+                .closedAt(OffsetDateTime.now())
+                .build();
+    }
+
+    private void setupCommonMocksForProcess() {
+        lenient().when(feedbackRepository.findByFeedbackKey(anyString())).thenReturn(Optional.empty());
+        lenient().when(feedbackRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        AiFeedbackResponse mockAiResponse = new AiFeedbackResponse(
+                "요약", "총평", List.of("잘함"), List.of("개선점"), List.of("다음행동"), List.of("질문")
+        );
+        lenient().when(aiClientPort.requestAiFeedback(any(UUID.class), any(FeedbackType.class), anyString()))
+                .thenReturn(mockAiResponse);
+    }
+
+    // =========================================================================
+    // 테스트 케이스
+    // =========================================================================
+
+    @Test
+    @DisplayName("ENTRY_FEEDBACK: 첫 번째 체결 내역 1건과 ENTRY 진단 결과만 AI에 전달된다")
+    void testCreateEntryFeedback() throws JsonProcessingException {
+        // given
+        setupCommonMocksForProcess();
+        ExecutionSnapshot exec1 = createExecutionSnapshot(TradeType.BUY);
+
+        when(executionSnapshotRepository.findFirstByPositionIdAndUserIdOrderByExecutedAtAscIdAsc(positionId, userId))
+                .thenReturn(Optional.of(exec1));
+
+        DiagnosisResult diagEntry = createDiagnosisResult(DiagnosisPhase.ENTRY);
+        DiagnosisResult diagTrade = createDiagnosisResult(DiagnosisPhase.TRADE);
+        when(diagnosisResultRepository.findAllByPositionId(positionId))
+                .thenReturn(List.of(diagEntry, diagTrade));
 
         // when
-        AiFeedbackResponse response = learningCommandService.createOnDemandFeedback(positionId, userId);
+        learningCommandService.createEntryFeedback(positionId, userId);
 
         // then
-        assertThat(response).isNotNull();
-        assertThat(response.title()).isEqualTo("분석 완료");
-        verify(aiClientPort, times(1)).requestAiFeedback(any(UUID.class), any(FeedbackType.class), anyString());
-        verify(aiRequestRepository, times(1)).save(any());
+        ArgumentCaptor<AiFeedbackRequestDto> captor = ArgumentCaptor.forClass(AiFeedbackRequestDto.class);
+        verify(objectMapper, atLeastOnce()).writeValueAsString(captor.capture());
+
+        AiFeedbackRequestDto capturedDto = captor.getValue();
+        assertEquals(1, capturedDto.executions().size());
+        assertEquals(1, capturedDto.diagnoses().size());
+        assertEquals("OPEN", capturedDto.position().status());
     }
 
     @Test
-    @DisplayName("이미 존재하는 피드백(feedbackKey)이 있는 경우 AI를 호출하지 않고 기존 결과 반환 (멱등성)")
-    void createOnDemandFeedback_Idempotency() throws Exception {
+    @DisplayName("ON_DEMAND_FEEDBACK: 전체 체결 내역과 ENTRY, TRADE 진단 결과가 전달된다")
+    void testCreateOnDemandFeedback() throws JsonProcessingException {
         // given
-        UUID positionId = UUID.randomUUID();
-        UUID userId = UUID.randomUUID();
-        UUID executionId = UUID.randomUUID();
+        setupCommonMocksForProcess();
+        ExecutionSnapshot exec1 = createExecutionSnapshot(TradeType.BUY);
+        ExecutionSnapshot exec2 = createExecutionSnapshot(TradeType.BUY);
+        ExecutionSnapshot exec3 = createExecutionSnapshot(TradeType.SELL);
 
-        ExecutionSnapshot mockSnapshot = ExecutionSnapshot.builder()
-                .executionId(executionId)
-                .positionId(positionId)
-                .userId(userId)
-                .executedAt(OffsetDateTime.now())
-                .build();
+        when(executionSnapshotRepository.findFirstByPositionIdAndUserIdOrderByExecutedAtDescIdDesc(positionId, userId))
+                .thenReturn(Optional.of(exec3));
 
-        AiFeedbackResponse existingResponse = new AiFeedbackResponse(
-                "기존 피드백",
-                "이미 생성된 내용입니다.",
-                List.of("참고") // ✅ List 타입으로 수정
-        );
-        Feedback existingFeedback = Feedback.builder()
-                .feedbackKey("ON_DEMAND_FEEDBACK:" + positionId + ":" + executionId)
-                .userId(userId)
-                .positionId(positionId)
-                .basedOnExecutionId(executionId)
-                .feedbackType(FeedbackType.ON_DEMAND_FEEDBACK)
-                .build();
+        when(executionSnapshotRepository.findAllByPositionIdOrderByExecutedAtAscIdAsc(positionId))
+                .thenReturn(List.of(exec1, exec2, exec3));
 
-        // 리플렉션이나 objectMapper를 통해 content 필드 세팅 (필요시 빌더나 메서드 활용)
-        existingFeedback.complete(objectMapper.valueToTree(existingResponse), true, "v1.0");
+        DiagnosisResult diagEntry = createDiagnosisResult(DiagnosisPhase.ENTRY);
+        DiagnosisResult diagTrade = createDiagnosisResult(DiagnosisPhase.TRADE);
+        DiagnosisResult diagClose = createDiagnosisResult(DiagnosisPhase.CLOSE);
 
-        given(executionSnapshotRepository.findFirstByPositionIdAndUserIdOrderByExecutedAtDescIdDesc(positionId, userId))
-                .willReturn(Optional.of(mockSnapshot));
-        given(feedbackRepository.findByFeedbackKey(anyString()))
-                .willReturn(Optional.of(existingFeedback));
+        when(diagnosisResultRepository.findAllByPositionId(positionId))
+                .thenReturn(List.of(diagEntry, diagTrade, diagClose));
 
         // when
-        AiFeedbackResponse response = learningCommandService.createOnDemandFeedback(positionId, userId);
+        learningCommandService.createOnDemandFeedback(positionId, userId);
 
         // then
-        assertThat(response).isNotNull();
-        assertThat(response.title()).isEqualTo("기존 피드백");
-        // AI 클라이언트가 호출되지 않았음을 검증 (캐싱/멱등성 효과)
-        verify(aiClientPort, never()).requestAiFeedback(any(UUID.class), any(FeedbackType.class), anyString());
+        ArgumentCaptor<AiFeedbackRequestDto> captor = ArgumentCaptor.forClass(AiFeedbackRequestDto.class);
+        verify(objectMapper, atLeastOnce()).writeValueAsString(captor.capture());
+
+        AiFeedbackRequestDto capturedDto = captor.getValue();
+        assertEquals(3, capturedDto.executions().size());
+        assertEquals(2, capturedDto.diagnoses().size());
+    }
+
+    @Test
+    @DisplayName("POSITION_REVIEW: ClosedPositionSnapshot 활용 및 전체 데이터 전달된다")
+    void testCreatePositionReviewFeedback() throws JsonProcessingException {
+        // given
+        setupCommonMocksForProcess();
+        ExecutionSnapshot exec1 = createExecutionSnapshot(TradeType.BUY);
+        ExecutionSnapshot exec2 = createExecutionSnapshot(TradeType.SELL);
+
+        when(executionSnapshotRepository.findFirstByPositionIdAndUserIdOrderByExecutedAtDescIdDesc(positionId, userId))
+                .thenReturn(Optional.of(exec2));
+
+        when(executionSnapshotRepository.findAllByPositionIdOrderByExecutedAtAscIdAsc(positionId))
+                .thenReturn(List.of(exec1, exec2));
+
+        DiagnosisResult diagEntry = createDiagnosisResult(DiagnosisPhase.ENTRY);
+        DiagnosisResult diagTrade = createDiagnosisResult(DiagnosisPhase.TRADE);
+        DiagnosisResult diagClose = createDiagnosisResult(DiagnosisPhase.CLOSE);
+        when(diagnosisResultRepository.findAllByPositionId(positionId))
+                .thenReturn(List.of(diagEntry, diagTrade, diagClose));
+
+        ClosedPositionSnapshot closedSnapshot = createClosedPositionSnapshot();
+        when(closedPositionSnapshotRepository.findByPositionId(positionId))
+                .thenReturn(Optional.of(closedSnapshot));
+
+        // when
+        learningCommandService.createPositionReviewFeedback(positionId, userId);
+
+        // then
+        ArgumentCaptor<AiFeedbackRequestDto> captor = ArgumentCaptor.forClass(AiFeedbackRequestDto.class);
+        verify(objectMapper, atLeastOnce()).writeValueAsString(captor.capture());
+
+        AiFeedbackRequestDto capturedDto = captor.getValue();
+        verify(closedPositionSnapshotRepository, times(1)).findByPositionId(positionId);
+        assertEquals(2, capturedDto.executions().size());
+        assertEquals(3, capturedDto.diagnoses().size());
+        assertEquals("CLOSED", capturedDto.position().status());
     }
 }
