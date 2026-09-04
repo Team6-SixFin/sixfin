@@ -67,25 +67,33 @@ CREATE TABLE IF NOT EXISTS trading_service.p_price_candles (
 
 
 -- ----------------------------------------
--- orders(임시 — Orders 도메인 소유자 확정 전까지 로컬 기동용 스텁)
--- BaseEntity 감사 컬럼 포함해야 ddl-auto: validate 통과함
+-- 주문
 -- ----------------------------------------
 CREATE TABLE IF NOT EXISTS trading_service.p_orders (
-    id          UUID PRIMARY KEY,
-    created_at  TIMESTAMPTZ,
-    created_by  UUID,
-    updated_at  TIMESTAMPTZ,
-    updated_by  UUID,
-    deleted_at  TIMESTAMPTZ,
-    deleted_by  UUID
+    id                      UUID            PRIMARY KEY DEFAULT gen_random_uuid(),
+    request_id              UUID            NOT NULL UNIQUE,
+    account_id              UUID            NOT NULL,
+    stock_id                BIGINT          NOT NULL,
+    position_id             UUID,
+    side                    VARCHAR(10)     NOT NULL,
+    order_type              VARCHAR(10)     NOT NULL DEFAULT 'MARKET',
+    quantity                INT             NOT NULL CHECK (quantity > 0),
+    status                  VARCHAR(20)     NOT NULL,
+    reject_reason           VARCHAR(100),
+    planned_stop_loss_price NUMERIC(19,4),
+    investment_reason       VARCHAR(500),
+    market_time             TIMESTAMPTZ     NOT NULL,
+    candle_seq              BIGINT          NOT NULL,
+    created_at              TIMESTAMPTZ     NOT NULL DEFAULT now(),
+    created_by              UUID            NOT NULL,
+    updated_at              TIMESTAMPTZ,
+    updated_by              UUID,
+    deleted_at              TIMESTAMPTZ,
+    deleted_by              UUID
 );
 
 -- 리플레이 스케줄러가 "현재 seq 이하만" 조회할 때 사용 (candles P1 API도 동일)
 CREATE INDEX IF NOT EXISTS idx_price_candle_seq ON trading_service.p_price_candles (seq);
-ALTER TABLE trading_service.p_orders
-    ALTER COLUMN created_at TYPE TIMESTAMPTZ USING created_at AT TIME ZONE 'UTC',
-    ALTER COLUMN updated_at TYPE TIMESTAMPTZ USING updated_at AT TIME ZONE 'UTC',
-    ALTER COLUMN deleted_at TYPE TIMESTAMPTZ USING deleted_at AT TIME ZONE 'UTC';
 
 -- ----------------------------------------
 -- 시계
@@ -144,23 +152,57 @@ CREATE INDEX IF NOT EXISTS idx_cash_ledgers_account_id
     ON trading_service.p_cash_ledgers (account_id);
 
 -- ----------------------------------------
---체결
+-- 포지션
 -- ----------------------------------------
-CREATE TABLE TABLE IF NOT EXISTS trading_service.p_executions (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    order_id UUID NOT NULL UNIQUE,
-    position_id UUID NOT NULL,
-    user_id UUID NOT NULL,
-    stock_id BIGINT NOT NULL,
-    side VARCHAR(10) NOT NULL,
-    executed_price NUMERIC(19, 4) NOT NULL,
-    executed_quantity INTEGER NOT NULL,
-    executed_amount NUMERIC(19, 4) GENERATED ALWAYS AS (executed_price * executed_quantity) STORED NOT NULL,
-    avg_entry_price_at_execution NUMERIC(19, 4),
-    realized_profit NUMERIC(19, 4),
-    candle_seq BIGINT NOT NULL,
-    market_time TIMESTAMPTZ NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+CREATE TABLE IF NOT EXISTS trading_service.p_positions (
+    id                      UUID            PRIMARY KEY DEFAULT gen_random_uuid(),
+    account_id              UUID            NOT NULL REFERENCES trading_service.p_accounts (id),
+    stock_id                BIGINT          NOT NULL REFERENCES trading_service.p_stocks (id),
+    user_id                 UUID            NOT NULL,
+    status                  VARCHAR(20)     NOT NULL DEFAULT 'OPEN',
+    quantity                INT             NOT NULL DEFAULT 0 CHECK (quantity >= 0),
+    average_entry_price     NUMERIC(19,4)   NOT NULL,
+    planned_stop_loss_price NUMERIC(19,4),
+    investment_reason       VARCHAR(500),
+    total_buy_quantity      INT             NOT NULL DEFAULT 0 CHECK (total_buy_quantity >= 0),
+    total_buy_amount        NUMERIC(19,4)   NOT NULL DEFAULT 0,
+    total_sell_quantity     INT             NOT NULL DEFAULT 0 CHECK (total_sell_quantity >= 0),
+    total_sell_amount       NUMERIC(19,4)   NOT NULL DEFAULT 0,
+    realized_profit         NUMERIC(19,4)   NOT NULL DEFAULT 0,
+    opened_at               TIMESTAMPTZ     NOT NULL DEFAULT now(),
+    opened_seq              BIGINT          NOT NULL,
+    closed_at               TIMESTAMPTZ,
+    closed_seq              BIGINT,
+    created_at              TIMESTAMPTZ     NOT NULL DEFAULT now(),
+    created_by              UUID            NOT NULL,
+    updated_at              TIMESTAMPTZ,
+    updated_by              UUID,
+    deleted_at              TIMESTAMPTZ,
+    deleted_by              UUID
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uk_positions_open_account_stock
+    ON trading_service.p_positions (account_id, stock_id) WHERE status = 'OPEN';
+CREATE INDEX IF NOT EXISTS idx_positions_account_id ON trading_service.p_positions (account_id);
+
+-- ----------------------------------------
+-- 체결
+-- ----------------------------------------
+CREATE TABLE IF NOT EXISTS trading_service.p_executions (
+    id              UUID            PRIMARY KEY DEFAULT gen_random_uuid(),
+    order_id        UUID            NOT NULL UNIQUE REFERENCES trading_service.p_orders (id),
+    position_id     UUID            NOT NULL REFERENCES trading_service.p_positions (id),
+    user_id         UUID            NOT NULL,
+    stock_id        BIGINT          NOT NULL REFERENCES trading_service.p_stocks (id),
+    side            VARCHAR(10)     NOT NULL,
+    executed_quantity INT           NOT NULL CHECK (executed_quantity > 0),
+    executed_price  NUMERIC(19,4)   NOT NULL,
+    executed_amount NUMERIC(19,4)   GENERATED ALWAYS AS (executed_price * executed_quantity) STORED,
+    avg_entry_price_at_execution NUMERIC(19,4),
+    realized_profit NUMERIC(19,4),
+    candle_seq      BIGINT          NOT NULL,
+    market_time     TIMESTAMPTZ     NOT NULL,
+    created_at      TIMESTAMPTZ     NOT NULL DEFAULT now(),
     created_by UUID NOT NULL,
     updated_at TIMESTAMPTZ,
     updated_by UUID,
@@ -168,38 +210,169 @@ CREATE TABLE TABLE IF NOT EXISTS trading_service.p_executions (
     deleted_by UUID
 );
 
-    -- INDEX 생성
-    CREATE INDEX idx_p_executions_order_id ON trading_service.p_executions(order_id);
-    CREATE INDEX idx_p_executions_position_id ON trading_service.p_executions(position_id);
-    CREATE INDEX idx_p_executions_user_id ON trading_service.p_executions(user_id);
-    CREATE INDEX idx_p_executions_stock_id ON trading_service.p_executions(stock_id);
+CREATE INDEX IF NOT EXISTS idx_executions_position_id ON trading_service.p_executions (position_id);
 
 -- ----------------------------------------
---실패/미발행 이벤트
+-- Transactional Outbox
+-- 실제 Kafka 발행, 상태 전환과 재처리는 별도 발행기 책임이다.
 -- ----------------------------------------
-CREATE TABLE trading_service.p_outbox_events (
-    id BIGINT PRIMARY KEY GENERATED BY DEFAULT AS IDENTITY,
-    event_id UUID NOT NULL UNIQUE DEFAULT gen_random_uuid(),
-    event_type VARCHAR(50) NOT NULL,
-    event_version INTEGER NOT NULL DEFAULT 1,
-    aggregate_type VARCHAR(50) NOT NULL,
-    aggregate_id UUID NOT NULL,
-    partition_key VARCHAR(50) NOT NULL,
-    payload JSONB NOT NULL,
-    status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
-    retry_count INTEGER NOT NULL DEFAULT 0,
-    last_error VARCHAR(500),
-    occurred_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    published_at TIMESTAMPTZ,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    created_by UUID NOT NULL,
-    updated_at TIMESTAMPTZ,
-    updated_by UUID
+CREATE TABLE IF NOT EXISTS trading_service.p_outbox_events (
+    id              BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+    event_id        UUID            NOT NULL UNIQUE DEFAULT gen_random_uuid(),
+    event_type      VARCHAR(50)     NOT NULL,
+    event_version   INT             NOT NULL DEFAULT 1,
+    aggregate_type  VARCHAR(50)     NOT NULL,
+    aggregate_id    UUID            NOT NULL,
+    partition_key   VARCHAR(50)     NOT NULL,
+    payload         JSONB           NOT NULL,
+    status          VARCHAR(20)     NOT NULL DEFAULT 'PENDING',
+    retry_count     INT             NOT NULL DEFAULT 0,
+    last_error      VARCHAR(500),
+    occurred_at     TIMESTAMPTZ     NOT NULL DEFAULT now(),
+    published_at    TIMESTAMPTZ,
+    created_at      TIMESTAMPTZ     NOT NULL DEFAULT now(),
+    created_by      UUID            NOT NULL,
+    updated_at      TIMESTAMPTZ,
+    updated_by      UUID
 );
 
-    -- 기본 인덱스 생성
-    CREATE INDEX idx_p_outbox_events_event_id ON trading_service.p_outbox_events(event_id);
-    CREATE INDEX idx_p_outbox_events_status ON trading_service.p_outbox_events(status);
+CREATE INDEX IF NOT EXISTS idx_outbox_events_pending
+    ON trading_service.p_outbox_events (occurred_at) WHERE status = 'PENDING';
 
-    -- 부분 인덱스 (Partial Index: PENDING 상태 폴링 최적화용)
-    CREATE INDEX idx_p_outbox_pending ON trading_service.p_outbox_events(occurred_at) WHERE status = 'PENDING';
+-- M-2 초기 구현의 명세 외 컬럼·컬럼명은 빈 테이블에서만 자동 정렬한다.
+-- 데이터가 있으면 의미를 추측해 변환하지 않고 수동 이관을 요구한다.
+DO $$
+BEGIN
+    IF (
+        EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'trading_service' AND table_name = 'p_orders' AND column_name IN ('request_hash', 'cash_balance_after'))
+        OR EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'trading_service' AND table_name = 'p_positions' AND column_name IN ('total_buy_qty', 'total_sell_qty'))
+        OR EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'trading_service' AND table_name = 'p_executions' AND column_name IN ('quantity', 'quote_time', 'executed_at'))
+        OR EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'trading_service' AND table_name = 'p_outbox_events' AND column_name IN ('topic', 'message_key'))
+    ) AND (
+        EXISTS (SELECT 1 FROM trading_service.p_orders)
+        OR EXISTS (SELECT 1 FROM trading_service.p_positions)
+        OR EXISTS (SELECT 1 FROM trading_service.p_executions)
+        OR EXISTS (SELECT 1 FROM trading_service.p_outbox_events)
+    ) THEN
+        RAISE EXCEPTION 'M-2 테이블에 명세 외 구형 컬럼과 데이터가 함께 있습니다. 자동 변환하지 않으므로 수동 이관이 필요합니다.';
+    END IF;
+
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'trading_service' AND table_name = 'p_positions' AND column_name = 'total_buy_qty') THEN
+        EXECUTE 'ALTER TABLE trading_service.p_positions RENAME COLUMN total_buy_qty TO total_buy_quantity';
+    END IF;
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'trading_service' AND table_name = 'p_positions' AND column_name = 'total_sell_qty') THEN
+        EXECUTE 'ALTER TABLE trading_service.p_positions RENAME COLUMN total_sell_qty TO total_sell_quantity';
+    END IF;
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'trading_service' AND table_name = 'p_executions' AND column_name = 'quantity') THEN
+        EXECUTE 'ALTER TABLE trading_service.p_executions RENAME COLUMN quantity TO executed_quantity';
+    END IF;
+END $$;
+
+ALTER TABLE trading_service.p_accounts
+    ALTER COLUMN id SET DEFAULT gen_random_uuid(),
+    ALTER COLUMN initial_deposit SET DEFAULT 100000.0000,
+    ALTER COLUMN currency TYPE CHAR(3) USING currency::CHAR(3),
+    ALTER COLUMN currency SET DEFAULT 'USD',
+    ALTER COLUMN created_at SET DEFAULT now();
+
+ALTER TABLE trading_service.p_orders
+    DROP COLUMN IF EXISTS request_hash,
+    DROP COLUMN IF EXISTS cash_balance_after,
+    ALTER COLUMN id SET DEFAULT gen_random_uuid(),
+    ALTER COLUMN order_type SET DEFAULT 'MARKET',
+    ALTER COLUMN created_at SET DEFAULT now(),
+    ALTER COLUMN created_at SET NOT NULL,
+    ALTER COLUMN created_by SET NOT NULL;
+
+ALTER TABLE trading_service.p_positions
+    ADD COLUMN IF NOT EXISTS user_id UUID,
+    ADD COLUMN IF NOT EXISTS total_buy_amount NUMERIC(19,4) NOT NULL DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS total_sell_amount NUMERIC(19,4) NOT NULL DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS opened_seq BIGINT,
+    ADD COLUMN IF NOT EXISTS closed_seq BIGINT,
+    ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS deleted_by UUID,
+    ALTER COLUMN id SET DEFAULT gen_random_uuid(),
+    ALTER COLUMN status SET DEFAULT 'OPEN',
+    ALTER COLUMN quantity SET DEFAULT 0,
+    ALTER COLUMN total_buy_quantity SET DEFAULT 0,
+    ALTER COLUMN total_sell_quantity SET DEFAULT 0,
+    ALTER COLUMN realized_profit SET DEFAULT 0,
+    ALTER COLUMN opened_at SET DEFAULT now(),
+    ALTER COLUMN created_at SET DEFAULT now(),
+    ALTER COLUMN user_id SET NOT NULL,
+    ALTER COLUMN opened_seq SET NOT NULL;
+
+ALTER TABLE trading_service.p_executions
+    ADD COLUMN IF NOT EXISTS user_id UUID,
+    ADD COLUMN IF NOT EXISTS avg_entry_price_at_execution NUMERIC(19,4),
+    ADD COLUMN IF NOT EXISTS realized_profit NUMERIC(19,4),
+    ADD COLUMN IF NOT EXISTS candle_seq BIGINT,
+    ADD COLUMN IF NOT EXISTS market_time TIMESTAMPTZ,
+    DROP COLUMN IF EXISTS quote_time,
+    DROP COLUMN IF EXISTS executed_at,
+    ALTER COLUMN id SET DEFAULT gen_random_uuid(),
+    ALTER COLUMN created_at SET DEFAULT now(),
+    ALTER COLUMN user_id SET NOT NULL,
+    ALTER COLUMN candle_seq SET NOT NULL,
+    ALTER COLUMN market_time SET NOT NULL;
+
+DO $$
+BEGIN
+    IF (SELECT is_generated FROM information_schema.columns
+        WHERE table_schema = 'trading_service' AND table_name = 'p_executions' AND column_name = 'executed_amount') <> 'ALWAYS' THEN
+        ALTER TABLE trading_service.p_executions DROP COLUMN executed_amount;
+        ALTER TABLE trading_service.p_executions
+            ADD COLUMN executed_amount NUMERIC(19,4) GENERATED ALWAYS AS (executed_price * executed_quantity) STORED;
+    END IF;
+END $$;
+
+ALTER TABLE trading_service.p_outbox_events
+    DROP COLUMN IF EXISTS topic,
+    DROP COLUMN IF EXISTS message_key,
+    ADD COLUMN IF NOT EXISTS partition_key VARCHAR(50),
+    ADD COLUMN IF NOT EXISTS created_by UUID,
+    ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS updated_by UUID,
+    ALTER COLUMN event_id SET DEFAULT gen_random_uuid(),
+    ALTER COLUMN event_version SET DEFAULT 1,
+    ALTER COLUMN status SET DEFAULT 'PENDING',
+    ALTER COLUMN retry_count SET DEFAULT 0,
+    ALTER COLUMN last_error TYPE VARCHAR(500),
+    ALTER COLUMN occurred_at SET DEFAULT now(),
+    ALTER COLUMN created_at SET DEFAULT now(),
+    ALTER COLUMN partition_key SET NOT NULL,
+    ALTER COLUMN created_by SET NOT NULL;
+
+DROP INDEX IF EXISTS trading_service.idx_outbox_events_pending;
+CREATE INDEX idx_outbox_events_pending
+    ON trading_service.p_outbox_events (occurred_at) WHERE status = 'PENDING';
+
+CREATE INDEX IF NOT EXISTS idx_orders_account_id ON trading_service.p_orders (account_id);
+CREATE INDEX IF NOT EXISTS idx_orders_position_id ON trading_service.p_orders (position_id);
+CREATE INDEX IF NOT EXISTS idx_positions_stock_id ON trading_service.p_positions (stock_id);
+CREATE INDEX IF NOT EXISTS idx_positions_user_id ON trading_service.p_positions (user_id);
+CREATE INDEX IF NOT EXISTS idx_positions_status ON trading_service.p_positions (status);
+CREATE INDEX IF NOT EXISTS idx_executions_user_id ON trading_service.p_executions (user_id);
+CREATE INDEX IF NOT EXISTS idx_executions_stock_id ON trading_service.p_executions (stock_id);
+
+-- 주문·원장 외래 키는 참조 테이블을 모두 만든 뒤 추가한다.
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_orders_account_id') THEN
+        ALTER TABLE trading_service.p_orders ADD CONSTRAINT fk_orders_account_id
+            FOREIGN KEY (account_id) REFERENCES trading_service.p_accounts (id);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_orders_stock_id') THEN
+        ALTER TABLE trading_service.p_orders ADD CONSTRAINT fk_orders_stock_id
+            FOREIGN KEY (stock_id) REFERENCES trading_service.p_stocks (id);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_orders_position_id') THEN
+        ALTER TABLE trading_service.p_orders ADD CONSTRAINT fk_orders_position_id
+            FOREIGN KEY (position_id) REFERENCES trading_service.p_positions (id);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_cash_ledgers_execution_id') THEN
+        ALTER TABLE trading_service.p_cash_ledgers ADD CONSTRAINT fk_cash_ledgers_execution_id
+            FOREIGN KEY (execution_id) REFERENCES trading_service.p_executions (id);
+    END IF;
+END $$;

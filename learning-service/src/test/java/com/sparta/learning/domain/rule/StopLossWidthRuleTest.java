@@ -4,6 +4,7 @@ import com.sparta.learning.domain.entity.DiagnosisResult;
 import com.sparta.learning.domain.model.DiagnosisPhase;
 import com.sparta.learning.domain.model.DiagnosisStatus;
 import com.sparta.learning.domain.model.RuleCode;
+import com.sparta.learning.fixture.DiagnosisContextFixture;
 import com.sparta.learning.fixture.ExecutionSnapshotFixture;
 import org.junit.jupiter.api.Test;
 
@@ -24,8 +25,8 @@ public class StopLossWidthRuleTest {
     // ENTRY 단계의 최초 매수는 모두 판정 대상이다
     @Test
     void 최초_매수는_모두_적용_대상이다(){
-        assertThat(rule.supports(ExecutionSnapshotFixture.firstBuyWithStopLoss())).isTrue();
-        assertThat(rule.supports(ExecutionSnapshotFixture.firstBuyWithoutStopLoss())).isTrue();
+        assertThat(rule.supports(DiagnosisContextFixture.of(ExecutionSnapshotFixture.firstBuyWithStopLoss()))).isTrue();
+        assertThat(rule.supports(DiagnosisContextFixture.of(ExecutionSnapshotFixture.firstBuyWithoutStopLoss()))).isTrue();
     }
 
     // 손절가가 없으면 폭을 계산할 수 없다
@@ -34,7 +35,7 @@ public class StopLossWidthRuleTest {
     void 손절가가_없으면_NOT_APPLICABLE(){
         var snapshot = ExecutionSnapshotFixture.firstBuyWithoutStopLoss();
 
-        DiagnosisResult result = rule.diagnose(snapshot);
+        DiagnosisResult result = rule.diagnose(DiagnosisContextFixture.of(snapshot));
 
         assertThat(result.getResult()).isEqualTo(DiagnosisStatus.NOT_APPLICABLE);
     }
@@ -44,7 +45,7 @@ public class StopLossWidthRuleTest {
     void 판정하지_않으면_측정값과_기준값이_비어_있다(){
         var snapshot = ExecutionSnapshotFixture.firstBuyWithoutStopLoss();
 
-        DiagnosisResult result = rule.diagnose(snapshot);
+        DiagnosisResult result = rule.diagnose(DiagnosisContextFixture.of(snapshot));
 
         assertThat(result.getMetricValue()).isNull();
         assertThat(result.getThresholdValue()).isNull();
@@ -56,7 +57,7 @@ public class StopLossWidthRuleTest {
     void 판정하지_않아도_근거_문구가_담긴다(){
         var snapshot = ExecutionSnapshotFixture.firstBuyWithoutStopLoss();
 
-        DiagnosisResult result = rule.diagnose(snapshot);
+        DiagnosisResult result = rule.diagnose(DiagnosisContextFixture.of(snapshot));
 
         assertThat(result.getEvidence().get("message").asText()).isNotBlank();
     }
@@ -64,21 +65,21 @@ public class StopLossWidthRuleTest {
     @Test
     void 손절_폭이_기준_범위_안이면_PASS(){
         var snapshot = ExecutionSnapshotFixture.firstBuyWithStopLoss();
-        DiagnosisResult result = rule.diagnose(snapshot);
+        DiagnosisResult result = rule.diagnose(DiagnosisContextFixture.of(snapshot));
         assertThat(result.getResult()).isEqualTo(DiagnosisStatus.PASS);
     }
 
     @Test
     void 손절_폭이_2퍼센트_미만이면_WARNNING(){
         var snapshot = ExecutionSnapshotFixture.firstBuy(new BigDecimal("181.0000"));
-        DiagnosisResult result = rule.diagnose(snapshot);
+        DiagnosisResult result = rule.diagnose(DiagnosisContextFixture.of(snapshot));
         assertThat(result.getResult()).isEqualTo(DiagnosisStatus.WARNING);
     }
 
     @Test
     void 손절_폭이_정확히_2퍼센트면_PASS(){
         var snapshot = ExecutionSnapshotFixture.firstBuy(WIDTH_2_PERCENT);
-        DiagnosisResult result = rule.diagnose(snapshot);
+        DiagnosisResult result = rule.diagnose(DiagnosisContextFixture.of(snapshot));
 
         assertThat(result.getResult()).isEqualTo(DiagnosisStatus.PASS);
         assertThat(result.getMetricValue()).isEqualByComparingTo(new BigDecimal("2"));
@@ -88,7 +89,7 @@ public class StopLossWidthRuleTest {
     @Test
     void 손절_폭이_정확히_15퍼센트면_PASS(){
         var snapshot = ExecutionSnapshotFixture.firstBuy(WIDTH_15_PERCENT);
-        DiagnosisResult result = rule.diagnose(snapshot);
+        DiagnosisResult result = rule.diagnose(DiagnosisContextFixture.of(snapshot));
 
         assertThat(result.getResult()).isEqualTo(DiagnosisStatus.PASS);
         assertThat(result.getMetricValue()).isEqualByComparingTo(new BigDecimal("15"));
@@ -96,8 +97,8 @@ public class StopLossWidthRuleTest {
 
     @Test
     void 위반한_방향에_따라_다른_기준값을_남긴다() {
-        var tooNarrow = rule.diagnose(ExecutionSnapshotFixture.firstBuy(new BigDecimal("181.0000")));
-        var tooWide = rule.diagnose(ExecutionSnapshotFixture.firstBuy(new BigDecimal("150.0000")));
+        var tooNarrow = rule.diagnose(DiagnosisContextFixture.of(ExecutionSnapshotFixture.firstBuy(new BigDecimal("181.0000"))));
+        var tooWide = rule.diagnose(DiagnosisContextFixture.of(ExecutionSnapshotFixture.firstBuy(new BigDecimal("150.0000"))));
 
         assertThat(tooNarrow.getThresholdValue()).isEqualByComparingTo(new BigDecimal("2"));
         assertThat(tooWide.getThresholdValue()).isEqualByComparingTo(new BigDecimal("15"));
@@ -108,7 +109,7 @@ public class StopLossWidthRuleTest {
     void 판정에_사용한_값이_metrics에_담긴다() {
         var snapshot = ExecutionSnapshotFixture.firstBuyWithStopLoss();
 
-        DiagnosisResult result = rule.diagnose(snapshot);
+        DiagnosisResult result = rule.diagnose(DiagnosisContextFixture.of(snapshot));
 
         assertThat(result.getMetrics().get("executedPrice").decimalValue())
                 .isEqualByComparingTo(snapshot.getExecutedPrice());
@@ -141,7 +142,7 @@ public class StopLossWidthRuleTest {
     void 진단_결과에_근거_체결과_규칙_정보가_담긴다() {
         var snapshot = ExecutionSnapshotFixture.firstBuyWithStopLoss();
 
-        DiagnosisResult result = rule.diagnose(snapshot);
+        DiagnosisResult result = rule.diagnose(DiagnosisContextFixture.of(snapshot));
 
         assertThat(result.getRuleCode()).isEqualTo(RuleCode.STOP_LOSS_WIDTH.name());
         assertThat(result.getDiagnosisPhase()).isEqualTo(DiagnosisPhase.ENTRY);
@@ -155,15 +156,15 @@ public class StopLossWidthRuleTest {
     void 같은_체결은_항상_같은_진단_키를_만든다() {
         var snapshot = ExecutionSnapshotFixture.firstBuyWithStopLoss();
 
-        String first = rule.diagnose(snapshot).getDiagnosisKey();
-        String second = rule.diagnose(snapshot).getDiagnosisKey();
+        String first = rule.diagnose(DiagnosisContextFixture.of(snapshot)).getDiagnosisKey();
+        String second = rule.diagnose(DiagnosisContextFixture.of(snapshot)).getDiagnosisKey();
 
         assertThat(first).isEqualTo(second);
         assertThat(first).isEqualTo("ENTRY:" + snapshot.getExecutionId() + ":STOP_LOSS_WIDTH:v1");
     }
 
     private String messageOf(com.sparta.learning.domain.entity.ExecutionSnapshot snapshot) {
-        return rule.diagnose(snapshot).getEvidence().get("message").asText();
+        return rule.diagnose(DiagnosisContextFixture.of(snapshot)).getEvidence().get("message").asText();
     }
 
 }
