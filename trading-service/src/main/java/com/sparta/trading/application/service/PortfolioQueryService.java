@@ -120,7 +120,7 @@ public class PortfolioQueryService {
             unrealizedProfit = unrealizedProfit.add(positionProfit);
         }
 
-        // 10. 미실현 수익률 계산
+        // 미실현 수익률 계산
         // 수익률 = 미실현 손익 ÷ 매수 원금 × 100
         BigDecimal unrealizedReturnRate = ZERO;
 
@@ -131,10 +131,10 @@ public class PortfolioQueryService {
                     .divide(totalCost, 4, RoundingMode.HALF_UP);
         }
 
-        // 11. 현재 시세 기준 시각
+        // 현재 시세 기준 시각
         Instant marketTime = quotes.get(0).marketTime();
 
-        // 12. 계산 결과를 응답 DTO로 변환
+        // 계산 결과를 응답 DTO로 변환
         // totalAssets는 PortfolioResponse.of() 내부에서 계산
         return PortfolioResponse.of(
                 account,
