@@ -235,7 +235,7 @@ public class TradingAdminQueryService {
                     execution.getExecutedPrice(),
                     execution.getExecutedQuantity(),
                     execution.getExecutedAmount(),
-                    execution.getAvgEntyPriceAtExecuation(),
+                    execution.getAvgEntryPriceAtExecution(),
                     execution.getRealizedProfit(),
                     execution.getCandleSeq(),
                     execution.getMarketTime(),
