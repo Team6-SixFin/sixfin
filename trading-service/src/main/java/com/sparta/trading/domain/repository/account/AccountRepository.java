@@ -9,5 +9,7 @@ public interface AccountRepository {
 
     Optional<Accounts> findByUserId(UUID userId);
 
+    Optional<Accounts> findByUserIdForUpdate(UUID userId);
+
     Accounts saveAndFlush(Accounts account);
 }
