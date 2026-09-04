@@ -6,6 +6,7 @@ import com.sparta.learning.domain.model.DiagnosisPhase;
 import com.sparta.learning.domain.model.RuleCode;
 import com.sparta.learning.domain.rule.DiagnosisRule;
 import com.sparta.learning.domain.rule.StopLossSetRule;
+import com.sparta.learning.fixture.DiagnosisContextFixture;
 import com.sparta.learning.fixture.ExecutionSnapshotFixture;
 import com.sparta.learning.infrastructure.persistence.repository.DiagnosisResultRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -85,7 +86,7 @@ class DiagnosisServiceTest {
     @Test
     void 이미_진단된_체결은_다시_저장하지_않는다() {
         ExecutionSnapshot snapshot = ExecutionSnapshotFixture.firstBuyWithStopLoss();
-        DiagnosisResult alreadySaved = new StopLossSetRule().diagnose(snapshot);
+        DiagnosisResult alreadySaved = new StopLossSetRule().diagnose(DiagnosisContextFixture.of(snapshot));
 
         when(diagnosisResultRepository.findByDiagnosisKeyIn(anyCollection()))
                 .thenReturn(List.of(alreadySaved));
@@ -104,7 +105,7 @@ class DiagnosisServiceTest {
 
         // 이 서비스에는 규칙이 하나뿐이므로, 다른 키가 저장돼 있어도 걸러지지 않아야 한다
         DiagnosisResult otherRuleResult = new StopLossSetRule()
-                .diagnose(ExecutionSnapshotFixture.firstBuyWithStopLoss());
+                .diagnose(DiagnosisContextFixture.of(ExecutionSnapshotFixture.firstBuyWithStopLoss()));
         when(diagnosisResultRepository.findByDiagnosisKeyIn(anyCollection()))
                 .thenReturn(List.of(otherRuleResult));
 

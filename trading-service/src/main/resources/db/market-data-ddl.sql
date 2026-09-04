@@ -202,7 +202,12 @@ CREATE TABLE IF NOT EXISTS trading_service.p_executions (
     realized_profit NUMERIC(19,4),
     candle_seq      BIGINT          NOT NULL,
     market_time     TIMESTAMPTZ     NOT NULL,
-    created_at      TIMESTAMPTZ     NOT NULL DEFAULT now()
+    created_at      TIMESTAMPTZ     NOT NULL DEFAULT now(),
+    created_by UUID NOT NULL,
+    updated_at TIMESTAMPTZ,
+    updated_by UUID,
+    deleted_at TIMESTAMPTZ,
+    deleted_by UUID
 );
 
 CREATE INDEX IF NOT EXISTS idx_executions_position_id ON trading_service.p_executions (position_id);
