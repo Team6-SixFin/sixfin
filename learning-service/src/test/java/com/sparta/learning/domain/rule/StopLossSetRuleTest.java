@@ -4,6 +4,7 @@ import com.sparta.learning.domain.entity.DiagnosisResult;
 import com.sparta.learning.domain.model.DiagnosisPhase;
 import com.sparta.learning.domain.model.DiagnosisStatus;
 import com.sparta.learning.domain.model.RuleCode;
+import com.sparta.learning.fixture.DiagnosisContextFixture;
 import com.sparta.learning.fixture.ExecutionSnapshotFixture;
 import org.junit.jupiter.api.Test;
 
@@ -20,7 +21,7 @@ class StopLossSetRuleTest {
     void 손절가가_있으면_PASS() {
         var snapshot = ExecutionSnapshotFixture.firstBuyWithStopLoss();
 
-        DiagnosisResult result = rule.diagnose(snapshot);
+        DiagnosisResult result = rule.diagnose(DiagnosisContextFixture.of(snapshot));
 
         assertThat(result.getResult()).isEqualTo(DiagnosisStatus.PASS);
     }
@@ -30,7 +31,7 @@ class StopLossSetRuleTest {
     void 손절가가_없으면_WARNING() {
         var snapshot = ExecutionSnapshotFixture.firstBuyWithoutStopLoss();
 
-        DiagnosisResult result = rule.diagnose(snapshot);
+        DiagnosisResult result = rule.diagnose(DiagnosisContextFixture.of(snapshot));
 
         assertThat(result.getResult()).isEqualTo(DiagnosisStatus.WARNING);
     }
@@ -40,7 +41,7 @@ class StopLossSetRuleTest {
     void 진단_결과에_근거_체결과_규칙_정보가_담긴다() {
         var snapshot = ExecutionSnapshotFixture.firstBuyWithStopLoss();
 
-        DiagnosisResult result = rule.diagnose(snapshot);
+        DiagnosisResult result = rule.diagnose(DiagnosisContextFixture.of(snapshot));
 
         assertThat(result.getRuleCode()).isEqualTo(RuleCode.STOP_LOSS_SET.name());
         assertThat(result.getDiagnosisPhase()).isEqualTo(DiagnosisPhase.ENTRY);
@@ -54,8 +55,8 @@ class StopLossSetRuleTest {
     void 같은_체결은_항상_같은_진단_키를_만든다() {
         var snapshot = ExecutionSnapshotFixture.firstBuyWithStopLoss();
 
-        String first = rule.diagnose(snapshot).getDiagnosisKey();
-        String second = rule.diagnose(snapshot).getDiagnosisKey();
+        String first = rule.diagnose(DiagnosisContextFixture.of(snapshot)).getDiagnosisKey();
+        String second = rule.diagnose(DiagnosisContextFixture.of(snapshot)).getDiagnosisKey();
 
         assertThat(first).isEqualTo(second);
         assertThat(first).isEqualTo("ENTRY:" + snapshot.getExecutionId() + ":STOP_LOSS_SET:v1");
@@ -66,7 +67,7 @@ class StopLossSetRuleTest {
     void 손절가가_있으면_metrics에_담긴다() {
         var snapshot = ExecutionSnapshotFixture.firstBuyWithStopLoss();
 
-        DiagnosisResult result = rule.diagnose(snapshot);
+        DiagnosisResult result = rule.diagnose(DiagnosisContextFixture.of(snapshot));
 
         assertThat(result.getMetrics().get("executedPrice").decimalValue())
                 .isEqualByComparingTo(snapshot.getExecutedPrice());
@@ -79,7 +80,7 @@ class StopLossSetRuleTest {
     void 손절가가_없으면_metrics에_키를_넣지_않는다() {
         var snapshot = ExecutionSnapshotFixture.firstBuyWithoutStopLoss();
 
-        DiagnosisResult result = rule.diagnose(snapshot);
+        DiagnosisResult result = rule.diagnose(DiagnosisContextFixture.of(snapshot));
 
         assertThat(result.getMetrics().has("plannedStopLossPrice")).isFalse();
         assertThat(result.getMetrics().has("executedPrice")).isTrue();
@@ -88,9 +89,9 @@ class StopLossSetRuleTest {
     // evidence.message는 조회 API가 그대로 응답에 내보내므로 비면안된다
     @Test
     void 판정_결과에_따라_다른_근거_문구가_담긴다() {
-        String withStopLoss = rule.diagnose(ExecutionSnapshotFixture.firstBuyWithStopLoss())
+        String withStopLoss = rule.diagnose(DiagnosisContextFixture.of(ExecutionSnapshotFixture.firstBuyWithStopLoss()))
                 .getEvidence().get("message").asText();
-        String withoutStopLoss = rule.diagnose(ExecutionSnapshotFixture.firstBuyWithoutStopLoss())
+        String withoutStopLoss = rule.diagnose(DiagnosisContextFixture.of(ExecutionSnapshotFixture.firstBuyWithoutStopLoss()))
                 .getEvidence().get("message").asText();
 
         assertThat(withStopLoss).isNotBlank();
