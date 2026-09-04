@@ -5,6 +5,7 @@ import com.sparta.learning.domain.entity.ExecutionSnapshot;
 import com.sparta.learning.domain.model.DiagnosisPhase;
 import com.sparta.learning.domain.model.DiagnosisStatus;
 import com.sparta.learning.domain.model.RuleCode;
+import com.sparta.learning.fixture.DiagnosisContextFixture;
 import com.sparta.learning.fixture.ExecutionSnapshotFixture;
 import org.junit.jupiter.api.Test;
 
@@ -26,21 +27,21 @@ class SellBelowStopLossRuleTest {
     void 매수_체결은_판정하지_않는다() {
         var snapshot = ExecutionSnapshotFixture.additionalBuy();
 
-        assertThat(rule.supports(snapshot)).isFalse();
+        assertThat(rule.supports(DiagnosisContextFixture.of(snapshot))).isFalse();
     }
 
     // 손절가 유무와 무관하게 매도는 모두 적용 대상이다
     @Test
     void 매도_체결은_모두_적용_대상이다() {
-        assertThat(rule.supports(ExecutionSnapshotFixture.sellAt(BELOW_STOP_LOSS, STOP_LOSS_PRICE))).isTrue();
-        assertThat(rule.supports(ExecutionSnapshotFixture.sellAt(BELOW_STOP_LOSS, null))).isTrue();
+        assertThat(rule.supports(DiagnosisContextFixture.of(ExecutionSnapshotFixture.sellAt(BELOW_STOP_LOSS, STOP_LOSS_PRICE)))).isTrue();
+        assertThat(rule.supports(DiagnosisContextFixture.of(ExecutionSnapshotFixture.sellAt(BELOW_STOP_LOSS, null)))).isTrue();
     }
 
     @Test
     void 계획_손절가가_없으면_NOT_APPLICABLE() {
         var snapshot = ExecutionSnapshotFixture.sellAt(BELOW_STOP_LOSS, null);
 
-        DiagnosisResult result = rule.diagnose(snapshot);
+        DiagnosisResult result = rule.diagnose(DiagnosisContextFixture.of(snapshot));
 
         assertThat(result.getResult()).isEqualTo(DiagnosisStatus.NOT_APPLICABLE);
     }
@@ -49,7 +50,7 @@ class SellBelowStopLossRuleTest {
     void 판정하지_않으면_측정값과_기준값이_비어_있다() {
         var snapshot = ExecutionSnapshotFixture.sellAt(BELOW_STOP_LOSS, null);
 
-        DiagnosisResult result = rule.diagnose(snapshot);
+        DiagnosisResult result = rule.diagnose(DiagnosisContextFixture.of(snapshot));
 
         assertThat(result.getMetricValue()).isNull();
         assertThat(result.getThresholdValue()).isNull();
@@ -60,7 +61,7 @@ class SellBelowStopLossRuleTest {
     void 판정하지_않아도_근거_문구가_담긴다() {
         var snapshot = ExecutionSnapshotFixture.sellAt(BELOW_STOP_LOSS, null);
 
-        DiagnosisResult result = rule.diagnose(snapshot);
+        DiagnosisResult result = rule.diagnose(DiagnosisContextFixture.of(snapshot));
 
         assertThat(result.getEvidence().get("message").asText()).isNotBlank();
     }
@@ -69,7 +70,7 @@ class SellBelowStopLossRuleTest {
     void 손절가보다_낮게_매도하면_VIOLATION() {
         var snapshot = ExecutionSnapshotFixture.sellAt(BELOW_STOP_LOSS, STOP_LOSS_PRICE);
 
-        DiagnosisResult result = rule.diagnose(snapshot);
+        DiagnosisResult result = rule.diagnose(DiagnosisContextFixture.of(snapshot));
 
         assertThat(result.getResult()).isEqualTo(DiagnosisStatus.VIOLATION);
     }
@@ -78,7 +79,7 @@ class SellBelowStopLossRuleTest {
     void 손절가보다_높게_매도하면_PASS() {
         var snapshot = ExecutionSnapshotFixture.sellAt(ABOVE_STOP_LOSS, STOP_LOSS_PRICE);
 
-        DiagnosisResult result = rule.diagnose(snapshot);
+        DiagnosisResult result = rule.diagnose(DiagnosisContextFixture.of(snapshot));
 
         assertThat(result.getResult()).isEqualTo(DiagnosisStatus.PASS);
     }
@@ -87,7 +88,7 @@ class SellBelowStopLossRuleTest {
     void 손절가와_같은_가격에_매도하면_PASS() {
         var snapshot = ExecutionSnapshotFixture.sellAt(STOP_LOSS_PRICE, STOP_LOSS_PRICE);
 
-        DiagnosisResult result = rule.diagnose(snapshot);
+        DiagnosisResult result = rule.diagnose(DiagnosisContextFixture.of(snapshot));
 
         assertThat(result.getResult()).isEqualTo(DiagnosisStatus.PASS);
     }
@@ -96,7 +97,7 @@ class SellBelowStopLossRuleTest {
     void 판정_기준은_사용자가_선언한_손절가다() {
         var snapshot = ExecutionSnapshotFixture.sellAt(BELOW_STOP_LOSS, STOP_LOSS_PRICE);
 
-        DiagnosisResult result = rule.diagnose(snapshot);
+        DiagnosisResult result = rule.diagnose(DiagnosisContextFixture.of(snapshot));
 
         assertThat(result.getMetricValue()).isEqualByComparingTo(BELOW_STOP_LOSS);
         assertThat(result.getThresholdValue()).isEqualByComparingTo(STOP_LOSS_PRICE);
@@ -107,7 +108,7 @@ class SellBelowStopLossRuleTest {
     void 위반하면_하회_폭을_metrics에_담는다() {
         var snapshot = ExecutionSnapshotFixture.sellAt(BELOW_STOP_LOSS, STOP_LOSS_PRICE);
 
-        DiagnosisResult result = rule.diagnose(snapshot);
+        DiagnosisResult result = rule.diagnose(DiagnosisContextFixture.of(snapshot));
 
         assertThat(result.getMetrics().get("executedPrice").decimalValue())
                 .isEqualByComparingTo(BELOW_STOP_LOSS);
@@ -122,7 +123,7 @@ class SellBelowStopLossRuleTest {
     void 위반하지_않으면_하회_폭_키를_넣지_않는다() {
         var snapshot = ExecutionSnapshotFixture.sellAt(ABOVE_STOP_LOSS, STOP_LOSS_PRICE);
 
-        DiagnosisResult result = rule.diagnose(snapshot);
+        DiagnosisResult result = rule.diagnose(DiagnosisContextFixture.of(snapshot));
 
         assertThat(result.getMetrics().has("belowStopLossRate")).isFalse();
         assertThat(result.getMetrics().has("executedPrice")).isTrue();
@@ -143,7 +144,7 @@ class SellBelowStopLossRuleTest {
     void 진단_결과에_근거_체결과_규칙_정보가_담긴다() {
         var snapshot = ExecutionSnapshotFixture.sellAt(BELOW_STOP_LOSS, STOP_LOSS_PRICE);
 
-        DiagnosisResult result = rule.diagnose(snapshot);
+        DiagnosisResult result = rule.diagnose(DiagnosisContextFixture.of(snapshot));
 
         assertThat(result.getRuleCode()).isEqualTo(RuleCode.SELL_BELOW_STOP_LOSS.name());
         assertThat(result.getDiagnosisPhase()).isEqualTo(DiagnosisPhase.TRADE);
@@ -157,14 +158,14 @@ class SellBelowStopLossRuleTest {
     void 같은_체결은_항상_같은_진단_키를_만든다() {
         var snapshot = ExecutionSnapshotFixture.sellAt(BELOW_STOP_LOSS, STOP_LOSS_PRICE);
 
-        String first = rule.diagnose(snapshot).getDiagnosisKey();
-        String second = rule.diagnose(snapshot).getDiagnosisKey();
+        String first = rule.diagnose(DiagnosisContextFixture.of(snapshot)).getDiagnosisKey();
+        String second = rule.diagnose(DiagnosisContextFixture.of(snapshot)).getDiagnosisKey();
 
         assertThat(first).isEqualTo(second);
         assertThat(first).isEqualTo("TRADE:" + snapshot.getExecutionId() + ":SELL_BELOW_STOP_LOSS:v1");
     }
 
     private String messageOf(ExecutionSnapshot snapshot) {
-        return rule.diagnose(snapshot).getEvidence().get("message").asText();
+        return rule.diagnose(DiagnosisContextFixture.of(snapshot)).getEvidence().get("message").asText();
     }
 }

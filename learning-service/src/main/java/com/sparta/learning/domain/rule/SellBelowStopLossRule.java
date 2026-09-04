@@ -28,12 +28,13 @@ public class SellBelowStopLossRule implements DiagnosisRule {
 
     // TRADE 단계에는 추가 매수도 들어오므로 매도인지 확인한다
     @Override
-    public boolean supports(ExecutionSnapshot snapshot) {
-        return snapshot.getTradeType() == TradeType.SELL;
+    public boolean supports(DiagnosisContext context) {
+        return context.executionSnapshot().getTradeType() == TradeType.SELL;
     }
 
     @Override
-    public DiagnosisResult diagnose(ExecutionSnapshot snapshot) {
+    public DiagnosisResult diagnose(DiagnosisContext context) {
+        ExecutionSnapshot snapshot = context.executionSnapshot();
         BigDecimal executedPrice = snapshot.getExecutedPrice();
         BigDecimal stopLossPrice = snapshot.getPlannedStopLossPrice();
 
