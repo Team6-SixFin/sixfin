@@ -1,8 +1,6 @@
-package com.sparta.trading.presentation.controller.account;
+package com.sparta.trading.presentation.controller.portfolio;
 
-import com.sparta.trading.application.service.AccountQueryService;
 import com.sparta.trading.application.service.PortfolioQueryService;
-import com.sparta.trading.presentation.dto.response.AccountResponse;
 import com.sparta.trading.presentation.dto.response.PortfolioResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -23,10 +21,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @ExtendWith(MockitoExtension.class)
-class AssetQueryControllerTest {
+class PortfolioQueryControllerTest {
 
-    @Mock
-    private AccountQueryService accountQueryService;
     @Mock
     private PortfolioQueryService portfolioQueryService;
 
@@ -34,30 +30,7 @@ class AssetQueryControllerTest {
 
     @BeforeEach
     void setUp() {
-        mockMvc = MockMvcBuilders.standaloneSetup(new AssetQueryController(accountQueryService, portfolioQueryService)).build();
-    }
-
-    @Test
-    void getMyAccount_delegatesUsingUserIdHeader() throws Exception {
-        UUID userId = UUID.randomUUID();
-        when(accountQueryService.getOrCreateAccount(userId)).thenReturn(new AccountResponse(
-                new BigDecimal("100000.0000"),
-                new BigDecimal("100000.0000"),
-                "USD",
-                Instant.parse("2026-09-02T00:00:00Z")
-        ));
-
-        mockMvc.perform(get("/api/trading/accounts/me").header("X-User-Id", userId))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.currency").value("USD"));
-
-        verify(accountQueryService).getOrCreateAccount(userId);
-    }
-
-    @Test
-    void getMyAccount_rejectsRequestWithoutUserIdHeader() throws Exception {
-        mockMvc.perform(get("/api/trading/accounts/me"))
-                .andExpect(status().isBadRequest());
+        mockMvc = MockMvcBuilders.standaloneSetup(new PortfolioQueryController(portfolioQueryService)).build();
     }
 
     @Test
