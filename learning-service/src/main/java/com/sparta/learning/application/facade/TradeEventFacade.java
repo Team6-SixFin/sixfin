@@ -22,9 +22,11 @@ public class TradeEventFacade {
     public IngestionResult handle(TradingEventEnvelope event){
         IngestionResult result = ingestionService.ingest(event);
 
-        // 중복 이벤트는 재진단을 안하고 포지션 종료는 아직 진단 대상이 아님
-        if(result.hasDiagnosisTarget()){
+        // 이벤트 종류에 따라 진단 대상이 다르고, 중복 이벤트는 재진단하지 않는다
+        if(result.hasExecutionTarget()){
             runDiagnosis(result);
+        } else if(result.hasClosedPositionTarget()){
+            runCloseDiagnosis(result);
         }
 
         return result;
@@ -37,6 +39,15 @@ public class TradeEventFacade {
         }
         catch (Exception e){
             log.error("진단 실행에 실패했습니다. executionId={}", result.executionSnapshot().getExecutionId(), e);
+        }
+    }
+
+    private void runCloseDiagnosis(IngestionResult result) {
+        try{
+            diagnosisService.diagnoseClose(result.closedPositionSnapshot());
+        }
+        catch (Exception e){
+            log.error("포지션 종료 진단 실행에 실패했습니다. positionId={}", result.closedPositionSnapshot().getPositionId(), e);
         }
     }
 }
