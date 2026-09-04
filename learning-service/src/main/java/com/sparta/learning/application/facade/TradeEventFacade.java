@@ -5,13 +5,11 @@ import com.sparta.learning.application.model.IngestionResult;
 import com.sparta.learning.application.service.TradeEventIngestionService;
 import com.sparta.learning.infrastructure.messaging.kafka.dto.TradingEventEnvelope;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 /* 체결 이벤트 처리 순서를 조율한다.
 * 이 클래스에는 트랜잭션을 안붙이고 각 서비스가 자기 트랜잭션을 열고 닫는다.
 * */
-@Slf4j
 @Component
 @RequiredArgsConstructor
 public class TradeEventFacade {
@@ -22,32 +20,14 @@ public class TradeEventFacade {
     public IngestionResult handle(TradingEventEnvelope event){
         IngestionResult result = ingestionService.ingest(event);
 
-        // 이벤트 종류에 따라 진단 대상이 다르고, 중복 이벤트는 재진단하지 않는다
+        // 최초 처리와 중복 재처리 모두 스냅샷이 있으면 멱등하게 진단한다.
+        // 체결과 포지션 종료는 진단 대상 타입이 달라 실행 경로를 나눈다.
         if(result.hasExecutionTarget()){
-            runDiagnosis(result);
+            diagnosisService.diagnose(result.executionSnapshot());
         } else if(result.hasClosedPositionTarget()){
-            runCloseDiagnosis(result);
+            diagnosisService.diagnoseClose(result.closedPositionSnapshot());
         }
 
         return result;
-    }
-
-    /*트랜잭션은 분리되어 있으나 예외는 호출 스택을 타고 올라오므로 여기서 차단함*/
-    private void runDiagnosis(IngestionResult result) {
-        try{
-            diagnosisService.diagnose(result.executionSnapshot());
-        }
-        catch (Exception e){
-            log.error("진단 실행에 실패했습니다. executionId={}", result.executionSnapshot().getExecutionId(), e);
-        }
-    }
-
-    private void runCloseDiagnosis(IngestionResult result) {
-        try{
-            diagnosisService.diagnoseClose(result.closedPositionSnapshot());
-        }
-        catch (Exception e){
-            log.error("포지션 종료 진단 실행에 실패했습니다. positionId={}", result.closedPositionSnapshot().getPositionId(), e);
-        }
     }
 }
