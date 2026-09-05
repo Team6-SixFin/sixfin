@@ -147,26 +147,28 @@ public class LearningCommandService {
         String modelName = "gemini-3.5-flash";
         String promptVersion = "v1.0";
         AiFeedbackResponse aiResponse = null;
+        String feedbackKey = context.feedback().getFeedbackKey();
 
         try {
-            // 외부 API 통신 (지연이 발생해도 DB 커넥션에 영향을 주지 않음)
             aiResponse = aiClientPort.requestAiFeedback(
                     context.feedback().getPositionId(),
                     context.feedback().getFeedbackType(),
                     context.contextJsonStr()
             );
 
-            // [트랜잭션 2] 성공 시 DB 업데이트
+            // [리뷰 반영] AI 응답 필수값 검증 로직 추가
+            validateAiResponse(aiResponse);
+
+            // [리뷰 반영] Detached Entity 이슈 방지를 위해 객체 대신 식별자(Key) 전달
             final AiFeedbackResponse finalAiResponse = aiResponse;
             transactionTemplate.executeWithoutResult(status ->
-                    completeFeedback(context.feedback(), context.contextJsonStr(), finalAiResponse, requestId, modelName, promptVersion)
+                    completeFeedback(feedbackKey, context.contextJsonStr(), finalAiResponse, requestId, modelName, promptVersion)
             );
 
         } catch (Exception e) {
-            log.error("피드백 생성 실패", e);
-            // [트랜잭션 2] 실패 시 DB 업데이트
+            log.error("피드백 생성/파싱 실패", e);
             transactionTemplate.executeWithoutResult(status ->
-                    failFeedback(context.feedback(), context.contextJsonStr(), e.getMessage(), requestId, modelName, promptVersion)
+                    failFeedback(feedbackKey, context.contextJsonStr(), e.getMessage(), requestId, modelName, promptVersion)
             );
             throw new CustomException(LearningErrorCode.AI_RESPONSE_GENERATION_FAILED);
         }
@@ -177,26 +179,28 @@ public class LearningCommandService {
     // =================================================================================
     // [트랜잭션 2] 성공/실패 시 상태 업데이트 및 이력 저장 (빠르게 커넥션 점유 후 반납)
     // =================================================================================
-    void completeFeedback(Feedback feedback, String contextJson, AiFeedbackResponse aiResponse, String reqId, String model, String version) {
+    protected void completeFeedback(String feedbackKey, String contextJson, AiFeedbackResponse aiResponse, String reqId, String model, String version) {
+        // [리뷰 반영] 영속성 컨텍스트(Managed) 상태로 가져오기
+        Feedback managedFeedback = feedbackRepository.findByFeedbackKey(feedbackKey)
+                .orElseThrow(() -> new IllegalStateException("피드백 데이터를 찾을 수 없습니다: " + feedbackKey));
+
         JsonNode contentNode = objectMapper.valueToTree(aiResponse);
         JsonNode inputNode = null;
-        try {
-            inputNode = objectMapper.readTree(contextJson);
-        } catch (JsonProcessingException ignored) {}
+        try {inputNode = objectMapper.readTree(contextJson);} catch (JsonProcessingException ignored) {}
 
-        feedback.complete(contentNode, true, version);
-        aiRequestRepository.save(AiRequest.success(feedback, reqId, model, version, inputNode, contentNode));
+        managedFeedback.complete(contentNode, true, version);
+        aiRequestRepository.save(AiRequest.success(managedFeedback, reqId, model, version, inputNode, contentNode));
     }
-
     // TODO : AI 답변 생성 실패시 현재는 FAIL로 저장되나, 팀원과 상의 후 수정 해야 함 (fail과 fallback)
-    void failFeedback(Feedback feedback, String contextJson, String errorMsg, String reqId, String model, String version) {
-        JsonNode inputNode = null;
-        try {
-            inputNode = objectMapper.readTree(contextJson);
-        } catch (JsonProcessingException ignored) {}
+    protected void failFeedback(String feedbackKey, String contextJson, String errorMsg, String reqId, String model, String version) {
+        Feedback managedFeedback = feedbackRepository.findByFeedbackKey(feedbackKey)
+                .orElseThrow(() -> new IllegalStateException("피드백 데이터를 찾을 수 없습니다: " + feedbackKey));
 
-        feedback.fail(errorMsg);
-        aiRequestRepository.save(AiRequest.failed(feedback, reqId, model, version, inputNode, errorMsg));
+        JsonNode inputNode = null;
+        try { inputNode = objectMapper.readTree(contextJson); } catch (JsonProcessingException ignored) {}
+
+        managedFeedback.fail(errorMsg);
+        aiRequestRepository.save(AiRequest.failed(managedFeedback, reqId, model, version, inputNode, errorMsg));
     }
 
     // =================================================================================
@@ -206,21 +210,17 @@ public class LearningCommandService {
     // 1. ENTRY (첫 체결과 ENTRY 진단만 조회)
     private String buildEntryContextJson(ExecutionSnapshot firstExec, UUID positionId, UUID userId) {
         List<DiagnosisResult> entryDiagnoses = diagnosisResultRepository.findAllByPositionId(positionId).stream()
-                .filter(d -> d.getDiagnosisPhase() == DiagnosisPhase.ENTRY)
-                .toList();
+                .filter(d -> d.getDiagnosisPhase() == DiagnosisPhase.ENTRY).toList();
 
         AiFeedbackRequestDto requestDto = new AiFeedbackRequestDto(
-                FeedbackType.ENTRY_FEEDBACK.name(),
-                "v1.0",
-                userId,
-                positionId,
+                FeedbackType.ENTRY_FEEDBACK.name(), "v1.0", userId, positionId,
                 new StockDto(firstExec.getStockId(), firstExec.getStockSymbol(), firstExec.getStockName()),
                 new PositionDto("OPEN", firstExec.getPositionAveragePrice(), firstExec.getPositionQuantityAfter(), firstExec.getPlannedStopLossPrice()),
+                null, null, // closedInfo, previousSummary 불필요
                 List.of(mapToExecutionDto(firstExec)),
                 mapToMarketContextDto(firstExec),
                 entryDiagnoses.stream().map(this::mapToDiagnosisDto).toList()
         );
-
         return serializeToJson(requestDto);
     }
 
@@ -228,21 +228,29 @@ public class LearningCommandService {
     private String buildOnDemandContextJson(ExecutionSnapshot latestExec, UUID positionId, UUID userId) {
         List<ExecutionSnapshot> allExecutions = executionSnapshotRepository.findAllByPositionIdOrderByExecutedAtAscIdAsc(positionId);
         List<DiagnosisResult> diagnoses = diagnosisResultRepository.findAllByPositionId(positionId).stream()
-                .filter(d -> d.getDiagnosisPhase() == DiagnosisPhase.ENTRY || d.getDiagnosisPhase() == DiagnosisPhase.TRADE)
-                .toList();
+                .filter(d -> d.getDiagnosisPhase() == DiagnosisPhase.ENTRY || d.getDiagnosisPhase() == DiagnosisPhase.TRADE).toList();
+
+        // [리뷰 반영] 이전 피드백 요약본 가져오기 (가장 최근 피드백의 summary 파싱)
+        String previousSummary = null;
+        Optional<Feedback> prevFeedbackOpt = feedbackRepository.findByFeedbackKey(
+                String.format("%s:%s:%s", FeedbackType.ENTRY_FEEDBACK.name(), positionId, allExecutions.get(0).getExecutionId())
+        ); // 가장 간단한 방법으로 최초 ENTRY 피드백 참조 (추후 고도화 가능)
+
+        if (prevFeedbackOpt.isPresent() && prevFeedbackOpt.get().getContent() != null) {
+            try {
+                previousSummary = objectMapper.treeToValue(prevFeedbackOpt.get().getContent(), AiFeedbackResponse.class).summary();
+            } catch (Exception ignored) {}
+        }
 
         AiFeedbackRequestDto requestDto = new AiFeedbackRequestDto(
-                FeedbackType.ON_DEMAND_FEEDBACK.name(),
-                "v1.0",
-                userId,
-                positionId,
+                FeedbackType.ON_DEMAND_FEEDBACK.name(), "v1.0", userId, positionId,
                 new StockDto(latestExec.getStockId(), latestExec.getStockSymbol(), latestExec.getStockName()),
                 new PositionDto("OPEN", latestExec.getPositionAveragePrice(), latestExec.getPositionQuantityAfter(), latestExec.getPlannedStopLossPrice()),
+                null, previousSummary,
                 allExecutions.stream().map(this::mapToExecutionDto).toList(),
                 mapToMarketContextDto(latestExec),
                 diagnoses.stream().map(this::mapToDiagnosisDto).toList()
         );
-
         return serializeToJson(requestDto);
     }
 
@@ -254,18 +262,26 @@ public class LearningCommandService {
         List<ExecutionSnapshot> allExecutions = executionSnapshotRepository.findAllByPositionIdOrderByExecutedAtAscIdAsc(positionId);
         List<DiagnosisResult> allDiagnoses = diagnosisResultRepository.findAllByPositionId(positionId);
 
+        // [리뷰 반영] ClosedInfoDto 생성하여 정확한 시스템 손익/수량 전달
+        ClosedInfoDto closedInfoDto = new ClosedInfoDto(
+                closedPos.getAverageExitPrice(),
+                closedPos.getTotalBoughtQuantity(),
+                closedPos.getTotalSoldQuantity(),
+                closedPos.getRealizedProfit(),
+                closedPos.getRealizedReturnRate(),
+                closedPos.getOpenedAt() != null ? closedPos.getOpenedAt().toString() : null,
+                closedPos.getClosedAt() != null ? closedPos.getClosedAt().toString() : null
+        );
+
         AiFeedbackRequestDto requestDto = new AiFeedbackRequestDto(
-                FeedbackType.POSITION_REVIEW.name(),
-                "v1.0",
-                userId,
-                positionId,
+                FeedbackType.POSITION_REVIEW.name(), "v1.0", userId, positionId,
                 new StockDto(closedPos.getStockId(), closedPos.getStockSymbol(), closedPos.getStockName()),
                 new PositionDto("CLOSED", closedPos.getAverageEntryPrice(), 0, closedPos.getPlannedStopLossPrice()),
+                closedInfoDto, null, // closedInfo 포함
                 allExecutions.stream().map(this::mapToExecutionDto).toList(),
                 mapToMarketContextDto(latestExec),
                 allDiagnoses.stream().map(this::mapToDiagnosisDto).toList()
         );
-
         return serializeToJson(requestDto);
     }
 
@@ -280,37 +296,28 @@ public class LearningCommandService {
     }
 
     private ExecutionDto mapToExecutionDto(ExecutionSnapshot exec) {
-        return new ExecutionDto(
-                exec.getExecutionId(),
-                exec.getTradeType().name(),
-                exec.getQuantity(),
-                exec.getExecutedPrice(),
-                exec.getPositionQuantityAfter(),
-                exec.getInvestmentReason(),
-                exec.getExecutedAt().toString()
-        );
+        return new ExecutionDto(exec.getExecutionId(), exec.getTradeType().name(), exec.getQuantity(), exec.getExecutedPrice(), exec.getPositionQuantityAfter(), exec.getInvestmentReason(), exec.getExecutedAt().toString());
     }
 
     private MarketContextDto mapToMarketContextDto(ExecutionSnapshot exec) {
-        return new MarketContextDto(
-                exec.getRecent20dHigh(),
-                exec.getRecent20dLow(),
-                exec.getRecent5dReturnRate(),
-                exec.getQuoteAt().toString()
-        );
+        return new MarketContextDto(exec.getRecent20dHigh(), exec.getRecent20dLow(), exec.getRecent5dReturnRate(), exec.getQuoteAt().toString());
     }
 
     private DiagnosisDto mapToDiagnosisDto(DiagnosisResult diag) {
-        return new DiagnosisDto(
-                diag.getRuleCode(),
-                diag.getRuleVersion(),
-                diag.getResult().name(),
-                diag.getMetricValue(),
-                diag.getThresholdValue(),
-                diag.getMetrics(),
-                diag.getEvidence()
-        );
+        return new DiagnosisDto(diag.getRuleCode(), diag.getRuleVersion(), diag.getResult().name(), diag.getMetricValue(), diag.getThresholdValue(), diag.getMetrics(), diag.getEvidence());
     }
+
+    // [리뷰반영]: Ai 응답 필수 부분 검증
+    private void validateAiResponse(AiFeedbackResponse response) {
+        if (response.summary() == null || response.summary().isBlank() ||
+                response.overview() == null || response.overview().isBlank() ||
+                response.strengths() == null || response.strengths().isEmpty() ||
+                response.improvements() == null || response.improvements().isEmpty() ||
+                response.nextActions() == null || response.nextActions().isEmpty()) {
+            throw new CustomException(LearningErrorCode.AI_RESPONSE_INCOMPLETE);
+        }
+    }
+
 
     // 내부 메서드간 통신용 Record
     record GenerationContext(Feedback feedback, String contextJsonStr, boolean isAlreadyCompleted) {}
