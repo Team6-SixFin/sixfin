@@ -12,6 +12,8 @@ public record AiFeedbackRequestDto(
         UUID positionId,
         StockDto stock,
         PositionDto position,
+        ClosedInfoDto closedInfo,
+        String previousFeedbackSummary,
         List<ExecutionDto> executions,
         MarketContextDto marketContext,
         List<DiagnosisDto> diagnoses
@@ -21,4 +23,15 @@ public record AiFeedbackRequestDto(
     public record ExecutionDto(UUID executionId, String tradeType, Integer quantity, BigDecimal executedPrice, Integer positionQuantityAfter, String investmentReason, String executedAt) {}
     public record MarketContextDto(BigDecimal recent20DayHigh, BigDecimal recent20DayLow, BigDecimal recent5DayReturnRate, String quoteAt) {}
     public record DiagnosisDto(String ruleCode, Integer ruleVersion, String result, BigDecimal metricValue, BigDecimal thresholdValue, Object metrics, Object evidence) {}
+
+    // [리뷰 반영]: 시스템이 계산한 손익 정보 제공용
+    public record ClosedInfoDto(
+            BigDecimal averageExitPrice,
+            Long totalBoughtQuantity,
+            Long totalSoldQuantity,
+            BigDecimal realizedProfit,
+            BigDecimal realizedReturnRate,
+            String openedAt,
+            String closedAt
+    ) {}
 }
