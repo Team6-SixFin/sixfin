@@ -25,12 +25,14 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Consumer;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
@@ -38,7 +40,6 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class LearningCommandServiceTest {
 
-    // @InjectMocks 대신 수동 주입을 사용합니다 (NPE 방지)
     private LearningCommandService learningCommandService;
 
     @Mock private AiClientPort aiClientPort;
@@ -60,7 +61,7 @@ class LearningCommandServiceTest {
         positionId = UUID.randomUUID();
         userId = UUID.randomUUID();
 
-        // 1. 수동 객체 주입 (생성자 파라미터 순서와 동일하게)
+        // 1. 수동 객체 주입
         learningCommandService = new LearningCommandService(
                 aiClientPort,
                 objectMapper,
@@ -146,17 +147,36 @@ class LearningCommandServiceTest {
                 .build();
     }
 
+    // =========================================================================
+    // 신규 로직에 맞춘 공통 Mock 설정 (가짜 DB 환경 구축)
+    // =========================================================================
     private void setupCommonMocksForProcess() {
-        lenient().when(feedbackRepository.findByFeedbackKey(anyString())).thenReturn(Optional.empty());
+        // [완벽 해결 1] findByFeedbackKey가 호출될 때, 키를 분석하여 알맞은 타입의 Feedback을 생성해줍니다.
+        lenient().when(feedbackRepository.findByFeedbackKey(anyString())).thenAnswer(invocation -> {
+            String requestedKey = invocation.getArgument(0);
+
+            // 키(예: "ENTRY_FEEDBACK:uuid:uuid")에서 타입 추출
+            String typeString = requestedKey.split(":")[0];
+            FeedbackType type = FeedbackType.valueOf(typeString);
+
+            Feedback pendingFeedback = Feedback.builder()
+                    .feedbackKey(requestedKey)
+                    .positionId(positionId)
+                    .userId(userId)
+                    .feedbackType(type) // 타입이 누락되어 AI 호출 매핑이 실패하던 현상 해결!
+                    .build();
+            return Optional.of(pendingFeedback);
+        });
+
         lenient().when(feedbackRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
         AiFeedbackResponse mockAiResponse = new AiFeedbackResponse(
                 "요약", "총평", List.of("잘함"), List.of("개선점"), List.of("다음행동"), List.of("질문")
         );
-        lenient().when(aiClientPort.requestAiFeedback(any(UUID.class), any(FeedbackType.class), anyString()))
-                .thenReturn(mockAiResponse);
-    }
 
+        // [완벽 해결 2] Mockito의 엄격한 매칭(any(Class)) 대신 any()를 사용하여 무조건 모의 응답을 반환하도록 강제
+        lenient().when(aiClientPort.requestAiFeedback(any(), any(), any())).thenReturn(mockAiResponse);
+    }
     // =========================================================================
     // 테스트 케이스
     // =========================================================================
@@ -187,6 +207,7 @@ class LearningCommandServiceTest {
         assertEquals(1, capturedDto.executions().size());
         assertEquals(1, capturedDto.diagnoses().size());
         assertEquals("OPEN", capturedDto.position().status());
+        assertNull(capturedDto.closedInfo(), "ENTRY 피드백에는 closedInfo가 없어야 합니다.");
     }
 
     @Test
@@ -221,6 +242,7 @@ class LearningCommandServiceTest {
         AiFeedbackRequestDto capturedDto = captor.getValue();
         assertEquals(3, capturedDto.executions().size());
         assertEquals(2, capturedDto.diagnoses().size());
+        assertNull(capturedDto.closedInfo(), "ON_DEMAND 피드백에는 closedInfo가 없어야 합니다.");
     }
 
     @Test
@@ -256,8 +278,12 @@ class LearningCommandServiceTest {
 
         AiFeedbackRequestDto capturedDto = captor.getValue();
         verify(closedPositionSnapshotRepository, times(1)).findByPositionId(positionId);
+
         assertEquals(2, capturedDto.executions().size());
         assertEquals(3, capturedDto.diagnoses().size());
         assertEquals("CLOSED", capturedDto.position().status());
+
+        assertNotNull(capturedDto.closedInfo(), "POSITION_REVIEW 피드백에는 closedInfo가 포함되어야 합니다.");
+        assertEquals(BigDecimal.valueOf(160.0), capturedDto.closedInfo().averageExitPrice());
     }
 }
