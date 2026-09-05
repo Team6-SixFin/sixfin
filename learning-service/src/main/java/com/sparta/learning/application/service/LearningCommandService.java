@@ -182,7 +182,7 @@ public class LearningCommandService {
     protected void completeFeedback(String feedbackKey, String contextJson, AiFeedbackResponse aiResponse, String reqId, String model, String version) {
         // [리뷰 반영] 영속성 컨텍스트(Managed) 상태로 가져오기
         Feedback managedFeedback = feedbackRepository.findByFeedbackKey(feedbackKey)
-                .orElseThrow(() -> new IllegalStateException("피드백 데이터를 찾을 수 없습니다: " + feedbackKey));
+                .orElseThrow(() -> new CustomException(LearningErrorCode.FEEDBACK_NOT_FOUND));
 
         JsonNode contentNode = objectMapper.valueToTree(aiResponse);
         JsonNode inputNode = null;
@@ -194,7 +194,7 @@ public class LearningCommandService {
     // TODO : AI 답변 생성 실패시 현재는 FAIL로 저장되나, 팀원과 상의 후 수정 해야 함 (fail과 fallback)
     protected void failFeedback(String feedbackKey, String contextJson, String errorMsg, String reqId, String model, String version) {
         Feedback managedFeedback = feedbackRepository.findByFeedbackKey(feedbackKey)
-                .orElseThrow(() -> new IllegalStateException("피드백 데이터를 찾을 수 없습니다: " + feedbackKey));
+                .orElseThrow(() -> new CustomException(LearningErrorCode.FEEDBACK_NOT_FOUND));
 
         JsonNode inputNode = null;
         try { inputNode = objectMapper.readTree(contextJson); } catch (JsonProcessingException ignored) {}
