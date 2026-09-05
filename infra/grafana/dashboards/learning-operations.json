@@ -1,0 +1,232 @@
+{
+  "annotations": { "list": [] },
+  "description": "Learning 서비스의 Kafka 이벤트 수집과 규칙 기반 진단 파이프라인을 확인합니다.",
+  "editable": false,
+  "graphTooltip": 1,
+  "panels": [
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "최근 5분 동안 새로 처리한 Kafka 체결 이벤트 수입니다.",
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" } }, "overrides": [] },
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "id": 1,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "reduceOptions": { "calcs": ["lastNotNull"], "values": false },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "expr": "sum(increase(learning_trade_events_total{application=\"learning-service\", result=\"PROCESSED\"}[5m])) or vector(0)",
+          "refId": "A"
+        }
+      ],
+      "title": "최근 5분 처리 이벤트",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "최근 5분 동안 검증·수집 과정에서 실패한 이벤트 수입니다.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 1 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+      "id": 2,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "reduceOptions": { "calcs": ["lastNotNull"], "values": false },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "expr": "sum(increase(learning_trade_events_total{application=\"learning-service\", result=\"FAILED\"}[5m])) or vector(0)",
+          "refId": "A"
+        }
+      ],
+      "title": "최근 5분 실패 이벤트",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "최근 5분 동안 eventId 멱등 처리로 차단한 중복 이벤트 수입니다.",
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" } }, "overrides": [] },
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+      "id": 3,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "reduceOptions": { "calcs": ["lastNotNull"], "values": false },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "expr": "sum(increase(learning_trade_events_total{application=\"learning-service\", result=\"DUPLICATE\"}[5m])) or vector(0)",
+          "refId": "A"
+        }
+      ],
+      "title": "최근 5분 중복 이벤트",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Kafka 최신 offset과 Learning Consumer 처리 offset의 최대 차이입니다. 환경에 따라 Kafka Client Lag 메트릭이 없으면 No data로 표시됩니다.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 10 },
+              { "color": "red", "value": 100 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+      "id": 4,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "reduceOptions": { "calcs": ["lastNotNull"], "values": false },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "expr": "max(kafka_consumer_fetch_manager_records_lag_max{application=\"learning-service\"})",
+          "refId": "A"
+        }
+      ],
+      "title": "Kafka Consumer Lag 최대값",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "이벤트 유형과 처리 결과별 초당 처리량입니다.",
+      "fieldConfig": { "defaults": { "unit": "ops" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "id": 5,
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "none" }
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(learning_trade_events_total{application=\"learning-service\"}[1m])) by (event_type, result)",
+          "legendFormat": "{{event_type}} / {{result}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Kafka 이벤트 처리량",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "이벤트 수신부터 수집 파이프라인 완료까지 걸린 시간의 p95입니다.",
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "id": 6,
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "none" }
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(learning_trade_event_processing_duration_seconds_bucket{application=\"learning-service\"}[5m])) by (le, event_type))",
+          "legendFormat": "{{event_type}} p95",
+          "refId": "A"
+        }
+      ],
+      "title": "이벤트 처리시간 p95",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "ENTRY·TRADE·CLOSE 단계별 진단 성공과 실패 처리량입니다.",
+      "fieldConfig": { "defaults": { "unit": "ops" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+      "id": 7,
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "none" }
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(learning_diagnosis_runs_total{application=\"learning-service\"}[1m])) by (phase, result)",
+          "legendFormat": "{{phase}} / {{result}}",
+          "refId": "A"
+        }
+      ],
+      "title": "진단 실행량",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "진단 규칙 실행과 결과 저장에 걸린 시간의 p95입니다.",
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
+      "id": 8,
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "none" }
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(learning_diagnosis_duration_seconds_bucket{application=\"learning-service\"}[5m])) by (le, phase))",
+          "legendFormat": "{{phase}} p95",
+          "refId": "A"
+        }
+      ],
+      "title": "진단 처리시간 p95",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "최근 1시간 동안 규칙별 PASS·WARNING·VIOLATION·NOT_APPLICABLE 판정 수입니다.",
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 20 },
+      "id": 9,
+      "options": {
+        "displayMode": "gradient",
+        "minVizHeight": 10,
+        "minVizWidth": 0,
+        "orientation": "horizontal",
+        "reduceOptions": { "calcs": ["lastNotNull"], "values": false },
+        "showUnfilled": true,
+        "valueMode": "color"
+      },
+      "targets": [
+        {
+          "expr": "sum(increase(learning_diagnosis_results_total{application=\"learning-service\"}[1h])) by (rule_code, result)",
+          "instant": true,
+          "legendFormat": "{{rule_code}} / {{result}}",
+          "refId": "A"
+        }
+      ],
+      "title": "최근 1시간 규칙별 진단 결과",
+      "type": "bargauge"
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 39,
+  "tags": ["sixfin", "learning", "kafka", "diagnosis"],
+  "templating": { "list": [] },
+  "time": { "from": "now-1h", "to": "now" },
+  "timezone": "browser",
+  "title": "Learning Operations",
+  "uid": "sixfin-learning-operations",
+  "version": 1
+}

@@ -7,13 +7,16 @@ import com.sparta.learning.domain.model.RuleCode;
 import com.sparta.learning.domain.rule.DiagnosisRule;
 import com.sparta.learning.domain.rule.StopLossSetRule;
 import com.sparta.learning.fixture.ExecutionSnapshotFixture;
+import com.sparta.learning.infrastructure.monitoring.LearningMetrics;
 import com.sparta.learning.infrastructure.persistence.repository.DiagnosisResultRepository;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.Mockito.mock;
@@ -26,6 +29,8 @@ class DiagnosisServiceTest {
 
     private DiagnosisResultRepository diagnosisResultRepository;
     private DiagnosisService diagnosisService;
+    private SimpleMeterRegistry meterRegistry;
+    private LearningMetrics learningMetrics;
 
     @BeforeEach
     void setUp() {
@@ -38,9 +43,12 @@ class DiagnosisServiceTest {
         when(diagnosisResultRepository.findByDiagnosisKeyIn(anyCollection()))
                 .thenReturn(List.of());
 
+        meterRegistry = new SimpleMeterRegistry();
+        learningMetrics = new LearningMetrics(meterRegistry);
         diagnosisService = new DiagnosisService(
                 List.of(new StopLossSetRule()),
-                diagnosisResultRepository
+                diagnosisResultRepository,
+                learningMetrics
         );
     }
 
@@ -55,6 +63,17 @@ class DiagnosisServiceTest {
         assertThat(results.getFirst().getRuleCode()).isEqualTo(RuleCode.STOP_LOSS_SET.name());
         assertThat(results.getFirst().getDiagnosisPhase()).isEqualTo(DiagnosisPhase.ENTRY);
         verify(diagnosisResultRepository).saveAll(anyCollection());
+        assertThat(meterRegistry.get("learning.diagnosis.runs")
+                .tag("phase", "ENTRY")
+                .tag("result", "SUCCESS")
+                .counter()
+                .count()).isEqualTo(1.0);
+        assertThat(meterRegistry.get("learning.diagnosis.results")
+                .tag("phase", "ENTRY")
+                .tag("rule_code", "STOP_LOSS_SET")
+                .tag("result", "PASS")
+                .counter()
+                .count()).isEqualTo(1.0);
     }
 
     // 추가 매수는 TRADE 단계이므로 ENTRY 규칙이 실행되면 안 된다.
@@ -119,7 +138,7 @@ class DiagnosisServiceTest {
     @Test
     void 실행할_규칙이_없으면_저장하지_않는다() {
         DiagnosisService emptyRuleService = new DiagnosisService(
-                List.of(), diagnosisResultRepository
+                List.of(), diagnosisResultRepository, learningMetrics
         );
 
         List<DiagnosisResult> results = emptyRuleService.diagnose(
@@ -138,7 +157,7 @@ class DiagnosisServiceTest {
         when(neverSupports.supports(any())).thenReturn(false);
 
         DiagnosisService service = new DiagnosisService(
-                List.of(neverSupports), diagnosisResultRepository
+                List.of(neverSupports), diagnosisResultRepository, learningMetrics
         );
 
         List<DiagnosisResult> results = service.diagnose(
@@ -147,5 +166,28 @@ class DiagnosisServiceTest {
 
         assertThat(results).isEmpty();
         verify(neverSupports, never()).diagnose(any());
+    }
+
+    // 규칙 실행 중 예외가 발생하면 실패 메트릭을 남기고 예외를 그대로 전파해야 한다.
+    @Test
+    void 진단_실패는_메트릭을_남기고_예외를_전파한다() {
+        DiagnosisRule failingRule = mock(DiagnosisRule.class);
+        when(failingRule.getRuleCode()).thenReturn(RuleCode.STOP_LOSS_SET);
+        when(failingRule.supports(any())).thenReturn(true);
+        when(failingRule.diagnose(any())).thenThrow(new IllegalStateException("진단 실패"));
+
+        DiagnosisService service = new DiagnosisService(
+                List.of(failingRule), diagnosisResultRepository, learningMetrics
+        );
+
+        assertThatThrownBy(() -> service.diagnose(ExecutionSnapshotFixture.firstBuyWithStopLoss()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("진단 실패");
+
+        assertThat(meterRegistry.get("learning.diagnosis.runs")
+                .tag("phase", "ENTRY")
+                .tag("result", "FAILED")
+                .counter()
+                .count()).isEqualTo(1.0);
     }
 }
