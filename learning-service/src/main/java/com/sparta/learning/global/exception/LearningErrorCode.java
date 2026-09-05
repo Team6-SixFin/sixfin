@@ -16,6 +16,10 @@ public enum LearningErrorCode implements ErrorCode {
 
     POSITION_FIRST_TRADE_NOT_FOUND (HttpStatus.NOT_FOUND, "해당 포지션의 최초 체결 내역을 찾을 수 없습니다."),
     POSITION_LATEST_TRADE_NOT_FOUND (HttpStatus.NOT_FOUND, "해당 포지션의 최신 체결 내역을 찾을 수 없습니다."),
+    EXECUTION_NOT_FOUND (HttpStatus.NOT_FOUND, "체결 내역을 찾을 수 없습니다."),
+    CLOSED_POSITION_NOT_FOUND (HttpStatus.NOT_FOUND, "종료 포지션 최종 집계를 찾을 수 없습니다."),
+    AI_RESPONSE_INCOMPLETE  (HttpStatus.NOT_FOUND, "AI 응답 필수 필드가 누락되었습니다."),
+
 
     AI_RESPONSE_GENERATION_FAILED(HttpStatus.NOT_FOUND, "AI 피드백 생성을 실패했습니다.");
 
