@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
  interface TradingAccountsJpaRepository extends JpaRepository<Accounts, UUID> {
@@ -16,4 +17,6 @@ import java.util.UUID;
     Page<Accounts> search(UUID userId, Pageable pageable);
 
      List<Accounts> findAllByUserId(UUID userId);
+
+     Optional<Accounts> findByUserId(UUID userId);
  }

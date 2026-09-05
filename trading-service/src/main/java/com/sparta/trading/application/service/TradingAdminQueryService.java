@@ -12,19 +12,19 @@ import com.sparta.trading.domain.repository.accounts.TradingAccountsQueryReposit
 import com.sparta.trading.domain.repository.execution.TradingExecutionQueryRepository;
 import com.sparta.trading.domain.repository.order.TradingOrderQueryRepository;
 import com.sparta.trading.domain.repository.outboxEvent.TradingOutboxEventsQueryRepository;
+import com.sparta.trading.domain.repository.position.PositionRepository;
 import com.sparta.trading.global.exception.CustomException;
 import com.sparta.trading.global.exception.GlobalErrorCode;
+import com.sparta.trading.global.exception.TradingErrorCode;
 import com.sparta.trading.global.util.PageableUtil;
 import com.sparta.trading.infrastructure.persistence.repository.stocks.StocksRepository;
-import com.sparta.trading.presentation.dto.response.TradigAdminOrderResponseDto;
-import com.sparta.trading.presentation.dto.response.TradingAccountsResponseDto;
-import com.sparta.trading.presentation.dto.response.TradingAdminExecutionResponseDto;
-import com.sparta.trading.presentation.dto.response.TradingAdminOutboxEventResponseDto;
+import com.sparta.trading.presentation.dto.response.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -43,7 +43,10 @@ public class TradingAdminQueryService {
     private final TradingOrderQueryRepository tradingOrderQueryRepository;
     private final TradingExecutionQueryRepository tradingExecutionQueryRepository;
     private final TradingOutboxEventsQueryRepository tradingOutboxEventsQueryRepository;
+    private final PositionRepository positionRepository;
     private final StocksRepository stocksRepository;
+    private final StringRedisTemplate redisTemplate;
+
 
     public Page<TradingAccountsResponseDto> search(TradingSearchAccountsQuery tradingSearchAccountsQuery) {
         Pageable pageable = PageableUtil.createDescPageable(
@@ -285,6 +288,83 @@ public class TradingAdminQueryService {
 
         return new TradingAdminOutboxEventQueryResult(summary,responseDtoPage);
     }
+
+
+    public TradingAdminAccountByUserResponseDto searchAccountByUser(UUID userId, Boolean includePosition) {
+
+        Accounts account = tradingAccountsQueryRepository.findByUserId(userId)
+                .orElseThrow(() -> new CustomException(GlobalErrorCode.USER_NOT_FOUND, "계좌를 찾을 수 없습니다."));
+
+        boolean shouldIncludePositions = Boolean.TRUE.equals(includePosition);
+
+        List<TradingAdminAccountByUserResponseDto.PositionDto> positionDtos = Collections.emptyList();
+        BigDecimal evaluationAmount = BigDecimal.ZERO;
+        Instant valuationAt = null;
+
+        // 2. includePosition이 true이면 positions, stocks, Redis 순서대로 조회
+        if (shouldIncludePositions) {
+            List<Positions> positions = positionRepository.findAllByAccountIdAndStatus(account.getId(), "OPEN");
+
+            if (!positions.isEmpty()) {
+                valuationAt = Instant.now();
+                List<TradingAdminAccountByUserResponseDto.PositionDto> dtos = new ArrayList<>();
+
+                for (Positions p : positions) {
+                    // stocks 테이블 조회 (symbol 가져오기)
+                    Stocks stock = stocksRepository.findById(p.getStockId())
+                            .orElseThrow(() -> new CustomException(TradingErrorCode.STOCK_NOT_FOUND, "주식 정보를 찾을 수 없습니다."));
+
+                    String symbol = stock.getSymbol();
+
+                    // Redis에서 price:{symbol} 조회
+                    String priceStr = redisTemplate.opsForValue().get("price:" + symbol);
+
+                    // Redis 가격이 없으면 평균매수가로 fallback
+                    BigDecimal currentPrice = (priceStr != null)
+                            ? new BigDecimal(priceStr)
+                            : p.getAverageEntryPrice();
+
+                    // 평가손익 = (현재가 - 평균매수가) * 수량
+                    BigDecimal unrealizedProfit = currentPrice.subtract(p.getAverageEntryPrice())
+                            .multiply(BigDecimal.valueOf(p.getQuantity()));
+
+                    // 종목 평가금액 합산
+                    BigDecimal posEvalAmount = currentPrice.multiply(BigDecimal.valueOf(p.getQuantity()));
+                    evaluationAmount = evaluationAmount.add(posEvalAmount);
+
+                    dtos.add(new TradingAdminAccountByUserResponseDto.PositionDto(
+                            p.getId(),
+                            symbol,
+                            p.getQuantity(),
+                            p.getAverageEntryPrice(),
+                            currentPrice,
+                            unrealizedProfit
+                    ));
+                }
+                positionDtos = dtos;
+            }
+        }
+
+        // 3. 자산 계산 (총자산 = 예수금 + 평가금액)
+        BigDecimal cashBalance = account.getCashBalance();
+        BigDecimal orderableAmount = cashBalance; // MVP 기준 동일
+        BigDecimal totalAsset = cashBalance.add(evaluationAmount);
+
+        // 4. 응답 반환
+        return new TradingAdminAccountByUserResponseDto(
+                account.getId(),
+                account.getUserId(),
+                cashBalance,
+                orderableAmount,
+                account.getInitialDeposit(),
+                evaluationAmount,
+                totalAsset,
+                valuationAt,
+                positionDtos,
+                account.getCreatedAt()
+        );
+    }
+
 
 
     //날짜 검증

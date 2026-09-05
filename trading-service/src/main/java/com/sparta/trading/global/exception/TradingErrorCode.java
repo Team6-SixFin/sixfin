@@ -28,6 +28,7 @@ public enum TradingErrorCode implements  ErrorCode{
     ORDER_INCONSISTENT_STATE(HttpStatus.INTERNAL_SERVER_ERROR, "저장된 주문 상태가 일관되지 않습니다."),
     MARKET_CLOCK_FORBIDDEN(HttpStatus.FORBIDDEN, "관리자만 호출할 수 있습니다.");
 
+
     private final HttpStatus httpStatus;
     private final String message;
 }
