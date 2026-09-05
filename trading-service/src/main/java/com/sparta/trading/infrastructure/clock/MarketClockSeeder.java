@@ -11,16 +11,19 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
+import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
 
 /**
  * market_clock의 단일 행(id=1)이 없으면 만든다. 매 기동 시 확인한다. 이미 있으면 아무 것도 안 한다(멱등).
+ * MarketDataCsvLoader가 먼저 캔들을 채워야 start_seq 시각을 구할 수 있어 그 뒤에 실행되도록 순서를 고정한다.
  */
 @Slf4j
 @Component
 @RequiredArgsConstructor
+@Order(2)
 public class MarketClockSeeder implements ApplicationRunner {
 
     private static final int SINGLETON_ID = 1;

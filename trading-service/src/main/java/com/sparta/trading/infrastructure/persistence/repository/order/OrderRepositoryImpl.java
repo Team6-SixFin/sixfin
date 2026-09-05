@@ -3,6 +3,8 @@ package com.sparta.trading.infrastructure.persistence.repository.order;
 import com.sparta.trading.domain.entity.Orders;
 import com.sparta.trading.domain.repository.order.OrderRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
@@ -17,6 +19,11 @@ public class OrderRepositoryImpl implements OrderRepository {
     @Override
     public Optional<Orders> findByRequestId(UUID requestId) {
         return orderJpaRepository.findByRequestId(requestId);
+    }
+
+    @Override
+    public Optional<Orders> findById(UUID id) {
+        return orderJpaRepository.findById(id);
     }
 
     @Override
