@@ -4,7 +4,9 @@ import com.sparta.learning.domain.entity.DiagnosisResult;
 import com.sparta.learning.domain.entity.ExecutionSnapshot;
 import com.sparta.learning.domain.model.DiagnosisPhase;
 import com.sparta.learning.domain.rule.DiagnosisRule;
+import com.sparta.learning.infrastructure.monitoring.LearningMetrics;
 import com.sparta.learning.infrastructure.persistence.repository.DiagnosisResultRepository;
+import io.micrometer.core.instrument.Timer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -22,32 +24,46 @@ public class DiagnosisService {
 
     private final List<DiagnosisRule> rules;
     private final DiagnosisResultRepository diagnosisResultRepository;
+    private final LearningMetrics learningMetrics;
 
     // 이 체결에 해당하는 규칙을 실행해 진단 결과를 저장한다.
     // 스냅샷 저장과 같은 트랜젝션에 실행된다 -> 진단 저장이 실패하면 스냅샷도 같이 롤백됨
     @Transactional
     public List<DiagnosisResult> diagnose(ExecutionSnapshot snapshot){
-        DiagnosisPhase phase = DiagnosisPhase.from(snapshot);
+        Timer.Sample sample = learningMetrics.startTimer();
+        DiagnosisPhase phase = null;
 
-        // 1차: 거래 시점에 해당하는 규칙만 고름
-        // 2차: 같은 시점이라도 적용 대상인지 확인함 (supports)
-        List<DiagnosisResult> results = rules.stream()
-                .filter(rule -> rule.getRuleCode().getDiagnosisPhase() == phase)
-                .filter(rule -> rule.supports(snapshot))
-                .map(rule -> rule.diagnose(snapshot))
-                .toList();
+        try {
+            phase = DiagnosisPhase.from(snapshot);
+            DiagnosisPhase currentPhase = phase;
 
-        if(results.isEmpty()){
-            return List.of();
+            // 1차: 거래 시점에 해당하는 규칙만 고름
+            // 2차: 같은 시점이라도 적용 대상인지 확인함 (supports)
+            List<DiagnosisResult> results = rules.stream()
+                    .filter(rule -> rule.getRuleCode().getDiagnosisPhase() == currentPhase)
+                    .filter(rule -> rule.supports(snapshot))
+                    .map(rule -> rule.diagnose(snapshot))
+                    .toList();
+
+            if(results.isEmpty()){
+                learningMetrics.recordDiagnosisSuccess(phase, List.of(), sample);
+                return List.of();
+            }
+
+            List<DiagnosisResult> newResults = excludeAlreadySaved(results);
+            if(newResults.isEmpty()){
+                log.info("이미 진단된 체결입니다. executionId = {}, phase = {}", snapshot.getExecutionId(), phase);
+                learningMetrics.recordDiagnosisSuccess(phase, List.of(), sample);
+                return List.of();
+            }
+
+            List<DiagnosisResult> savedResults = diagnosisResultRepository.saveAll(newResults);
+            learningMetrics.recordDiagnosisSuccess(phase, savedResults, sample);
+            return savedResults;
+        } catch (RuntimeException exception) {
+            learningMetrics.recordDiagnosisFailure(phase, sample);
+            throw exception;
         }
-
-        List<DiagnosisResult> newResults = excludeAlreadySaved(results);
-        if(newResults.isEmpty()){
-            log.info("이미 진단된 체결입니다. executionId = {}, phase = {}", snapshot.getExecutionId(), phase);
-            return List.of();
-        }
-
-        return diagnosisResultRepository.saveAll(newResults);
     }
 
 
