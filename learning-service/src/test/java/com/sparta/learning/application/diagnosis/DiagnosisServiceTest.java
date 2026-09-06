@@ -5,13 +5,16 @@ import com.sparta.learning.domain.entity.ExecutionSnapshot;
 import com.sparta.learning.domain.model.DiagnosisPhase;
 import com.sparta.learning.domain.model.RuleCode;
 import com.sparta.learning.domain.rule.DiagnosisRule;
+import com.sparta.learning.domain.rule.DiagnosisContext;
 import com.sparta.learning.domain.rule.StopLossSetRule;
+import com.sparta.learning.fixture.DiagnosisContextFixture;
 import com.sparta.learning.fixture.ExecutionSnapshotFixture;
 import com.sparta.learning.infrastructure.monitoring.LearningMetrics;
 import com.sparta.learning.infrastructure.persistence.repository.DiagnosisResultRepository;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 import java.util.List;
 
@@ -104,7 +107,7 @@ class DiagnosisServiceTest {
     @Test
     void 이미_진단된_체결은_다시_저장하지_않는다() {
         ExecutionSnapshot snapshot = ExecutionSnapshotFixture.firstBuyWithStopLoss();
-        DiagnosisResult alreadySaved = new StopLossSetRule().diagnose(snapshot);
+        DiagnosisResult alreadySaved = new StopLossSetRule().diagnose(DiagnosisContextFixture.of(snapshot));
 
         when(diagnosisResultRepository.findByDiagnosisKeyIn(anyCollection()))
                 .thenReturn(List.of(alreadySaved));
@@ -123,7 +126,7 @@ class DiagnosisServiceTest {
 
         // 이 서비스에는 규칙이 하나뿐이므로, 다른 키가 저장돼 있어도 걸러지지 않아야 한다
         DiagnosisResult otherRuleResult = new StopLossSetRule()
-                .diagnose(ExecutionSnapshotFixture.firstBuyWithStopLoss());
+                .diagnose(DiagnosisContextFixture.of(ExecutionSnapshotFixture.firstBuyWithStopLoss()));
         when(diagnosisResultRepository.findByDiagnosisKeyIn(anyCollection()))
                 .thenReturn(List.of(otherRuleResult));
 
@@ -166,6 +169,42 @@ class DiagnosisServiceTest {
 
         assertThat(results).isEmpty();
         verify(neverSupports, never()).diagnose(any());
+    }
+
+    // Context 전달 구조와 모니터링을 병합해도 이전 진단이 규칙까지 전달되어야 한다.
+    @Test
+    void 이전_진단을_Context로_전달하면서_성공을_계측한다() {
+        ExecutionSnapshot snapshot = ExecutionSnapshotFixture.firstBuyWithStopLoss();
+        DiagnosisResult previous = new StopLossSetRule().diagnose(DiagnosisContextFixture.of(snapshot));
+        when(diagnosisResultRepository.findByPositionIdOrderByIdAsc(snapshot.getPositionId()))
+                .thenReturn(List.of(previous));
+        DiagnosisRule rule = mock(DiagnosisRule.class);
+        when(rule.getRuleCode()).thenReturn(RuleCode.STOP_LOSS_SET);
+        when(rule.supports(any())).thenReturn(true);
+        when(rule.diagnose(any())).thenReturn(previous);
+
+        new DiagnosisService(List.of(rule), diagnosisResultRepository, learningMetrics).diagnose(snapshot);
+
+        ArgumentCaptor<DiagnosisContext> captor = ArgumentCaptor.forClass(DiagnosisContext.class);
+        verify(rule).diagnose(captor.capture());
+        assertThat(captor.getValue().executionSnapshot()).isSameAs(snapshot);
+        assertThat(captor.getValue().previousDiagnoses()).containsExactly(previous);
+        assertThat(meterRegistry.get("learning.diagnosis.runs")
+                .tag("phase", "ENTRY").tag("result", "SUCCESS").counter().count()).isEqualTo(1.0);
+    }
+
+    // 이전 진단 조회 실패도 규칙 실행 실패와 동일하게 계측하고 재시도하도록 전파한다.
+    @Test
+    void 이전_진단_조회_실패를_계측하고_전파한다() {
+        ExecutionSnapshot snapshot = ExecutionSnapshotFixture.firstBuyWithStopLoss();
+        when(diagnosisResultRepository.findByPositionIdOrderByIdAsc(snapshot.getPositionId()))
+                .thenThrow(new IllegalStateException("이전 진단 조회 실패"));
+
+        assertThatThrownBy(() -> diagnosisService.diagnose(snapshot))
+                .isInstanceOf(IllegalStateException.class).hasMessage("이전 진단 조회 실패");
+        verify(diagnosisResultRepository, never()).saveAll(anyCollection());
+        assertThat(meterRegistry.get("learning.diagnosis.runs")
+                .tag("phase", "ENTRY").tag("result", "FAILED").counter().count()).isEqualTo(1.0);
     }
 
     // 규칙 실행 중 예외가 발생하면 실패 메트릭을 남기고 예외를 그대로 전파해야 한다.

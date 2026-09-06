@@ -14,6 +14,7 @@ public interface ExecutionSnapshotRepository extends JpaRepository<ExecutionSnap
 
     Optional<ExecutionSnapshot> findFirstByPositionIdAndUserIdOrderByExecutedAtAscIdAsc(UUID positionId, UUID userId);
 
+    Optional<ExecutionSnapshot> findByConsumedEventEventId(UUID eventId);
     // 요청형 피드백을 위한 최신(마지막) 체결 조회용
     Optional<ExecutionSnapshot> findFirstByPositionIdAndUserIdOrderByExecutedAtDescIdDesc(UUID positionId, UUID userId);
 }

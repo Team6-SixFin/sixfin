@@ -38,10 +38,10 @@ public class TradeEventIngestionService {
      * 스냅샷 저장이 실패하면 consumed_events 저장도 함께 롤백되어 재처리 가능
      *
      * 진단은 이 트랜잭션에 포함하지 않는다.
-     * 진단 규칙에서 예외가 발생하면 스냅샷 저장까지 롤백되고,
-     * Kafka 재시도 횟수를 넘기면 이벤트 자체가 유실되기 때문이다.
+     * 진단까지 같은 트랜잭션에 포함하면 진단 규칙의 예외로 스냅샷 저장도 롤백되고,
+     * Kafka 재시도 횟수를 넘겼을 때 이벤트 사본까지 남지 않을 수 있기 때문이다.
      * 스냅샷은 Trading 이벤트의 사본이라 유실되면 복구가 어렵지만,
-     * 진단은 스냅샷만 있으면 언제든 다시 실행할 수 있다.
+     * 진단은 Kafka 재시도 시 이미 저장된 스냅샷을 조회해 다시 실행할 수 있다.
      *
      * 그래서 저장한 스냅샷을 반환하고, 진단 호출 여부와 순서는 호출하는 쪽이 결정한다.
      */
@@ -50,9 +50,9 @@ public class TradeEventIngestionService {
         validateEnvelope(event);
 
         // 빠른 중복 확인이며, 동시 소비 경쟁의 최종 방어선은 event_id UNIQUE 제약
-        // 이미 처리한 이벤트는 진단도 저장되어 있으므로 스냅샷을 반환하지 않는다
+        // 체결 이벤트의 진단이 실패했을 수 있으므로 기존 스냅샷을 반환해 진단을 재실행한다.
         if (consumedEventRepository.existsByEventId(event.eventId())) {
-            return IngestionResult.duplicate();
+            return findDuplicateResult(event);
         }
 
         ConsumedEvent consumedEvent = consumedEventRepository.save(ConsumedEvent.builder()
@@ -79,6 +79,19 @@ public class TradeEventIngestionService {
                         snapshotMapper.toClosedPositionSnapshot(consumedEvent, event));
                 yield IngestionResult.processedWithoutDiagnosis();
             }
+        };
+    }
+
+    private IngestionResult findDuplicateResult(TradingEventEnvelope event) {
+        return switch (event.eventType()) {
+            case BUY_EXECUTED, SELL_EXECUTED -> executionSnapshotRepository
+                    .findByConsumedEventEventId(event.eventId())
+                    .map(IngestionResult::duplicate)
+                    .orElseThrow(() -> new IllegalStateException(
+                            "소비 이력에 대응하는 체결 스냅샷이 없습니다. eventId=" + event.eventId()
+                    ));
+            // CLOSE 진단은 아직 구현되지 않았으므로 기존 종료 스냅샷을 진단 대상으로 반환하지 않는다.
+            case POSITION_CLOSED -> IngestionResult.duplicate();
         };
     }
 

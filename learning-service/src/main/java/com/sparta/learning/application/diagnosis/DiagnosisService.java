@@ -3,6 +3,7 @@ package com.sparta.learning.application.diagnosis;
 import com.sparta.learning.domain.entity.DiagnosisResult;
 import com.sparta.learning.domain.entity.ExecutionSnapshot;
 import com.sparta.learning.domain.model.DiagnosisPhase;
+import com.sparta.learning.domain.rule.DiagnosisContext;
 import com.sparta.learning.domain.rule.DiagnosisRule;
 import com.sparta.learning.infrastructure.monitoring.LearningMetrics;
 import com.sparta.learning.infrastructure.persistence.repository.DiagnosisResultRepository;
@@ -27,7 +28,7 @@ public class DiagnosisService {
     private final LearningMetrics learningMetrics;
 
     // 이 체결에 해당하는 규칙을 실행해 진단 결과를 저장한다.
-    // 스냅샷 저장과 같은 트랜젝션에 실행된다 -> 진단 저장이 실패하면 스냅샷도 같이 롤백됨
+    // 스냅샷 저장과 별도 트랜잭션으로 실행하며, 실패는 호출자에게 전파해 재시도한다.
     @Transactional
     public List<DiagnosisResult> diagnose(ExecutionSnapshot snapshot){
         Timer.Sample sample = learningMetrics.startTimer();
@@ -35,15 +36,13 @@ public class DiagnosisService {
 
         try {
             phase = DiagnosisPhase.from(snapshot);
-            DiagnosisPhase currentPhase = phase;
-
-            // 1차: 거래 시점에 해당하는 규칙만 고름
-            // 2차: 같은 시점이라도 적용 대상인지 확인함 (supports)
-            List<DiagnosisResult> results = rules.stream()
-                    .filter(rule -> rule.getRuleCode().getDiagnosisPhase() == currentPhase)
-                    .filter(rule -> rule.supports(snapshot))
-                    .map(rule -> rule.diagnose(snapshot))
-                    .toList();
+            // 이전 진단을 한 번 조회해 모든 규칙에 동일한 Context를 전달한다.
+            // 조회 실패도 진단 실패 메트릭에 포함하도록 계측 구간 안에서 실행한다.
+            DiagnosisContext context = DiagnosisContext.ofExecution(
+                    snapshot,
+                    diagnosisResultRepository.findByPositionIdOrderByIdAsc(snapshot.getPositionId())
+            );
+            List<DiagnosisResult> results = execute(context, phase);
 
             if(results.isEmpty()){
                 learningMetrics.recordDiagnosisSuccess(phase, List.of(), sample);
@@ -64,6 +63,16 @@ public class DiagnosisService {
             learningMetrics.recordDiagnosisFailure(phase, sample);
             throw exception;
         }
+    }
+
+    // 1차: 거래 시점에 해당하는 규칙만 고름
+    // 2차: 같은 시점이라도 적용 대상인지 확인함 (supports)
+    private List<DiagnosisResult> execute(DiagnosisContext context, DiagnosisPhase phase){
+        return rules.stream()
+                .filter(rule -> rule.getRuleCode().getDiagnosisPhase() == phase)
+                .filter(rule -> rule.supports(context))
+                .map(rule -> rule.diagnose(context))
+                .toList();
     }
 
 
