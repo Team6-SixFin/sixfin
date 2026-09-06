@@ -26,7 +26,7 @@ public class PositionRepositoryImpl implements PositionRepository {
     }
 
     @Override
-    public List<Positions> findAllByAccountIdAndStatus(UUID id, String status) {
-        return positionJpaRepository.findAllByAccountIdAndStatus(id,status);
+    public List<Positions> findAllOpenByAccountId(UUID accountId) {
+        return positionJpaRepository.findAllOpenByAccountId(accountId);
     }
 }

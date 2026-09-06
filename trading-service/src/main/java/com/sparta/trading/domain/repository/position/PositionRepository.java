@@ -12,5 +12,6 @@ public interface PositionRepository {
 
     Positions save(Positions position);
 
-    List<Positions> findAllByAccountIdAndStatus(UUID id, String status);
+    // 현재 보유 중인 모든 포지션 조회
+    List<Positions> findAllOpenByAccountId(UUID accountId);
 }
