@@ -38,4 +38,9 @@ interface PositionJpaRepository extends JpaRepository<Positions, UUID> {
             String status,
             Pageable pageable
     );
+
+    Optional<Positions> findByIdAndUserIdAndDeletedAtIsNull(
+            UUID positionId,
+            UUID userId
+    );
 }

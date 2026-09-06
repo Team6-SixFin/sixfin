@@ -4,6 +4,7 @@ import com.sparta.trading.application.service.PositionQueryService;
 import com.sparta.trading.domain.entity.PositionStatus;
 import com.sparta.trading.global.response.PageResponse;
 import com.sparta.trading.global.util.PageableUtil;
+import com.sparta.trading.presentation.dto.response.PositionDetailResponse;
 import com.sparta.trading.presentation.dto.response.PositionResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
@@ -29,5 +30,13 @@ public class PositionQueryController {
             @PageableDefault(size = PageableUtil.DEFAULT_SIZE) Pageable pageable
     ) {
         return positionQueryService.getPositions(userId, status, pageable);
+    }
+
+    @GetMapping("/{id}")
+    public PositionDetailResponse getPositionDetail(
+            @RequestHeader(USER_ID_HEADER) UUID userId,
+            @PathVariable("id") UUID positionId
+    ) {
+        return positionQueryService.getPositionDetail(userId, positionId);
     }
 }

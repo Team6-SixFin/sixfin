@@ -11,6 +11,7 @@ import com.sparta.trading.global.exception.TradingErrorCode;
 import com.sparta.trading.global.response.PageResponse;
 import com.sparta.trading.global.util.PageableUtil;
 import com.sparta.trading.infrastructure.persistence.repository.stocks.StocksRepository;
+import com.sparta.trading.presentation.dto.response.PositionDetailResponse;
 import com.sparta.trading.presentation.dto.response.PositionResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -77,8 +78,26 @@ public class PositionQueryService {
                         quoteByStockId.get(position.getStockId())
                 )
         );
-
         return PageResponse.of(responsePage);
+    }
+
+    @Transactional(readOnly = true)
+    public PositionDetailResponse getPositionDetail(UUID userId, UUID positionId) {
+
+        Positions position = positionRepository.findByIdAndUserId(positionId, userId)
+                .orElseThrow(() -> new CustomException(TradingErrorCode.POSITION_NOT_FOUND));
+
+        Stocks stock = stocksRepository.findById(position.getStockId())
+                .orElseThrow(() -> new CustomException(TradingErrorCode.STOCK_NOT_FOUND));
+
+        PositionStatus status = PositionStatus.valueOf(position.getStatus());
+
+        Quote quote = null;
+        if (status == PositionStatus.OPEN) {
+            quote = quoteReader.read(stock.getSymbol());
+        }
+
+        return toDetailResponse(position, stock, status, quote);
     }
 
     /**
@@ -153,6 +172,52 @@ public class PositionQueryService {
                 unrealizedProfit,
                 position.getOpenedAt(),
                 position.getClosedAt()
+        );
+    }
+
+    private PositionDetailResponse toDetailResponse(
+            Positions position,
+            Stocks stock,
+            PositionStatus status,
+            Quote quote
+    ) {
+        BigDecimal currentPrice = null;
+        BigDecimal unrealizedProfit = null;
+
+        if (status == PositionStatus.OPEN) {
+            currentPrice = quote.price();
+            unrealizedProfit = calculateUnrealizedProfit(position, currentPrice);
+        }
+
+        return new PositionDetailResponse(
+                position.getId(),
+                position.getStockId(),
+                stock.getSymbol(),
+                stock.getName(),
+                status,
+                position.getQuantity(),
+                position.getAverageEntryPrice(),
+                currentPrice,
+                unrealizedProfit,
+                position.getPlannedStopLossPrice(),
+                position.getInvestmentReason(),
+                position.getTotalBuyQuantity(),
+                position.getTotalSellQuantity(),
+                position.getRealizedProfit(),
+                position.getOpenedAt(),
+                position.getClosedAt()
+        );
+    }
+
+    // 미실현 손익 계산 = (현재가 - 평균 매입 단가) × 현재 보유 수량
+    private BigDecimal calculateUnrealizedProfit(
+            Positions position,
+            BigDecimal currentPrice
+    ) {
+        return money(
+                currentPrice
+                        .subtract(position.getAverageEntryPrice())
+                        .multiply(BigDecimal.valueOf(position.getQuantity()))
         );
     }
 

@@ -45,4 +45,12 @@ public class PositionRepositoryImpl implements PositionRepository {
                 pageable
         );
     }
+
+    @Override
+    public Optional<Positions> findByIdAndUserId(UUID positionId, UUID userId) {
+        return positionJpaRepository.findByIdAndUserIdAndDeletedAtIsNull(
+                positionId,
+                userId
+        );
+    }
 }

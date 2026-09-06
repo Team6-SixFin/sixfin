@@ -23,4 +23,6 @@ public interface PositionRepository {
             PositionStatus status,
             Pageable pageable
     );
+
+    Optional<Positions> findByIdAndUserId(UUID positionId, UUID userId);
 }
