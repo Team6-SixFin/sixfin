@@ -1,0 +1,144 @@
+package com.sparta.trading.presentation.controller.position;
+
+import com.sparta.trading.application.service.PositionQueryService;
+import com.sparta.trading.domain.entity.PositionStatus;
+import com.sparta.trading.global.response.PageResponse;
+import com.sparta.trading.presentation.dto.response.PositionResponse;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableHandlerMethodArgumentResolver;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.List;
+import java.util.UUID;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+@ExtendWith(MockitoExtension.class)
+class PositionQueryControllerTest {
+
+    @Mock
+    private PositionQueryService positionQueryService;
+
+    private MockMvc mockMvc;
+
+    @BeforeEach
+    void setUp() {
+        mockMvc = MockMvcBuilders.standaloneSetup(new PositionQueryController(positionQueryService))
+                .setCustomArgumentResolvers(new PageableHandlerMethodArgumentResolver())
+                .build();
+    }
+
+    @Test
+    void getPositions_usesDefaultOpenStatusAndPageable() throws Exception {
+        UUID userId = UUID.randomUUID();
+        UUID positionId = UUID.randomUUID();
+        PositionResponse positionResponse = positionResponseOf(positionId, PositionStatus.OPEN);
+
+        when(positionQueryService.getPositions(eq(userId), eq(PositionStatus.OPEN), any(Pageable.class)))
+                .thenReturn(pageResponseOf(positionResponse, 0, 20, 1));
+
+        mockMvc.perform(get("/api/trading/positions").header("X-User-Id", userId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].positionId").value(positionId.toString()))
+                .andExpect(jsonPath("$.content[0].symbol").value("AAPL"))
+                .andExpect(jsonPath("$.content[0].status").value("OPEN"))
+                .andExpect(jsonPath("$.content[0].currentPrice").value(220.0))
+                .andExpect(jsonPath("$.content[0].unrealizedProfit").value(200.0))
+                .andExpect(jsonPath("$.pageInfo.paginationType").value("OFFSET"))
+                .andExpect(jsonPath("$.pageInfo.page").value(0))
+                .andExpect(jsonPath("$.pageInfo.size").value(20));
+
+        ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+        verify(positionQueryService).getPositions(
+                eq(userId),
+                eq(PositionStatus.OPEN),
+                pageableCaptor.capture()
+        );
+        assertThat(pageableCaptor.getValue().getPageNumber()).isZero();
+        assertThat(pageableCaptor.getValue().getPageSize()).isEqualTo(20);
+    }
+
+    @Test
+    void getPositions_delegatesRequestedStatusAndPageable() throws Exception {
+        UUID userId = UUID.randomUUID();
+
+        when(positionQueryService.getPositions(eq(userId), eq(PositionStatus.CLOSED), any(Pageable.class)))
+                .thenReturn(pageResponseOf(null, 1, 30, 0));
+
+        mockMvc.perform(get("/api/trading/positions")
+                        .header("X-User-Id", userId)
+                        .param("status", "CLOSED")
+                        .param("page", "1")
+                        .param("size", "30"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content").isEmpty())
+                .andExpect(jsonPath("$.pageInfo.page").value(1))
+                .andExpect(jsonPath("$.pageInfo.size").value(30));
+
+        ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+        verify(positionQueryService).getPositions(
+                eq(userId),
+                eq(PositionStatus.CLOSED),
+                pageableCaptor.capture()
+        );
+        assertThat(pageableCaptor.getValue().getPageNumber()).isEqualTo(1);
+        assertThat(pageableCaptor.getValue().getPageSize()).isEqualTo(30);
+    }
+
+    @Test
+    void getPositions_rejectsRequestWithoutUserIdHeader() throws Exception {
+        mockMvc.perform(get("/api/trading/positions"))
+                .andExpect(status().isBadRequest());
+    }
+
+    private PositionResponse positionResponseOf(UUID positionId, PositionStatus status) {
+        BigDecimal currentPrice = status == PositionStatus.OPEN ? new BigDecimal("220.0000") : null;
+        BigDecimal unrealizedProfit = status == PositionStatus.OPEN ? new BigDecimal("200.0000") : null;
+
+        return new PositionResponse(
+                positionId,
+                "AAPL",
+                "Apple Inc.",
+                status,
+                10,
+                new BigDecimal("200.0000"),
+                currentPrice,
+                unrealizedProfit,
+                Instant.parse("2026-09-04T01:30:00Z"),
+                null
+        );
+    }
+
+    private PageResponse<PositionResponse> pageResponseOf(
+            PositionResponse positionResponse,
+            int page,
+            int size,
+            long totalElements
+    ) {
+        List<PositionResponse> content = positionResponse == null ? List.of() : List.of(positionResponse);
+
+        return PageResponse.of(new PageImpl<>(
+                content,
+                PageRequest.of(page, size),
+                totalElements
+        ));
+    }
+}
