@@ -113,20 +113,42 @@ class TradeEventIngestionServiceTest {
         verifyNoInteractions(snapshotMapper, closedPositionSnapshotRepository);
     }
 
-    // 종료 포지션은 CLOSE 진단 구현 전까지 중복 수신 시 재진단 대상으로 반환하지 않는다
+    // 이미 저장된 종료 포지션은 스냅샷을 새로 만들지 않고 기존 스냅샷을 재진단 대상으로 반환한다
+    // CLOSE 진단이 실패해 남지 않았을 수 있어 체결과 같은 방식으로 다시 실행할 수 있어야 한다
     @Test
-    void skipsAlreadyConsumedPositionClosedEvent() throws Exception {
+    void returnsExistingSnapshotForAlreadyConsumedPositionClosedEvent() throws Exception {
         TradingEventEnvelope event = readEnvelope("events/position-closed.json");
+        ClosedPositionSnapshot snapshot = mock(ClosedPositionSnapshot.class);
         when(consumedEventRepository.existsByEventId(event.eventId())).thenReturn(true);
+        when(closedPositionSnapshotRepository.findByConsumedEventEventId(event.eventId()))
+                .thenReturn(Optional.of(snapshot));
 
         IngestionResult result = ingestionService.ingest(event);
 
         assertThat(result.status()).isEqualTo(EventIngestionResult.DUPLICATE);
-        // 이미 진단이 저장되어 있으므로 어느 쪽도 담지 않는다
+        assertThat(result.closedPositionSnapshot()).isSameAs(snapshot);
+        assertThat(result.hasClosedPositionTarget()).isTrue();
         assertThat(result.hasExecutionTarget()).isFalse();
-        assertThat(result.hasClosedPositionTarget()).isFalse();
         verify(consumedEventRepository, never()).save(any());
-        verifyNoInteractions(snapshotMapper, executionSnapshotRepository, closedPositionSnapshotRepository);
+        verify(closedPositionSnapshotRepository, never()).save(any());
+        verifyNoInteractions(snapshotMapper, executionSnapshotRepository);
+    }
+
+    // 소비 이력과 종료 스냅샷의 정합성이 깨졌다면 진단을 누락한 채로 정상 처리하지 않는다
+    @Test
+    void failsWhenConsumedPositionClosedEventHasNoSnapshot() throws Exception {
+        TradingEventEnvelope event = readEnvelope("events/position-closed.json");
+        when(consumedEventRepository.existsByEventId(event.eventId())).thenReturn(true);
+        when(closedPositionSnapshotRepository.findByConsumedEventEventId(event.eventId()))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> ingestionService.ingest(event))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining(event.eventId().toString());
+
+        verify(consumedEventRepository, never()).save(any());
+        verify(closedPositionSnapshotRepository, never()).save(any());
+        verifyNoInteractions(snapshotMapper, executionSnapshotRepository);
     }
 
     // BUY_EXECUTED 수신 시 원본 이벤트와 체결 스냅샷이 각각 한 번 저장되는지 확인
