@@ -9,6 +9,7 @@ import com.sparta.learning.application.dto.response.AiFeedbackResponse;
 import com.sparta.learning.application.port.AiClientPort;
 import com.sparta.learning.domain.entity.*;
 import com.sparta.learning.domain.model.DiagnosisPhase;
+import com.sparta.learning.domain.model.FeedbackStatus;
 import com.sparta.learning.domain.model.FeedbackType;
 import com.sparta.learning.global.exception.CustomException;
 import com.sparta.learning.global.exception.LearningErrorCode;
@@ -230,9 +231,9 @@ public class LearningCommandService {
         List<DiagnosisResult> diagnoses = diagnosisResultRepository.findAllByPositionId(positionId).stream()
                 .filter(d -> d.getDiagnosisPhase() == DiagnosisPhase.ENTRY || d.getDiagnosisPhase() == DiagnosisPhase.TRADE).toList();
 
-        // [리뷰 반영 수정] 이전 피드백 요약본 가져오기 (가장 최근 완료된 피드백 조회)
+        // [리뷰 반영 수정] 이전 피드백 요약본 가져오기 (가장 최근 완료된 피드백을 completedAt 기준으로 조회)
         String previousSummary = null;
-        Optional<Feedback> prevFeedbackOpt = feedbackRepository.findTopByPositionIdAndContentIsNotNullOrderByIdDesc(positionId);
+        Optional<Feedback> prevFeedbackOpt = feedbackRepository.findTopByPositionIdAndStatusOrderByCompletedAtDesc(positionId, FeedbackStatus.COMPLETED);
 
         if (prevFeedbackOpt.isPresent()) {
             try {
@@ -260,7 +261,7 @@ public class LearningCommandService {
         List<ExecutionSnapshot> allExecutions = executionSnapshotRepository.findAllByPositionIdOrderByExecutedAtAscIdAsc(positionId);
         List<DiagnosisResult> allDiagnoses = diagnosisResultRepository.findAllByPositionId(positionId);
 
-        // [리뷰 반영] ClosedInfoDto 생성하여 정확한 시스템 손익/수량 전달
+        // ClosedInfoDto 생성하여 정확한 시스템 손익/수량 전달
         ClosedInfoDto closedInfoDto = new ClosedInfoDto(
                 closedPos.getAverageExitPrice(),
                 closedPos.getTotalBoughtQuantity(),
