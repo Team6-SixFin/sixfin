@@ -66,7 +66,10 @@ services:
     ports:
       - "9090:9090"
     volumes:
-      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    # Windows/macOS뿐 아니라 Linux Docker에서도 호스트의 Learning 서비스에 접근할 수 있게 한다.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   # ---------- Grafana ----------
   grafana:
@@ -76,9 +79,17 @@ services:
       - "3000:3000"
     environment:
       GF_SECURITY_ADMIN_PASSWORD: admin
+    volumes:
+      - ./infra/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./infra/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      # 수동으로 Import한 외부 대시보드와 Grafana 설정을 컨테이너 재생성 후에도 유지한다.
+      - grafana-data:/var/lib/grafana
+      # 프로젝트에서 관리하는 서비스별 대시보드는 파일 프로비저닝으로 자동 등록한다.
+      - ./infra/grafana/dashboards:/var/lib/grafana/dashboards:ro
     depends_on:
       - prometheus
 
 volumes:
   pgdata:
   kafka-data:
+  grafana-data:

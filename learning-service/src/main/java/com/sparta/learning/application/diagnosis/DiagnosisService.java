@@ -5,7 +5,9 @@ import com.sparta.learning.domain.entity.ExecutionSnapshot;
 import com.sparta.learning.domain.model.DiagnosisPhase;
 import com.sparta.learning.domain.rule.DiagnosisContext;
 import com.sparta.learning.domain.rule.DiagnosisRule;
+import com.sparta.learning.infrastructure.monitoring.LearningMetrics;
 import com.sparta.learning.infrastructure.persistence.repository.DiagnosisResultRepository;
+import io.micrometer.core.instrument.Timer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -23,33 +25,44 @@ public class DiagnosisService {
 
     private final List<DiagnosisRule> rules;
     private final DiagnosisResultRepository diagnosisResultRepository;
+    private final LearningMetrics learningMetrics;
 
     // 이 체결에 해당하는 규칙을 실행해 진단 결과를 저장한다.
-    // 스냅샷 저장과 같은 트랜젝션에 실행된다 -> 진단 저장이 실패하면 스냅샷도 같이 롤백됨
+    // 스냅샷 저장과 별도 트랜잭션으로 실행하며, 실패는 호출자에게 전파해 재시도한다.
     @Transactional
     public List<DiagnosisResult> diagnose(ExecutionSnapshot snapshot){
-        DiagnosisPhase phase = DiagnosisPhase.from(snapshot);
+        Timer.Sample sample = learningMetrics.startTimer();
+        DiagnosisPhase phase = null;
 
-        // 규칙은 도메인 계층이라 DB를 조회할 수 없으므로 이전 진단을 미리 담아 전달한다
-        // 규칙 실행 전에 한 번만 조회해 모든 규칙이 같은 시점의 데이터를 보게 한다
-        DiagnosisContext context = DiagnosisContext.ofExecution(
-                snapshot,
-                diagnosisResultRepository.findByPositionIdOrderByIdAsc(snapshot.getPositionId())
-        );
+        try {
+            phase = DiagnosisPhase.from(snapshot);
+            // 이전 진단을 한 번 조회해 모든 규칙에 동일한 Context를 전달한다.
+            // 조회 실패도 진단 실패 메트릭에 포함하도록 계측 구간 안에서 실행한다.
+            DiagnosisContext context = DiagnosisContext.ofExecution(
+                    snapshot,
+                    diagnosisResultRepository.findByPositionIdOrderByIdAsc(snapshot.getPositionId())
+            );
+            List<DiagnosisResult> results = execute(context, phase);
 
-        List<DiagnosisResult> results = execute(context, phase);
+            if(results.isEmpty()){
+                learningMetrics.recordDiagnosisSuccess(phase, List.of(), sample);
+                return List.of();
+            }
 
-        if(results.isEmpty()){
-            return List.of();
+            List<DiagnosisResult> newResults = excludeAlreadySaved(results);
+            if(newResults.isEmpty()){
+                log.info("이미 진단된 체결입니다. executionId = {}, phase = {}", snapshot.getExecutionId(), phase);
+                learningMetrics.recordDiagnosisSuccess(phase, List.of(), sample);
+                return List.of();
+            }
+
+            List<DiagnosisResult> savedResults = diagnosisResultRepository.saveAll(newResults);
+            learningMetrics.recordDiagnosisSuccess(phase, savedResults, sample);
+            return savedResults;
+        } catch (RuntimeException exception) {
+            learningMetrics.recordDiagnosisFailure(phase, sample);
+            throw exception;
         }
-
-        List<DiagnosisResult> newResults = excludeAlreadySaved(results);
-        if(newResults.isEmpty()){
-            log.info("이미 진단된 체결입니다. executionId = {}, phase = {}", snapshot.getExecutionId(), phase);
-            return List.of();
-        }
-
-        return diagnosisResultRepository.saveAll(newResults);
     }
 
     // 1차: 거래 시점에 해당하는 규칙만 고름
