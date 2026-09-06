@@ -170,6 +170,10 @@ class LearningCommandServiceTest {
 
         lenient().when(feedbackRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
+        // 최근 피드백 조회 로직 Mocking (기본적으로 empty 반환하여 안전하게 통과시킴)
+        lenient().when(feedbackRepository.findTopByPositionIdAndContentIsNotNullOrderByIdDesc(any(UUID.class)))
+                .thenReturn(Optional.empty());
+
         AiFeedbackResponse mockAiResponse = new AiFeedbackResponse(
                 "요약", "총평", List.of("잘함"), List.of("개선점"), List.of("다음행동"), List.of("질문")
         );
