@@ -10,4 +10,7 @@ public interface ClosedPositionSnapshotRepository extends JpaRepository<ClosedPo
 
     // 중복 이벤트에서 기존 종료 스냅샷을 찾아 CLOSE 진단을 다시 실행하기 위해 사용
     Optional<ClosedPositionSnapshot> findByConsumedEventEventId(UUID eventId);
+
+    // Ai피드백 생성을 위한 종료 포지션 스냅샷 조회
+    Optional<ClosedPositionSnapshot> findByPositionId(UUID positionId);
 }
