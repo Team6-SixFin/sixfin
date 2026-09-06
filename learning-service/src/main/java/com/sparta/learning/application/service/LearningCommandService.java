@@ -156,10 +156,10 @@ public class LearningCommandService {
                     context.contextJsonStr()
             );
 
-            // [리뷰 반영] AI 응답 필수값 검증 로직 추가
+            // AI 응답 필수값 검증 로직 추가
             validateAiResponse(aiResponse);
 
-            // [리뷰 반영] Detached Entity 이슈 방지를 위해 객체 대신 식별자(Key) 전달
+            // Detached Entity 이슈 방지를 위해 객체 대신 식별자(Key) 전달
             final AiFeedbackResponse finalAiResponse = aiResponse;
             transactionTemplate.executeWithoutResult(status ->
                     completeFeedback(feedbackKey, context.contextJsonStr(), finalAiResponse, requestId, modelName, promptVersion)
@@ -180,7 +180,7 @@ public class LearningCommandService {
     // [트랜잭션 2] 성공/실패 시 상태 업데이트 및 이력 저장 (빠르게 커넥션 점유 후 반납)
     // =================================================================================
     protected void completeFeedback(String feedbackKey, String contextJson, AiFeedbackResponse aiResponse, String reqId, String model, String version) {
-        // [리뷰 반영] 영속성 컨텍스트(Managed) 상태로 가져오기
+        // 영속성 컨텍스트(Managed) 상태로 가져오기
         Feedback managedFeedback = feedbackRepository.findByFeedbackKey(feedbackKey)
                 .orElseThrow(() -> new CustomException(LearningErrorCode.FEEDBACK_NOT_FOUND));
 
@@ -230,13 +230,11 @@ public class LearningCommandService {
         List<DiagnosisResult> diagnoses = diagnosisResultRepository.findAllByPositionId(positionId).stream()
                 .filter(d -> d.getDiagnosisPhase() == DiagnosisPhase.ENTRY || d.getDiagnosisPhase() == DiagnosisPhase.TRADE).toList();
 
-        // [리뷰 반영] 이전 피드백 요약본 가져오기 (가장 최근 피드백의 summary 파싱)
+        // [리뷰 반영 수정] 이전 피드백 요약본 가져오기 (가장 최근 완료된 피드백 조회)
         String previousSummary = null;
-        Optional<Feedback> prevFeedbackOpt = feedbackRepository.findByFeedbackKey(
-                String.format("%s:%s:%s", FeedbackType.ENTRY_FEEDBACK.name(), positionId, allExecutions.get(0).getExecutionId())
-        ); // 가장 간단한 방법으로 최초 ENTRY 피드백 참조 (추후 고도화 가능)
+        Optional<Feedback> prevFeedbackOpt = feedbackRepository.findTopByPositionIdAndContentIsNotNullOrderByIdDesc(positionId);
 
-        if (prevFeedbackOpt.isPresent() && prevFeedbackOpt.get().getContent() != null) {
+        if (prevFeedbackOpt.isPresent()) {
             try {
                 previousSummary = objectMapper.treeToValue(prevFeedbackOpt.get().getContent(), AiFeedbackResponse.class).summary();
             } catch (Exception ignored) {}
@@ -307,7 +305,7 @@ public class LearningCommandService {
         return new DiagnosisDto(diag.getRuleCode(), diag.getRuleVersion(), diag.getResult().name(), diag.getMetricValue(), diag.getThresholdValue(), diag.getMetrics(), diag.getEvidence());
     }
 
-    // [리뷰반영]: Ai 응답 필수 부분 검증
+    // Ai 응답 필수 부분 검증
     private void validateAiResponse(AiFeedbackResponse response) {
         if (response.summary() == null || response.summary().isBlank() ||
                 response.overview() == null || response.overview().isBlank() ||
