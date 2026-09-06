@@ -1,8 +1,11 @@
 package com.sparta.trading.infrastructure.persistence.repository.position;
 
+import com.sparta.trading.domain.entity.PositionStatus;
 import com.sparta.trading.domain.entity.Positions;
 import com.sparta.trading.domain.repository.position.PositionRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -28,5 +31,18 @@ public class PositionRepositoryImpl implements PositionRepository {
     @Override
     public List<Positions> findAllOpenByAccountId(UUID accountId) {
         return positionJpaRepository.findAllOpenByAccountId(accountId);
+    }
+
+    @Override
+    public Page<Positions> findAllByUserIdAndStatus(
+            UUID userId,
+            PositionStatus status,
+            Pageable pageable
+    ) {
+        return positionJpaRepository.findAllByUserIdAndStatus(
+                userId,
+                status.name(),
+                pageable
+        );
     }
 }
