@@ -3,6 +3,7 @@ package com.sparta.trading.presentation.controller.position;
 import com.sparta.trading.application.service.PositionQueryService;
 import com.sparta.trading.domain.entity.PositionStatus;
 import com.sparta.trading.global.response.PageResponse;
+import com.sparta.trading.presentation.dto.response.PositionDetailResponse;
 import com.sparta.trading.presentation.dto.response.PositionResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -109,6 +110,35 @@ class PositionQueryControllerTest {
                 .andExpect(status().isBadRequest());
     }
 
+    @Test
+    void getPositionDetail_delegatesUsingUserIdHeaderAndPositionId() throws Exception {
+        UUID userId = UUID.randomUUID();
+        UUID positionId = UUID.randomUUID();
+
+        when(positionQueryService.getPositionDetail(userId, positionId))
+                .thenReturn(positionDetailResponseOf(positionId));
+
+        mockMvc.perform(get("/api/trading/positions/{id}", positionId)
+                        .header("X-User-Id", userId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.positionId").value(positionId.toString()))
+                .andExpect(jsonPath("$.stockId").value(1))
+                .andExpect(jsonPath("$.symbol").value("AAPL"))
+                .andExpect(jsonPath("$.status").value("OPEN"))
+                .andExpect(jsonPath("$.currentPrice").value(220.0))
+                .andExpect(jsonPath("$.unrealizedProfit").value(200.0))
+                .andExpect(jsonPath("$.totalBuyQuantity").value(10))
+                .andExpect(jsonPath("$.realizedProfit").value(0.0));
+
+        verify(positionQueryService).getPositionDetail(userId, positionId);
+    }
+
+    @Test
+    void getPositionDetail_rejectsRequestWithoutUserIdHeader() throws Exception {
+        mockMvc.perform(get("/api/trading/positions/{id}", UUID.randomUUID()))
+                .andExpect(status().isBadRequest());
+    }
+
     private PositionResponse positionResponseOf(UUID positionId, PositionStatus status) {
         BigDecimal currentPrice = status == PositionStatus.OPEN ? new BigDecimal("220.0000") : null;
         BigDecimal unrealizedProfit = status == PositionStatus.OPEN ? new BigDecimal("200.0000") : null;
@@ -140,5 +170,26 @@ class PositionQueryControllerTest {
                 PageRequest.of(page, size),
                 totalElements
         ));
+    }
+
+    private PositionDetailResponse positionDetailResponseOf(UUID positionId) {
+        return new PositionDetailResponse(
+                positionId,
+                1L,
+                "AAPL",
+                "Apple Inc.",
+                PositionStatus.OPEN,
+                10,
+                new BigDecimal("200.0000"),
+                new BigDecimal("220.0000"),
+                new BigDecimal("200.0000"),
+                new BigDecimal("190.0000"),
+                "실적 개선 기대",
+                10,
+                0,
+                new BigDecimal("0.0000"),
+                Instant.parse("2026-09-04T01:30:00Z"),
+                null
+        );
     }
 }
