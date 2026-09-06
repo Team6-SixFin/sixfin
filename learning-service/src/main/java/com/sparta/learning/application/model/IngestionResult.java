@@ -21,6 +21,11 @@ public record IngestionResult(
         return new IngestionResult(EventIngestionResult.DUPLICATE, executionSnapshot, null);
     }
 
+    // 포지션 종료도 같은 이유로 기존 종료 스냅샷을 담아 CLOSE 진단을 다시 실행
+    public static IngestionResult duplicate(ClosedPositionSnapshot closedPositionSnapshot){
+        return new IngestionResult(EventIngestionResult.DUPLICATE, null, closedPositionSnapshot);
+    }
+
     public static IngestionResult processed(ExecutionSnapshot executionSnapshot){
         return new IngestionResult(EventIngestionResult.PROCESSED, executionSnapshot, null);
     }
