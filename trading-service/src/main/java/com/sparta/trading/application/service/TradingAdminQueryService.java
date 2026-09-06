@@ -301,25 +301,39 @@ public class TradingAdminQueryService {
         BigDecimal evaluationAmount = BigDecimal.ZERO;
         Instant valuationAt = null;
 
-        // 2. includePosition이 true이면 positions, stocks, Redis 순서대로 조회
+        //includePosition이 true이면 positions, stocks, Redis 순서대로 조회
         if (shouldIncludePositions) {
             List<Positions> positions = positionRepository.findAllByAccountIdAndStatus(account.getId(), "OPEN");
 
             if (!positions.isEmpty()) {
                 valuationAt = Instant.now();
+
+                // [N+1 해결 1] 모든 stockId 수집 후 stocks 테이블 1번만 배치 조회 (IN 쿼리)
+                List<Long> stockIds = positions.stream().map(Positions::getStockId).toList();
+                List<Stocks> stocksList = stocksRepository.findAllById(stockIds);
+
+                // 빠른 조회를 위해 Map으로 변환 (Key: stockId, Value: Stocks)
+                Map<Long, Stocks> stockMap = stocksList.stream()
+                        .collect(Collectors.toMap(Stocks::getId, s -> s));
+
+                // [N+1 해결 2] Redis 조회용 키 목록("price:AAPL", "price:NVDA") 일괄 생성
+                List<String> redisKeys = positions.stream()
+                        .map(p -> "price:" + stockMap.get(p.getStockId()).getSymbol())
+                        .toList();
+
+                // Redis 네트워크 요청 1번으로 일괄 조회 (multiGet)
+                List<String> pricesFromRedis = redisTemplate.opsForValue().multiGet(redisKeys);
+
                 List<TradingAdminAccountByUserResponseDto.PositionDto> dtos = new ArrayList<>();
 
-                for (Positions p : positions) {
-                    // stocks 테이블 조회 (symbol 가져오기)
-                    Stocks stock = stocksRepository.findById(p.getStockId())
-                            .orElseThrow(() -> new CustomException(TradingErrorCode.STOCK_NOT_FOUND, "주식 정보를 찾을 수 없습니다."));
-
+                // 메모리 내 계산 및 DTO 변환 (추가 DB/Redis 조회 0건)
+                for (int i = 0; i < positions.size(); i++) {
+                    Positions p = positions.get(i);
+                    Stocks stock = stockMap.get(p.getStockId());
                     String symbol = stock.getSymbol();
 
-                    // Redis에서 price:{symbol} 조회
-                    String priceStr = redisTemplate.opsForValue().get("price:" + symbol);
-
-                    // Redis 가격이 없으면 평균매수가로 fallback
+                    // Redis 값 매핑 (없으면 평균매수가로 fallback)
+                    String priceStr = (pricesFromRedis != null) ? pricesFromRedis.get(i) : null;
                     BigDecimal currentPrice = (priceStr != null)
                             ? new BigDecimal(priceStr)
                             : p.getAverageEntryPrice();
@@ -345,12 +359,12 @@ public class TradingAdminQueryService {
             }
         }
 
-        // 3. 자산 계산 (총자산 = 예수금 + 평가금액)
+        // 자산 계산 (총자산 = 예수금 + 평가금액)
         BigDecimal cashBalance = account.getCashBalance();
-        BigDecimal orderableAmount = cashBalance; // MVP 기준 동일
+        BigDecimal orderableAmount = cashBalance;
         BigDecimal totalAsset = cashBalance.add(evaluationAmount);
 
-        // 4. 응답 반환
+        //응답 반환
         return new TradingAdminAccountByUserResponseDto(
                 account.getId(),
                 account.getUserId(),
