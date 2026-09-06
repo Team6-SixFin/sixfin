@@ -5,6 +5,7 @@ import com.sparta.trading.domain.repository.position.PositionRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -22,5 +23,10 @@ public class PositionRepositoryImpl implements PositionRepository {
     @Override
     public Positions save(Positions position) {
         return positionJpaRepository.save(position);
+    }
+
+    @Override
+    public List<Positions> findAllOpenByAccountId(UUID accountId) {
+        return positionJpaRepository.findAllOpenByAccountId(accountId);
     }
 }
