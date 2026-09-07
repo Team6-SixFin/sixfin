@@ -102,6 +102,10 @@ class TradingCommandServiceTest {
         assertThat(response.cashBalance()).isEqualByComparingTo("99000.0000");
         assertThat(response.positionId()).isNotNull();
         assertThat(response.execution()).isNotNull();
+        assertThat(response.execution().executedPrice()).isEqualByComparingTo("100.0000");
+        assertThat(response.execution().executedQuantity()).isEqualTo(10);
+        assertThat(response.execution().executedAmount()).isEqualByComparingTo("1000.0000");
+        assertThat(response.execution().realizedProfit()).isNull();
         assertThat(account.getCashBalance()).isEqualByComparingTo("99000.0000");
         verify(accountRepository).findByUserIdForUpdate(userId);
         verify(positionRepository).save(any());
