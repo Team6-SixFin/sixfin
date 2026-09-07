@@ -2,10 +2,12 @@ package com.sparta.learning.application.facade;
 
 import com.sparta.learning.application.diagnosis.DiagnosisService;
 import com.sparta.learning.application.model.IngestionResult;
+import com.sparta.learning.application.service.LearningCommandService;
 import com.sparta.learning.application.service.TradeEventIngestionService;
 import com.sparta.learning.domain.entity.ClosedPositionSnapshot;
 import com.sparta.learning.domain.entity.ExecutionSnapshot;
 import com.sparta.learning.infrastructure.messaging.kafka.dto.TradingEventEnvelope;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -38,6 +40,16 @@ class TradeEventFacadeTest {
     private TradeEventFacade facade;
 
     private final TradingEventEnvelope event = mock(TradingEventEnvelope.class);
+
+
+    @Mock
+    private LearningCommandService learningCommandService;
+
+    @BeforeEach
+    void setUp() {
+        // 생성자에 learningCommandService 추가 주입
+        facade = new TradeEventFacade(ingestionService, diagnosisService, learningCommandService);
+    }
 
     // 체결 이벤트는 스냅샷 저장 후 진단까지 이어져야 한다
     @Test
