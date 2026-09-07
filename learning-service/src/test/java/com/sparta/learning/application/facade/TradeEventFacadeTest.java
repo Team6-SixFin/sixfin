@@ -1,6 +1,7 @@
 package com.sparta.learning.application.facade;
 
 import com.sparta.learning.application.diagnosis.DiagnosisService;
+import com.sparta.learning.application.dto.response.AiFeedbackResponse;
 import com.sparta.learning.application.model.IngestionResult;
 import com.sparta.learning.application.service.LearningCommandService;
 import com.sparta.learning.application.service.TradeEventIngestionService;
@@ -15,6 +16,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
@@ -25,6 +27,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.lenient;
 
 // 이벤트 수집과 진단의 실행 순서, 진단 실패 처리를 검증합니다.
 @ExtendWith(MockitoExtension.class)
@@ -49,6 +52,18 @@ class TradeEventFacadeTest {
     void setUp() {
         // 생성자에 learningCommandService 추가 주입
         facade = new TradeEventFacade(ingestionService, diagnosisService, learningCommandService);
+
+        // 더미 응답 객체 생성
+        AiFeedbackResponse mockResponse = new AiFeedbackResponse(
+                "요약", "총평", List.of(), List.of(), List.of(), List.of()
+        );
+
+        // 비동기 호출 시 NullPointerException 방지를 위한 유연한(lenient) Mocking 추가
+        lenient().when(learningCommandService.createEntryFeedback(any(), any()))
+                .thenReturn(CompletableFuture.completedFuture(mockResponse));
+
+        lenient().when(learningCommandService.createPositionReviewFeedback(any(), any()))
+                .thenReturn(CompletableFuture.completedFuture(mockResponse));
     }
 
     // 체결 이벤트는 스냅샷 저장 후 진단까지 이어져야 한다

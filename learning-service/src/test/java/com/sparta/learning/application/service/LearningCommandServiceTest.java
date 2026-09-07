@@ -28,6 +28,7 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -203,8 +204,11 @@ class LearningCommandServiceTest {
         when(diagnosisResultRepository.findAllByPositionId(positionId))
                 .thenReturn(List.of(diagEntry, diagTrade));
 
-        // when
-        AiFeedbackResponse response = learningCommandService.createEntryFeedback(positionId, userId);
+        // when: 반환 타입이 CompletableFuture로 변경됨
+        CompletableFuture<AiFeedbackResponse> futureResponse = learningCommandService.createEntryFeedback(positionId, userId);
+
+        // 비동기 작업이 끝날 때까지 대기하고 결과를 가져옵니다.
+        AiFeedbackResponse response = futureResponse.join();
 
         // then
         assertNotNull(response); // 반환값 검증
@@ -284,8 +288,11 @@ class LearningCommandServiceTest {
         when(closedPositionSnapshotRepository.findByPositionId(positionId))
                 .thenReturn(Optional.of(closedSnapshot));
 
-        // when
-        AiFeedbackResponse response = learningCommandService.createPositionReviewFeedback(positionId, userId);
+        // when: 반환 타입이 CompletableFuture로 변경됨
+        CompletableFuture<AiFeedbackResponse> futureResponse = learningCommandService.createPositionReviewFeedback(positionId, userId);
+
+        // 비동기 작업 결과 대기 및 추출
+        AiFeedbackResponse response = futureResponse.join();
 
         // then
         assertNotNull(response); // 반환값 검증
