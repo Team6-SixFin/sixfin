@@ -9,7 +9,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-// CLOSE 규칙이 집계할 이전 진단 결과를 만듭니다
+// 규칙이 참조할 이전 진단 결과를 만듭니다
 // 판정 결과와 규칙 코드만 사용하므로 나머지 값은 기본값으로 채웁니다
 public final class DiagnosisResultFixture {
 
