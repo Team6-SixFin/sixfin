@@ -73,12 +73,10 @@ public class TradeEventIngestionService {
                     executionSnapshotRepository.save(
                             snapshotMapper.toSellSnapshot(consumedEvent, event))
             );
-            // 포지션 종료는 현재 진단 인터페이스로 처리할 수 없다. CLOSE 규칙 구현 시 같이 정리하겠습니다.
-            case POSITION_CLOSED -> {
-                closedPositionSnapshotRepository.save(
-                        snapshotMapper.toClosedPositionSnapshot(consumedEvent, event));
-                yield IngestionResult.processedWithoutDiagnosis();
-            }
+            case POSITION_CLOSED -> IngestionResult.processed(
+                    closedPositionSnapshotRepository.save(
+                            snapshotMapper.toClosedPositionSnapshot(consumedEvent, event))
+            );
         };
     }
 
@@ -90,8 +88,13 @@ public class TradeEventIngestionService {
                     .orElseThrow(() -> new IllegalStateException(
                             "소비 이력에 대응하는 체결 스냅샷이 없습니다. eventId=" + event.eventId()
                     ));
-            // CLOSE 진단은 아직 구현되지 않았으므로 기존 종료 스냅샷을 진단 대상으로 반환하지 않는다.
-            case POSITION_CLOSED -> IngestionResult.duplicate();
+            // 종료 스냅샷은 저장됐지만 CLOSE 진단이 실패했을 수 있어, 체결과 같은 방식으로 재진단 대상을 담는다
+            case POSITION_CLOSED -> closedPositionSnapshotRepository
+                    .findByConsumedEventEventId(event.eventId())
+                    .map(IngestionResult::duplicate)
+                    .orElseThrow(() -> new IllegalStateException(
+                            "소비 이력에 대응하는 종료 스냅샷이 없습니다. eventId=" + event.eventId()
+                    ));
         };
     }
 

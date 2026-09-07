@@ -21,8 +21,11 @@ public class TradeEventFacade {
         IngestionResult result = ingestionService.ingest(event);
 
         // 최초 처리와 중복 재처리 모두 스냅샷이 있으면 멱등하게 진단한다.
-        if(result.hasDiagnosisTarget()){
+        // 체결과 포지션 종료는 진단 대상 타입이 달라 실행 경로를 나눈다.
+        if(result.hasExecutionTarget()){
             diagnosisService.diagnose(result.executionSnapshot());
+        } else if(result.hasClosedPositionTarget()){
+            diagnosisService.diagnoseClose(result.closedPositionSnapshot());
         }
 
         return result;
