@@ -35,10 +35,16 @@ public class TradeEventFacade {
 
             diagnosisService.diagnose(snapshot);
 
-            // 최초 매수(신규 포지션)인 경우에만 진입 피드백 생성 (동기 호출)
+            // 최초 매수(신규 포지션)인 경우에만 진입 피드백 생성 (비동기 호출)
             if (snapshot.getTradeType() == TradeType.BUY && snapshot.isNewPosition()) {
-                AiFeedbackResponse feedbackResponse = learningCommandService.createEntryFeedback(snapshot.getPositionId(), snapshot.getUserId());
-                log.info("[최초 매수 진입] AI 피드백 생성 완료! 요약: {}", feedbackResponse.summary());
+                learningCommandService.createEntryFeedback(snapshot.getPositionId(), snapshot.getUserId())
+                        .thenAccept(feedbackResponse ->
+                                log.info("[최초 매수 진입] AI 피드백 비동기 생성 완료! 요약: {}", feedbackResponse.summary())
+                        )
+                        .exceptionally(ex -> {
+                            log.error("최초 매수 진입] AI 비동기 처리 중 오류 발생", ex);
+                            return null;
+                        });
             }
 
         } else if(result.hasClosedPositionTarget()){
@@ -46,9 +52,15 @@ public class TradeEventFacade {
 
             diagnosisService.diagnoseClose(snapshot);
 
-            // 포지션 종료 리뷰 피드백 생성 (동기 호출)
-            AiFeedbackResponse feedbackResponse = learningCommandService.createPositionReviewFeedback(snapshot.getPositionId(), snapshot.getUserId());
-            log.info("[포지션 종료 리뷰] AI 피드백 생성 완료! 요약: {}", feedbackResponse.summary());
+            // 포지션 종료 리뷰 피드백 생성 (비동기 호출)
+            learningCommandService.createPositionReviewFeedback(snapshot.getPositionId(), snapshot.getUserId())
+                    .thenAccept(feedbackResponse ->
+                            log.info("[포지션 종료 리뷰] AI 피드백 비동기 생성 완료! 요약: {}", feedbackResponse.summary())
+                    )
+                    .exceptionally(ex -> {
+                        log.error("[포지션 종료 리뷰] AI 비동기 처리 중 오류 발생", ex);
+                        return null;
+                    });
         }
 
         return result;

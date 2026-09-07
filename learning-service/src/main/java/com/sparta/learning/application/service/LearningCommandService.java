@@ -16,12 +16,14 @@ import com.sparta.learning.global.exception.LearningErrorCode;
 import com.sparta.learning.infrastructure.persistence.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 @Slf4j
 @Service
@@ -54,21 +56,23 @@ public class LearningCommandService {
     /**
      * 2. 최초 매수 진입 피드백 생성 (Kafka 이벤트 수신 시 호출)
      */
-    public AiFeedbackResponse createEntryFeedback(UUID positionId, UUID userId) {
+    @Async("aiThreadPoolTaskExecutor")
+    public CompletableFuture<AiFeedbackResponse> createEntryFeedback(UUID positionId, UUID userId) {
         GenerationContext context = transactionTemplate.execute(status ->
                 prepareGenerationContext(positionId, userId, FeedbackType.ENTRY_FEEDBACK)
         );
-        return processAiFeedback(context);
+        return CompletableFuture.completedFuture(processAiFeedback(context));
     }
 
     /**
      * 3. 포지션 종료 리뷰 피드백 생성 (Kafka 이벤트 수신 시 호출)
      */
-    public AiFeedbackResponse createPositionReviewFeedback(UUID positionId, UUID userId) {
+    @Async("aiThreadPoolTaskExecutor")
+    public CompletableFuture<AiFeedbackResponse> createPositionReviewFeedback(UUID positionId, UUID userId) {
         GenerationContext context = transactionTemplate.execute(status ->
                 prepareGenerationContext(positionId, userId, FeedbackType.POSITION_REVIEW)
         );
-        return processAiFeedback(context);
+        return CompletableFuture.completedFuture(processAiFeedback(context));
     }
 
     // =================================================================================
