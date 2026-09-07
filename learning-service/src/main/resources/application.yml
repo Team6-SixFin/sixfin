@@ -28,6 +28,10 @@ spring:
         spring.json.trusted.packages: com.sparta.learning.infrastructure.messaging.kafka.dto
         spring.json.use.type.headers: false
         spring.json.value.default.type: com.sparta.learning.infrastructure.messaging.kafka.dto.TradingEventEnvelope
+    # 재시도를 모두 소진한 이벤트를 DLT로 발행할 때만 사용
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
     listener:
       ack-mode: record
 
