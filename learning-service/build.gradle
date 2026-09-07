@@ -32,6 +32,7 @@ dependencies {
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 
     implementation 'org.springframework.boot:spring-boot-starter-webmvc'
+    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.1.0'
     testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
 
     // [Spring AI 2.0 적용] 루트 BOM을 통해 버전이 자동 주입되므로 버전 명시가 필요 없습니다.
