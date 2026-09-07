@@ -35,6 +35,7 @@ public class LearningCommandService {
     private final ExecutionSnapshotRepository executionSnapshotRepository;
     private final DiagnosisResultRepository diagnosisResultRepository;
     private final ClosedPositionSnapshotRepository closedPositionSnapshotRepository;
+    private final FeedbackDiagnosisRepository feedbackDiagnosisRepository;
 
     // Spring AOP 자기 호출(Self-Invocation) 이슈를 방지하고
     // 프로그래밍 방식으로 안전하게 트랜잭션을 관리하기 위한 템플릿
@@ -77,6 +78,8 @@ public class LearningCommandService {
 
         UUID basedOnExecutionId;
         String contextJsonStr;
+        // 피드백에 사용된 진단 결과를 추적하고 매핑하기 위한 리스트
+        List<DiagnosisResult> usedDiagnoses;
 
         // 피드백 타입별 최적화된 쿼리 및 Context JSON 조립
         switch (feedbackType) {
@@ -84,14 +87,22 @@ public class LearningCommandService {
                 ExecutionSnapshot firstExec = executionSnapshotRepository.findFirstByPositionIdAndUserIdOrderByExecutedAtAscIdAsc(positionId, userId)
                         .orElseThrow(() -> new CustomException(LearningErrorCode.POSITION_FIRST_TRADE_NOT_FOUND));
                 basedOnExecutionId = firstExec.getExecutionId();
-                contextJsonStr = buildEntryContextJson(firstExec, positionId, userId);
+
+                // [수정] 헬퍼 메서드 내부에 있던 진단 결과 조회를 밖으로 분리
+                usedDiagnoses = diagnosisResultRepository.findAllByPositionId(positionId).stream()
+                        .filter(d -> d.getDiagnosisPhase() == DiagnosisPhase.ENTRY).toList();
+                contextJsonStr = buildEntryContextJson(firstExec, positionId, userId, usedDiagnoses);
                 break;
 
             case ON_DEMAND_FEEDBACK:
                 ExecutionSnapshot latestExecForDemand = executionSnapshotRepository.findFirstByPositionIdAndUserIdOrderByExecutedAtDescIdDesc(positionId, userId)
                         .orElseThrow(() -> new CustomException(LearningErrorCode.POSITION_LATEST_TRADE_NOT_FOUND));
                 basedOnExecutionId = latestExecForDemand.getExecutionId();
-                contextJsonStr = buildOnDemandContextJson(latestExecForDemand, positionId, userId);
+
+                // [수정] 진단 결과 조회를 밖으로 분리
+                usedDiagnoses = diagnosisResultRepository.findAllByPositionId(positionId).stream()
+                        .filter(d -> d.getDiagnosisPhase() == DiagnosisPhase.ENTRY || d.getDiagnosisPhase() == DiagnosisPhase.TRADE).toList();
+                contextJsonStr = buildOnDemandContextJson(latestExecForDemand, positionId, userId, usedDiagnoses);
                 break;
 
             case POSITION_REVIEW:
@@ -99,7 +110,10 @@ public class LearningCommandService {
                 ExecutionSnapshot latestExecForReview = executionSnapshotRepository.findFirstByPositionIdAndUserIdOrderByExecutedAtDescIdDesc(positionId, userId)
                         .orElseThrow(() -> new CustomException(LearningErrorCode.POSITION_LATEST_TRADE_NOT_FOUND));
                 basedOnExecutionId = latestExecForReview.getExecutionId();
-                contextJsonStr = buildReviewContextJson(latestExecForReview, positionId, userId);
+
+                // [수정] 진단 결과 조회를 밖으로 분리
+                usedDiagnoses = diagnosisResultRepository.findAllByPositionId(positionId);
+                contextJsonStr = buildReviewContextJson(latestExecForReview, positionId, userId, usedDiagnoses);
                 break;
         }
 
@@ -113,17 +127,32 @@ public class LearningCommandService {
 
         if (existingFeedback.isPresent() && existingFeedback.get().getContent() != null) {
             feedback = existingFeedback.get();
-            isAlreadyCompleted = true; // 이미 완료된 피드백 (AI 재호출 방지)
+            isAlreadyCompleted = true;
         } else {
-            feedback = existingFeedback.orElseGet(() -> feedbackRepository.save(
-                    Feedback.builder()
-                            .feedbackKey(feedbackKey)
-                            .userId(userId)
-                            .positionId(positionId)
-                            .basedOnExecutionId(basedOnExecutionId)
-                            .feedbackType(feedbackType)
-                            .build()
-            ));
+            feedback = existingFeedback.orElseGet(() -> {
+                Feedback newFeedback = feedbackRepository.save(
+                        Feedback.builder()
+                                .feedbackKey(feedbackKey)
+                                .userId(userId)
+                                .positionId(positionId)
+                                .basedOnExecutionId(basedOnExecutionId)
+                                .feedbackType(feedbackType)
+                                .build()
+                );
+
+                // [추가] 명세서에 정의된 피드백-진단결과(feedback_diagnosis_results) 매핑 정보 저장 로직
+                if (!usedDiagnoses.isEmpty()) {
+                    List<FeedbackDiagnosis> mappings = usedDiagnoses.stream()
+                            .map(diag -> FeedbackDiagnosis.builder()
+                                    .feedback(newFeedback)
+                                    .diagnosisResult(diag)
+                                    .build())
+                            .toList();
+                    feedbackDiagnosisRepository.saveAll(mappings);
+                }
+
+                return newFeedback;
+            });
         }
 
         return new GenerationContext(feedback, contextJsonStr, isAlreadyCompleted);
@@ -209,15 +238,21 @@ public class LearningCommandService {
     // =================================================================================
 
     // 1. ENTRY (첫 체결과 ENTRY 진단만 조회)
-    private String buildEntryContextJson(ExecutionSnapshot firstExec, UUID positionId, UUID userId) {
-        List<DiagnosisResult> entryDiagnoses = diagnosisResultRepository.findAllByPositionId(positionId).stream()
-                .filter(d -> d.getDiagnosisPhase() == DiagnosisPhase.ENTRY).toList();
-
+    // [수정] 파라미터로 entryDiagnoses 리스트를 직접 받도록 변경
+    private String buildEntryContextJson(ExecutionSnapshot firstExec, UUID positionId, UUID userId, List<DiagnosisResult> entryDiagnoses) {
         AiFeedbackRequestDto requestDto = new AiFeedbackRequestDto(
-                FeedbackType.ENTRY_FEEDBACK.name(), "v1.0", userId, positionId,
-                new StockDto(firstExec.getStockId(), firstExec.getStockSymbol(), firstExec.getStockName()),
-                new PositionDto("OPEN", firstExec.getPositionAveragePrice(), firstExec.getPositionQuantityAfter(), firstExec.getPlannedStopLossPrice()),
-                null, null, // closedInfo, previousSummary 불필요
+                FeedbackType.ENTRY_FEEDBACK.name(),
+                "v1.0",
+                userId,
+                positionId,
+                new StockDto(firstExec.getStockId(),
+                firstExec.getStockSymbol(),
+                firstExec.getStockName()),
+                new PositionDto("OPEN", firstExec.getPositionAveragePrice(),
+                firstExec.getPositionQuantityAfter(),
+                firstExec.getPlannedStopLossPrice()),
+                null,
+                null,
                 List.of(mapToExecutionDto(firstExec)),
                 mapToMarketContextDto(firstExec),
                 entryDiagnoses.stream().map(this::mapToDiagnosisDto).toList()
@@ -226,12 +261,10 @@ public class LearningCommandService {
     }
 
     // 2. ON_DEMAND (전체 체결과 ENTRY/TRADE 진단 조회)
-    private String buildOnDemandContextJson(ExecutionSnapshot latestExec, UUID positionId, UUID userId) {
+    // [수정] 파라미터로 diagnoses 리스트를 직접 받도록 변경
+    private String buildOnDemandContextJson(ExecutionSnapshot latestExec, UUID positionId, UUID userId, List<DiagnosisResult> diagnoses) {
         List<ExecutionSnapshot> allExecutions = executionSnapshotRepository.findAllByPositionIdOrderByExecutedAtAscIdAsc(positionId);
-        List<DiagnosisResult> diagnoses = diagnosisResultRepository.findAllByPositionId(positionId).stream()
-                .filter(d -> d.getDiagnosisPhase() == DiagnosisPhase.ENTRY || d.getDiagnosisPhase() == DiagnosisPhase.TRADE).toList();
 
-        // [리뷰 반영 수정] 이전 피드백 요약본 가져오기 (가장 최근 완료된 피드백을 completedAt 기준으로 조회)
         String previousSummary = null;
         Optional<Feedback> prevFeedbackOpt = feedbackRepository.findTopByPositionIdAndStatusOrderByCompletedAtDesc(positionId, FeedbackStatus.COMPLETED);
 
@@ -242,10 +275,14 @@ public class LearningCommandService {
         }
 
         AiFeedbackRequestDto requestDto = new AiFeedbackRequestDto(
-                FeedbackType.ON_DEMAND_FEEDBACK.name(), "v1.0", userId, positionId,
+                FeedbackType.ON_DEMAND_FEEDBACK.name(),
+                "v1.0",
+                userId,
+                positionId,
                 new StockDto(latestExec.getStockId(), latestExec.getStockSymbol(), latestExec.getStockName()),
                 new PositionDto("OPEN", latestExec.getPositionAveragePrice(), latestExec.getPositionQuantityAfter(), latestExec.getPlannedStopLossPrice()),
-                null, previousSummary,
+                null,
+                previousSummary,
                 allExecutions.stream().map(this::mapToExecutionDto).toList(),
                 mapToMarketContextDto(latestExec),
                 diagnoses.stream().map(this::mapToDiagnosisDto).toList()
@@ -254,14 +291,13 @@ public class LearningCommandService {
     }
 
     // 3. POSITION_REVIEW (종료 정보 조회 및 전체 체결/진단)
-    private String buildReviewContextJson(ExecutionSnapshot latestExec, UUID positionId, UUID userId) {
+    // [수정] 파라미터로 allDiagnoses 리스트를 직접 받도록 변경
+    private String buildReviewContextJson(ExecutionSnapshot latestExec, UUID positionId, UUID userId, List<DiagnosisResult> allDiagnoses) {
         ClosedPositionSnapshot closedPos = closedPositionSnapshotRepository.findByPositionId(positionId)
                 .orElseThrow(() -> new CustomException(LearningErrorCode.CLOSED_POSITION_NOT_FOUND));
 
         List<ExecutionSnapshot> allExecutions = executionSnapshotRepository.findAllByPositionIdOrderByExecutedAtAscIdAsc(positionId);
-        List<DiagnosisResult> allDiagnoses = diagnosisResultRepository.findAllByPositionId(positionId);
 
-        // ClosedInfoDto 생성하여 정확한 시스템 손익/수량 전달
         ClosedInfoDto closedInfoDto = new ClosedInfoDto(
                 closedPos.getAverageExitPrice(),
                 closedPos.getTotalBoughtQuantity(),
@@ -276,7 +312,7 @@ public class LearningCommandService {
                 FeedbackType.POSITION_REVIEW.name(), "v1.0", userId, positionId,
                 new StockDto(closedPos.getStockId(), closedPos.getStockSymbol(), closedPos.getStockName()),
                 new PositionDto("CLOSED", closedPos.getAverageEntryPrice(), 0, closedPos.getPlannedStopLossPrice()),
-                closedInfoDto, null, // closedInfo 포함
+                closedInfoDto, null,
                 allExecutions.stream().map(this::mapToExecutionDto).toList(),
                 mapToMarketContextDto(latestExec),
                 allDiagnoses.stream().map(this::mapToDiagnosisDto).toList()
