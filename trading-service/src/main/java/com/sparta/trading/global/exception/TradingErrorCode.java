@@ -21,6 +21,7 @@ public enum TradingErrorCode implements  ErrorCode{
     PRICE_CANDLE_NOT_FOUND_FOR_SEQ(HttpStatus.INTERNAL_SERVER_ERROR, "해당 seq의 캔들 데이터가 없습니다."),
     STOCK_NOT_FOUND(HttpStatus.NOT_FOUND, "존재하지 않는 종목입니다."),
     ACCOUNT_NOT_FOUND(HttpStatus.NOT_FOUND, "사용자 계좌가 존재하지 않습니다. 계좌를 먼저 조회하세요."),
+    POSITION_NOT_FOUND(HttpStatus.NOT_FOUND, "존재하지 않는 포지션입니다."),
     ORDER_REQUEST_ID_CONFLICT(HttpStatus.CONFLICT, "같은 requestId에 다른 주문 내용을 사용할 수 없습니다."),
     ORDER_SIDE_NOT_SUPPORTED(HttpStatus.BAD_REQUEST, "현재는 BUY 주문만 지원합니다."),
     ORDER_TYPE_NOT_SUPPORTED(HttpStatus.BAD_REQUEST, "현재는 MARKET 주문만 지원합니다."),
