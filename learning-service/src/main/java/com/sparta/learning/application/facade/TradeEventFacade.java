@@ -2,7 +2,11 @@ package com.sparta.learning.application.facade;
 
 import com.sparta.learning.application.diagnosis.DiagnosisService;
 import com.sparta.learning.application.model.IngestionResult;
+import com.sparta.learning.application.service.LearningCommandService;
 import com.sparta.learning.application.service.TradeEventIngestionService;
+import com.sparta.learning.domain.entity.ClosedPositionSnapshot;
+import com.sparta.learning.domain.entity.ExecutionSnapshot;
+import com.sparta.learning.domain.model.TradeType;
 import com.sparta.learning.infrastructure.messaging.kafka.dto.TradingEventEnvelope;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -16,6 +20,7 @@ public class TradeEventFacade {
 
     private final TradeEventIngestionService ingestionService;
     private final DiagnosisService diagnosisService;
+    private final LearningCommandService learningCommandService;
 
     public IngestionResult handle(TradingEventEnvelope event){
         IngestionResult result = ingestionService.ingest(event);
@@ -23,9 +28,22 @@ public class TradeEventFacade {
         // 최초 처리와 중복 재처리 모두 스냅샷이 있으면 멱등하게 진단한다.
         // 체결과 포지션 종료는 진단 대상 타입이 달라 실행 경로를 나눈다.
         if(result.hasExecutionTarget()){
-            diagnosisService.diagnose(result.executionSnapshot());
+            ExecutionSnapshot snapshot = result.executionSnapshot();
+
+            diagnosisService.diagnose(snapshot);
+
+            // 최초 매수(신규 포지션)인 경우에만 진입 피드백 생성 (동기 호출)
+            if (snapshot.getTradeType() == TradeType.BUY && snapshot.isNewPosition()) {
+                learningCommandService.createEntryFeedback(snapshot.getPositionId(), snapshot.getUserId());
+            }
+
         } else if(result.hasClosedPositionTarget()){
-            diagnosisService.diagnoseClose(result.closedPositionSnapshot());
+            ClosedPositionSnapshot snapshot = result.closedPositionSnapshot();
+
+            diagnosisService.diagnoseClose(snapshot);
+
+            // 포지션 종료 리뷰 피드백 생성 (동기 호출)
+            learningCommandService.createPositionReviewFeedback(snapshot.getPositionId(), snapshot.getUserId());
         }
 
         return result;
