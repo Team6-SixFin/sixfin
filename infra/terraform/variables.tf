@@ -19,3 +19,16 @@ variable "ssh_public_key" {
   description = "aws_key_pair에 등록할 SSH 공개키 내용 (개인키는 다루지 않는다)"
   type        = string
 }
+
+
+variable "service_names" {
+  description = "ECR 리포지토리를 만들 배포 대상 11개 서비스"
+  type        = list(string)
+  default = [
+    "eureka-server",
+    "gateway-service",
+    "user-service",
+    "trading-service",
+    "learning-service",
+  ]
+}
