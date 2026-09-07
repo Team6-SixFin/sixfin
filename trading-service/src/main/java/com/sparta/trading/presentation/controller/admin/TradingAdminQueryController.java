@@ -2,15 +2,18 @@ package com.sparta.trading.presentation.controller.admin;
 
 import com.sparta.trading.application.dto.query.TradingAdminSearchExecutionQuery;
 import com.sparta.trading.application.dto.query.TradingAdminSearchOrderQuery;
+import com.sparta.trading.application.dto.query.TradingAdminSearchOutboxEventQurey;
 import com.sparta.trading.application.dto.query.TradingSearchAccountsQuery;
 import com.sparta.trading.application.dto.result.TradingAdminExecutionQueryResult;
 import com.sparta.trading.application.dto.result.TradingAdminOrderQueryResult;
+import com.sparta.trading.application.dto.result.TradingAdminOutboxEventQueryResult;
 import com.sparta.trading.application.service.TradingAdminQueryService;
 import com.sparta.trading.domain.entity.Accounts;
 import com.sparta.trading.global.response.PageResponse;
 import com.sparta.trading.presentation.dto.response.TradigAdminOrderResponseDto;
 import com.sparta.trading.presentation.dto.response.TradingAccountsResponseDto;
 import com.sparta.trading.presentation.dto.response.TradingAdminExecutionResponseDto;
+import com.sparta.trading.presentation.dto.response.TradingAdminOutboxEventResponseDto;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -85,7 +88,7 @@ public class TradingAdminQueryController {
 
 
     /**
-     * 작성자 :
+     * 작성자 :정승호
      * 최초 작성일 :26-09-02
      * 최종 수정일 :
      * 기능 :
@@ -107,5 +110,32 @@ public class TradingAdminQueryController {
         TradingAdminExecutionQueryResult result = tradingAdminQueryService.searchExecuation(
              new TradingAdminSearchExecutionQuery(userId, positionId, symbol, side,from,to,sort,page,size));
         return PageResponse.of(result.summary(),result.page());
+    }
+
+    /**
+     * 작성자 :
+     * 최초 작성일 :
+     * 최종 수정일 :
+     * 기능 :
+     * 설명 :
+     * @Param:
+     **/
+    @GetMapping("/outbox")
+    public PageResponse<TradingAdminOutboxEventResponseDto> searchOutbox(
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String eventType,
+            @RequestParam(required = false) Integer minRetryCount,
+            @RequestParam(required = false) Instant from,
+            @RequestParam(required = false) Instant to,
+            @RequestParam(required = false) Boolean includePayload,
+            @RequestParam(required = false) String sort,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size
+    ){
+        TradingAdminOutboxEventQueryResult result = tradingAdminQueryService.searchOutbox(
+            new TradingAdminSearchOutboxEventQurey( status, eventType, minRetryCount, from, to, includePayload, sort, page,size
+            ));
+
+        return  PageResponse.of(result.summary(),result.page());
     }
 }

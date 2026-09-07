@@ -2,6 +2,7 @@ package com.sparta.trading.global.util;
 
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 
 import java.util.Set;
 
@@ -31,5 +32,10 @@ public final class PageableUtil {
                 : DEFAULT_SIZE;
 
         return PageRequest.of(pageable.getPageNumber(), size, pageable.getSort());
+    }
+
+    public static Pageable createDescPageable(int page, int size, String sort) {
+        int normalizedSize = ALLOWED_SIZES.contains(size) ? size : DEFAULT_SIZE;
+        return PageRequest.of(page, normalizedSize, Sort.by(Sort.Direction.DESC, sort));
     }
 }

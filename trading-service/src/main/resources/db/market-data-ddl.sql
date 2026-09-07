@@ -236,6 +236,9 @@ CREATE TABLE IF NOT EXISTS trading_service.p_outbox_events (
     updated_by      UUID
 );
 
+CREATE INDEX idx_p_outbox_events_event_id ON trading_service.p_outbox_events(event_id);
+CREATE INDEX idx_p_outbox_events_status ON trading_service.p_outbox_events(status);
+
 CREATE INDEX IF NOT EXISTS idx_outbox_events_pending
     ON trading_service.p_outbox_events (occurred_at) WHERE status = 'PENDING';
 
