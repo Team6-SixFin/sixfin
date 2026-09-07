@@ -12,7 +12,7 @@ import java.util.UUID;
 
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/api/trading/accounts")
+@RequestMapping("/api/trading")
 public class AccountQueryController {
 
     private static final String USER_ID_HEADER = "X-User-Id";
@@ -20,7 +20,7 @@ public class AccountQueryController {
     private final AccountQueryService accountQueryService;
 
     // 내 계좌 조회: 계좌가 없으면 초기 예수금 원장과 함께 생성한다.
-    @GetMapping("/me")
+    @GetMapping("/accounts/me")
     public AccountResponse getMyAccount(@RequestHeader(USER_ID_HEADER) UUID userId) {
         return accountQueryService.getOrCreateAccount(userId);
     }

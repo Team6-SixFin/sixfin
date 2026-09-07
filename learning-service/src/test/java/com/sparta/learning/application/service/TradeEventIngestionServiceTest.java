@@ -24,6 +24,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.io.InputStream;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -76,18 +77,78 @@ class TradeEventIngestionServiceTest {
         validatorFactory.close();
     }
 
-    // 이미 저장된 eventId는 스냅샷을 다시 만들지 않고 정상적인 중복 결과로 종료하는지 확인
+    // 이미 저장된 체결 이벤트는 스냅샷을 새로 만들지 않고 기존 스냅샷을 재진단 대상으로 반환한다
     @Test
-    void skipsAlreadyConsumedEvent() throws Exception {
+    void returnsExistingSnapshotForAlreadyConsumedExecutionEvent() throws Exception {
         TradingEventEnvelope event = readEnvelope("events/buy-executed-first.json");
+        ExecutionSnapshot snapshot = mock(ExecutionSnapshot.class);
         when(consumedEventRepository.existsByEventId(event.eventId())).thenReturn(true);
+        when(executionSnapshotRepository.findByConsumedEventEventId(event.eventId()))
+                .thenReturn(Optional.of(snapshot));
 
         IngestionResult result = ingestionService.ingest(event);
 
         assertThat(result.status()).isEqualTo(EventIngestionResult.DUPLICATE);
-        assertThat(result.hasDiagnosisTarget()).isFalse();
+        assertThat(result.executionSnapshot()).isSameAs(snapshot);
+        assertThat(result.hasExecutionTarget()).isTrue();
         verify(consumedEventRepository, never()).save(any());
-        verifyNoInteractions(snapshotMapper, executionSnapshotRepository, closedPositionSnapshotRepository);
+        verify(executionSnapshotRepository, never()).save(any());
+        verifyNoInteractions(snapshotMapper, closedPositionSnapshotRepository);
+    }
+
+    // 소비 이력과 체결 스냅샷의 정합성이 깨졌다면 진단을 누락한 채 정상 처리하지 않는다
+    @Test
+    void failsWhenConsumedExecutionEventHasNoSnapshot() throws Exception {
+        TradingEventEnvelope event = readEnvelope("events/buy-executed-first.json");
+        when(consumedEventRepository.existsByEventId(event.eventId())).thenReturn(true);
+        when(executionSnapshotRepository.findByConsumedEventEventId(event.eventId()))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> ingestionService.ingest(event))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining(event.eventId().toString());
+
+        verify(consumedEventRepository, never()).save(any());
+        verify(executionSnapshotRepository, never()).save(any());
+        verifyNoInteractions(snapshotMapper, closedPositionSnapshotRepository);
+    }
+
+    // 이미 저장된 종료 포지션은 스냅샷을 새로 만들지 않고 기존 스냅샷을 재진단 대상으로 반환한다
+    // CLOSE 진단이 실패해 남지 않았을 수 있어 체결과 같은 방식으로 다시 실행할 수 있어야 한다
+    @Test
+    void returnsExistingSnapshotForAlreadyConsumedPositionClosedEvent() throws Exception {
+        TradingEventEnvelope event = readEnvelope("events/position-closed.json");
+        ClosedPositionSnapshot snapshot = mock(ClosedPositionSnapshot.class);
+        when(consumedEventRepository.existsByEventId(event.eventId())).thenReturn(true);
+        when(closedPositionSnapshotRepository.findByConsumedEventEventId(event.eventId()))
+                .thenReturn(Optional.of(snapshot));
+
+        IngestionResult result = ingestionService.ingest(event);
+
+        assertThat(result.status()).isEqualTo(EventIngestionResult.DUPLICATE);
+        assertThat(result.closedPositionSnapshot()).isSameAs(snapshot);
+        assertThat(result.hasClosedPositionTarget()).isTrue();
+        assertThat(result.hasExecutionTarget()).isFalse();
+        verify(consumedEventRepository, never()).save(any());
+        verify(closedPositionSnapshotRepository, never()).save(any());
+        verifyNoInteractions(snapshotMapper, executionSnapshotRepository);
+    }
+
+    // 소비 이력과 종료 스냅샷의 정합성이 깨졌다면 진단을 누락한 채로 정상 처리하지 않는다
+    @Test
+    void failsWhenConsumedPositionClosedEventHasNoSnapshot() throws Exception {
+        TradingEventEnvelope event = readEnvelope("events/position-closed.json");
+        when(consumedEventRepository.existsByEventId(event.eventId())).thenReturn(true);
+        when(closedPositionSnapshotRepository.findByConsumedEventEventId(event.eventId()))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> ingestionService.ingest(event))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining(event.eventId().toString());
+
+        verify(consumedEventRepository, never()).save(any());
+        verify(closedPositionSnapshotRepository, never()).save(any());
+        verifyNoInteractions(snapshotMapper, executionSnapshotRepository);
     }
 
     // BUY_EXECUTED 수신 시 원본 이벤트와 체결 스냅샷이 각각 한 번 저장되는지 확인
@@ -122,12 +183,15 @@ class TradeEventIngestionServiceTest {
                 .thenAnswer(invocation -> invocation.getArgument(0));
         when(snapshotMapper.toClosedPositionSnapshot(any(ConsumedEvent.class), any(TradingEventEnvelope.class)))
                 .thenReturn(snapshot);
+        when(closedPositionSnapshotRepository.save(snapshot)).thenReturn(snapshot);
 
         IngestionResult result = ingestionService.ingest(event);
 
         assertThat(result.status()).isEqualTo(EventIngestionResult.PROCESSED);
-        // 포지션 종료는 ClosedPositionSnapshot이라 현재 진단 인터페이스로 처리할 수 없다
-        assertThat(result.hasDiagnosisTarget()).isFalse();
+        // 포지션 종료는 CLOSE 진단 대상이므로 종료 스냅샷을 담는다
+        assertThat(result.hasClosedPositionTarget()).isTrue();
+        assertThat(result.closedPositionSnapshot()).isSameAs(snapshot);
+        assertThat(result.hasExecutionTarget()).isFalse();
         verify(closedPositionSnapshotRepository).save(snapshot);
         verifyNoInteractions(executionSnapshotRepository);
     }

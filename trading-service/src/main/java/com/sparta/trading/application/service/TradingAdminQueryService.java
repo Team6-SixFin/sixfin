@@ -2,22 +2,24 @@ package com.sparta.trading.application.service;
 
 import com.sparta.trading.application.dto.query.TradingAdminSearchExecutionQuery;
 import com.sparta.trading.application.dto.query.TradingAdminSearchOrderQuery;
+import com.sparta.trading.application.dto.query.TradingAdminSearchOutboxEventQurey;
 import com.sparta.trading.application.dto.query.TradingSearchAccountsQuery;
 import com.sparta.trading.application.dto.result.TradingAdminExecutionQueryResult;
 import com.sparta.trading.application.dto.result.TradingAdminOrderQueryResult;
-import com.sparta.trading.domain.entity.Accounts;
-import com.sparta.trading.domain.entity.Executions;
-import com.sparta.trading.domain.entity.Orders;
-import com.sparta.trading.domain.entity.Stocks;
+import com.sparta.trading.application.dto.result.TradingAdminOutboxEventQueryResult;
+import com.sparta.trading.domain.entity.*;
 import com.sparta.trading.domain.repository.accounts.TradingAccountsQueryRepository;
 import com.sparta.trading.domain.repository.execution.TradingExecutionQueryRepository;
 import com.sparta.trading.domain.repository.order.TradingOrderQueryRepository;
+import com.sparta.trading.domain.repository.outboxEvent.TradingOutboxEventsQueryRepository;
 import com.sparta.trading.global.exception.CustomException;
 import com.sparta.trading.global.exception.GlobalErrorCode;
+import com.sparta.trading.global.util.PageableUtil;
 import com.sparta.trading.infrastructure.persistence.repository.stocks.StocksRepository;
 import com.sparta.trading.presentation.dto.response.TradigAdminOrderResponseDto;
 import com.sparta.trading.presentation.dto.response.TradingAccountsResponseDto;
 import com.sparta.trading.presentation.dto.response.TradingAdminExecutionResponseDto;
+import com.sparta.trading.presentation.dto.response.TradingAdminOutboxEventResponseDto;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -27,10 +29,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.UUID;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -41,17 +42,14 @@ public class TradingAdminQueryService {
     private final TradingAccountsQueryRepository tradingAccountsQueryRepository;
     private final TradingOrderQueryRepository tradingOrderQueryRepository;
     private final TradingExecutionQueryRepository tradingExecutionQueryRepository;
+    private final TradingOutboxEventsQueryRepository tradingOutboxEventsQueryRepository;
     private final StocksRepository stocksRepository;
 
     public Page<TradingAccountsResponseDto> search(TradingSearchAccountsQuery tradingSearchAccountsQuery) {
-        int page = tradingSearchAccountsQuery.page();
-        int size = tradingSearchAccountsQuery.size();
-        String sort = tradingSearchAccountsQuery.sort();
-
-        Pageable pageable = PageRequest.of(
-                page,
-                size,
-                Sort.by(Sort.Direction.DESC, sort)
+        Pageable pageable = PageableUtil.createDescPageable(
+                tradingSearchAccountsQuery.page(),
+                tradingSearchAccountsQuery.size(),
+                tradingSearchAccountsQuery.sort()
         );
 
         Page<Accounts> accounts = tradingAccountsQueryRepository.search(
@@ -63,23 +61,14 @@ public class TradingAdminQueryService {
 
     public TradingAdminOrderQueryResult searchOrder(TradingAdminSearchOrderQuery tradingAdminSearchOrderQuery) {
 
-        int page = tradingAdminSearchOrderQuery.page();
-        int size = tradingAdminSearchOrderQuery.size();
-        String sort = tradingAdminSearchOrderQuery.sort();
-
-        Pageable pageable = PageRequest.of(
-                page,
-                size,
-                Sort.by(Sort.Direction.DESC, sort)
+        Pageable pageable = PageableUtil.createDescPageable(
+                tradingAdminSearchOrderQuery.page(),
+                tradingAdminSearchOrderQuery.size(),
+                tradingAdminSearchOrderQuery.sort()
         );
 
         //검색 조건 처리
-        if (tradingAdminSearchOrderQuery.from() != null && tradingAdminSearchOrderQuery.to() != null) {
-            if (tradingAdminSearchOrderQuery.from().isAfter(tradingAdminSearchOrderQuery.to())) {
-                throw new CustomException(GlobalErrorCode.INVALID_REQUEST,"from이 to보다 이후일 수 없습니다.");
-            }
-        }
-
+        validateDateRange(tradingAdminSearchOrderQuery.from(),tradingAdminSearchOrderQuery.to());
 
         //심벌
         Long targetStockId = null;
@@ -165,22 +154,14 @@ public class TradingAdminQueryService {
     //체결 전체 조회
     public TradingAdminExecutionQueryResult searchExecuation(TradingAdminSearchExecutionQuery tradingExecutionQuery) {
 
-        int page = tradingExecutionQuery.page();
-        int size = tradingExecutionQuery.size();
-        String sort = tradingExecutionQuery.sort();
-
-        Pageable pageable = PageRequest.of(
-                page,
-                size,
-                Sort.by(Sort.Direction.DESC, sort)
+        Pageable pageable = PageableUtil.createDescPageable(
+                tradingExecutionQuery.page(),
+                tradingExecutionQuery.size(),
+                tradingExecutionQuery.sort()
         );
 
         //검색 조건 처리
-        if (tradingExecutionQuery.from() != null && tradingExecutionQuery.to() != null) {
-            if (tradingExecutionQuery.from().isAfter(tradingExecutionQuery.to())) {
-                throw new CustomException(GlobalErrorCode.INVALID_REQUEST,"from이 to보다 이후일 수 없습니다.");
-            }
-        }
+        validateDateRange(tradingExecutionQuery.from(),tradingExecutionQuery.to());
 
         //심벌
         Long targetStockId = null;
@@ -245,4 +226,92 @@ public class TradingAdminQueryService {
 
         return new TradingAdminExecutionQueryResult(summary,responsePage);
     }
+
+    public TradingAdminOutboxEventQueryResult searchOutbox(TradingAdminSearchOutboxEventQurey tradingAdminSearchOutboxEventQurey){
+
+        Pageable pageable = PageableUtil.createDescPageable(
+                tradingAdminSearchOutboxEventQurey.page(),
+                tradingAdminSearchOutboxEventQurey.size(),
+                tradingAdminSearchOutboxEventQurey.sort()
+        );
+
+        //검색 조건 처리
+        validateDateRange(tradingAdminSearchOutboxEventQurey.from(),tradingAdminSearchOutboxEventQurey.to());
+
+        //조회
+        Page<OutboxEvents> outboxEvents = tradingOutboxEventsQueryRepository.searchOutbox(
+                tradingAdminSearchOutboxEventQurey,
+                pageable
+        );
+        List<OutboxEvents> outboxEventsList = outboxEvents.getContent();
+
+        //summary 계산
+        long pendingCount = outboxEventsList.stream().filter(o -> "PENDING".equals(o.getStatus())).count();
+        long failedCount = outboxEventsList.stream().filter(o -> "FAILED".equals(o.getStatus())).count();
+
+        Instant oldestPendingAt = outboxEventsList.stream()
+                .map(OutboxEvents::getOccurredAt)
+                .min(Comparator.naturalOrder())
+                .orElse(null);
+
+        Map<String, Object> summary = new HashMap<>();
+        summary.put("pendingCount", pendingCount);
+        summary.put("failedCount", failedCount);
+        summary.put("oldestPendingAt", oldestPendingAt);
+
+        boolean includePayload = Boolean.TRUE.equals(tradingAdminSearchOutboxEventQurey.includePayload());
+
+
+        Page<TradingAdminOutboxEventResponseDto> responseDtoPage = outboxEvents.map(outboxEvent ->{
+            Object payloadValue = includePayload ? outboxEvent.getPayload() : null;
+            Long delayedSeconds = calculateDelayedSeconds(outboxEvent);
+            return new TradingAdminOutboxEventResponseDto(
+                   outboxEvent.getId(),
+                   outboxEvent.getEventId(),
+                   outboxEvent.getEventType(),
+                   outboxEvent.getEventVersion(),
+                   outboxEvent.getAggregateType(),
+                   outboxEvent.getAggregateId(),
+                   outboxEvent.getPartitionKey(),
+                   outboxEvent.getStatus(),
+                   outboxEvent.getRetryCount(),
+                   outboxEvent.getLastError(),
+                   payloadValue,
+                   outboxEvent.getOccurredAt(),
+                   outboxEvent.getPublishedAt(),
+                   delayedSeconds
+           );
+        });
+
+        return new TradingAdminOutboxEventQueryResult(summary,responseDtoPage);
+    }
+
+
+    //날짜 검증
+    public static void validateDateRange(Instant from, Instant to) {
+        if (from != null && to != null && from.isAfter(to)) {
+            throw new CustomException(GlobalErrorCode.INVALID_REQUEST, "from이 to보다 이후일 수 없습니다.");
+        }
+    }
+
+    //아웃박스 - delayedSecond 계산
+    private Long calculateDelayedSeconds(OutboxEvents outboxEvent) {
+        if (outboxEvent.getOccurredAt() == null) {
+            return 0L;
+        }
+
+        Instant now = Instant.now();
+
+        // PUBLISHED인 경우: publishedAt - occurredAt
+        if (OutboxStatus.PUBLISHED.equals(outboxEvent.getStatus())) {
+            if (outboxEvent.getPublishedAt() == null) {
+                return 0L;
+            }
+            return Duration.between(outboxEvent.getOccurredAt(), outboxEvent.getPublishedAt()).getSeconds();
+        }
+
+        // PENDING, FAILED인 경우: 현재 시간(now) - occurredAt
+        return Duration.between(outboxEvent.getOccurredAt(), now).getSeconds();
+    }
+
 }
