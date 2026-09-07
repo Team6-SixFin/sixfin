@@ -2,6 +2,8 @@ package com.sparta.trading.infrastructure.persistence.repository.position;
 
 import com.sparta.trading.domain.entity.Positions;
 import jakarta.persistence.LockModeType;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
@@ -24,5 +26,23 @@ interface PositionJpaRepository extends JpaRepository<Positions, UUID> {
             """)
     List<Positions> findAllOpenByAccountId(UUID accountId);
 
+    @Query("""
+            select p from Positions p
+            where p.userId = :userId
+              and p.status = :status
+              and p.deletedAt is null
+            order by p.openedAt desc, p.id desc
+            """)
+    Page<Positions> findAllByUserIdAndStatus(
+            UUID userId,
+            String status,
+            Pageable pageable
+    );
+
+    Optional<Positions> findByIdAndUserIdAndDeletedAtIsNull(
+            UUID positionId,
+            UUID userId
+    );
+           
     List<Positions> findAllByAccountIdAndStatus(UUID id, String status);
 }
