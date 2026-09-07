@@ -9,6 +9,7 @@ import org.springframework.data.domain.SearchResults;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Repository
@@ -30,5 +31,10 @@ public class TradingAccountsQueryRepositoryImpl implements TradingAccountsQueryR
     @Override
     public List<Accounts> findAllByUserId(UUID userId) {
         return tradingAccountsJpaRepository.findAllByUserId(userId);
+    }
+
+    @Override
+    public Optional<Accounts> findByUserId(UUID userId) {
+        return tradingAccountsJpaRepository.findByUserId(userId);
     }
 }

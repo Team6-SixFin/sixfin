@@ -43,4 +43,6 @@ interface PositionJpaRepository extends JpaRepository<Positions, UUID> {
             UUID positionId,
             UUID userId
     );
+           
+    List<Positions> findAllByAccountIdAndStatus(UUID id, String status);
 }

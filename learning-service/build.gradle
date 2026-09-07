@@ -1,3 +1,13 @@
+plugins {
+    // 서브 프로젝트 플러그인은 루트에서 apply false로 선언되어 있으므로 여기서는 이름만 적어줍니다.
+}
+
+// 모듈 레벨 저장소 명시 (안전장치)
+repositories {
+    mavenCentral()
+    maven { url 'https://repo.spring.io/milestone' }
+    maven { url 'https://repo.spring.io/snapshot' }
+}
 
 dependencies {
     def querydslVersion = '7.5'
@@ -23,4 +33,10 @@ dependencies {
 
     implementation 'org.springframework.boot:spring-boot-starter-webmvc'
     testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
+
+    // [Spring AI 2.0 적용] 루트 BOM을 통해 버전이 자동 주입되므로 버전 명시가 필요 없습니다.
+    implementation 'org.springframework.ai:spring-ai-starter-model-openai'
+    implementation 'org.springframework.ai:spring-ai-starter-model-transformers'
+    // 만약 Google Gemini(Vertex AI 등)를 직접 쓰신다면 아래 스타터로 교체하거나 함께 사용할 수 있습니다.
+    // implementation 'org.springframework.ai:spring-ai-starter-model-vertex-ai-gemini'
 }

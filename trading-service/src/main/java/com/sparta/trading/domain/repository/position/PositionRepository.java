@@ -25,4 +25,6 @@ public interface PositionRepository {
     );
 
     Optional<Positions> findByIdAndUserId(UUID positionId, UUID userId);
+  
+    List<Positions> findAllByAccountIdAndStatus(UUID id, String status);
 }

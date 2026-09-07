@@ -5,6 +5,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 public interface TradingAccountsQueryRepository {
@@ -14,4 +15,6 @@ public interface TradingAccountsQueryRepository {
     List<Accounts> findAllById(List<UUID> accountIds);
 
     List<Accounts> findAllByUserId(UUID uuid);
+
+    Optional<Accounts> findByUserId (UUID userId);
 }

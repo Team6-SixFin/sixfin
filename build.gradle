@@ -6,6 +6,7 @@ plugins {
 
 ext {
     springCloudVersion = '2025.1.2'
+    springAiVersion = '2.0.1' // Spring Boot 4.1에 호환되는 Spring AI 2.0 버전 정의
 }
 
 allprojects {
@@ -14,6 +15,9 @@ allprojects {
     description = 'sixfin'
     repositories {
         mavenCentral()
+        // Spring AI Milestone 및 Snapshot 패키지를 다운로드하기 위한 저장소
+        maven { url 'https://repo.spring.io/milestone' }
+        maven { url 'https://repo.spring.io/snapshot' }
     }
 
 }
@@ -30,6 +34,7 @@ subprojects {
     dependencyManagement {
         imports {
             mavenBom "org.springframework.cloud:spring-cloud-dependencies:${springCloudVersion}"
+            mavenBom "org.springframework.ai:spring-ai-bom:${springAiVersion}"
         }
     }
 

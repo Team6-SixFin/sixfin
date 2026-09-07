@@ -5,6 +5,7 @@ import com.sparta.learning.domain.entity.ExecutionSnapshot;
 import com.sparta.learning.domain.model.DiagnosisPhase;
 import com.sparta.learning.domain.model.DiagnosisStatus;
 import com.sparta.learning.domain.model.RuleCode;
+import com.sparta.learning.fixture.DiagnosisContextFixture;
 import com.sparta.learning.fixture.ExecutionSnapshotFixture;
 import org.junit.jupiter.api.Test;
 
@@ -26,8 +27,8 @@ class HighChasingBuyRuleTest {
     // ENTRY 단계의 최초 매수는 모두 판정 대상이다
     @Test
     void 최초_매수는_모두_적용_대상이다() {
-        assertThat(rule.supports(ExecutionSnapshotFixture.firstBuyWithStopLoss())).isTrue();
-        assertThat(rule.supports(ExecutionSnapshotFixture.buyWithRecent20dHigh(null))).isTrue();
+        assertThat(rule.supports(DiagnosisContextFixture.of(ExecutionSnapshotFixture.firstBuyWithStopLoss()))).isTrue();
+        assertThat(rule.supports(DiagnosisContextFixture.of(ExecutionSnapshotFixture.buyWithRecent20dHigh(null)))).isTrue();
     }
 
     // 20일 최고가가 없으면 비율을 계산할 수 없다
@@ -36,7 +37,7 @@ class HighChasingBuyRuleTest {
     void 최고가가_없으면_NOT_APPLICABLE() {
         var snapshot = ExecutionSnapshotFixture.buyWithRecent20dHigh(null);
 
-        DiagnosisResult result = rule.diagnose(snapshot);
+        DiagnosisResult result = rule.diagnose(DiagnosisContextFixture.of(snapshot));
 
         assertThat(result.getResult()).isEqualTo(DiagnosisStatus.NOT_APPLICABLE);
     }
@@ -46,7 +47,7 @@ class HighChasingBuyRuleTest {
     void 최고가가_0이면_NOT_APPLICABLE() {
         var snapshot = ExecutionSnapshotFixture.buyWithRecent20dHigh(BigDecimal.ZERO);
 
-        DiagnosisResult result = rule.diagnose(snapshot);
+        DiagnosisResult result = rule.diagnose(DiagnosisContextFixture.of(snapshot));
 
         assertThat(result.getResult()).isEqualTo(DiagnosisStatus.NOT_APPLICABLE);
     }
@@ -56,7 +57,7 @@ class HighChasingBuyRuleTest {
     void 판정하지_않으면_측정값과_기준값이_비어_있다() {
         var snapshot = ExecutionSnapshotFixture.buyWithRecent20dHigh(null);
 
-        DiagnosisResult result = rule.diagnose(snapshot);
+        DiagnosisResult result = rule.diagnose(DiagnosisContextFixture.of(snapshot));
 
         assertThat(result.getMetricValue()).isNull();
         assertThat(result.getThresholdValue()).isNull();
@@ -68,7 +69,7 @@ class HighChasingBuyRuleTest {
     void 판정하지_않아도_근거_문구가_담긴다() {
         var snapshot = ExecutionSnapshotFixture.buyWithRecent20dHigh(null);
 
-        DiagnosisResult result = rule.diagnose(snapshot);
+        DiagnosisResult result = rule.diagnose(DiagnosisContextFixture.of(snapshot));
 
         assertThat(result.getEvidence().get("message").asText()).isNotBlank();
     }
@@ -78,7 +79,7 @@ class HighChasingBuyRuleTest {
     void 최고가와_거리가_있으면_PASS() {
         var snapshot = ExecutionSnapshotFixture.firstBuyWithStopLoss();
 
-        DiagnosisResult result = rule.diagnose(snapshot);
+        DiagnosisResult result = rule.diagnose(DiagnosisContextFixture.of(snapshot));
 
         assertThat(result.getResult()).isEqualTo(DiagnosisStatus.PASS);
     }
@@ -87,7 +88,7 @@ class HighChasingBuyRuleTest {
     void 최고가와_같은_가격에_매수하면_WARNING() {
         var snapshot = ExecutionSnapshotFixture.buyAt(PRICE_AT_HIGH);
 
-        DiagnosisResult result = rule.diagnose(snapshot);
+        DiagnosisResult result = rule.diagnose(DiagnosisContextFixture.of(snapshot));
 
         assertThat(result.getResult()).isEqualTo(DiagnosisStatus.WARNING);
     }
@@ -96,7 +97,7 @@ class HighChasingBuyRuleTest {
     void 최고가의_정확히_99퍼센트면_WARNING() {
         var snapshot = ExecutionSnapshotFixture.buyAt(PRICE_AT_99_PERCENT);
 
-        DiagnosisResult result = rule.diagnose(snapshot);
+        DiagnosisResult result = rule.diagnose(DiagnosisContextFixture.of(snapshot));
 
         assertThat(result.getResult()).isEqualTo(DiagnosisStatus.WARNING);
         assertThat(result.getMetricValue()).isEqualByComparingTo(new BigDecimal("99"));
@@ -106,7 +107,7 @@ class HighChasingBuyRuleTest {
     void 최고가의_99퍼센트_바로_아래면_PASS() {
         var snapshot = ExecutionSnapshotFixture.buyAt(PRICE_JUST_BELOW_99);
 
-        DiagnosisResult result = rule.diagnose(snapshot);
+        DiagnosisResult result = rule.diagnose(DiagnosisContextFixture.of(snapshot));
 
         assertThat(result.getResult()).isEqualTo(DiagnosisStatus.PASS);
         assertThat(result.getMetricValue()).isEqualByComparingTo(new BigDecimal("98.99"));
@@ -117,7 +118,7 @@ class HighChasingBuyRuleTest {
     void 판정에_사용한_값이_metrics에_담긴다() {
         var snapshot = ExecutionSnapshotFixture.firstBuyWithStopLoss();
 
-        DiagnosisResult result = rule.diagnose(snapshot);
+        DiagnosisResult result = rule.diagnose(DiagnosisContextFixture.of(snapshot));
 
         assertThat(result.getMetrics().get("executedPrice").decimalValue())
                 .isEqualByComparingTo(snapshot.getExecutedPrice());
@@ -144,7 +145,7 @@ class HighChasingBuyRuleTest {
     void 진단_결과에_근거_체결과_규칙_정보가_담긴다() {
         var snapshot = ExecutionSnapshotFixture.firstBuyWithStopLoss();
 
-        DiagnosisResult result = rule.diagnose(snapshot);
+        DiagnosisResult result = rule.diagnose(DiagnosisContextFixture.of(snapshot));
 
         assertThat(result.getRuleCode()).isEqualTo(RuleCode.HIGH_CHASING_BUY.name());
         assertThat(result.getDiagnosisPhase()).isEqualTo(DiagnosisPhase.ENTRY);
@@ -156,6 +157,6 @@ class HighChasingBuyRuleTest {
 
 
     private String messageOf(ExecutionSnapshot snapshot) {
-        return rule.diagnose(snapshot).getEvidence().get("message").asText();
+        return rule.diagnose(DiagnosisContextFixture.of(snapshot)).getEvidence().get("message").asText();
     }
 }
