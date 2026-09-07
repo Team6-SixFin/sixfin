@@ -19,10 +19,10 @@ public record OrderResponse(
 ) {
     public record ExecutionResponse(
             UUID executionId,
-            int quantity,
             BigDecimal executedPrice,
+            int executedQuantity,
             BigDecimal executedAmount,
-            Instant executedAt
+            BigDecimal realizedProfit
     ) {
     }
 }

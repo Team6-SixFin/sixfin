@@ -229,8 +229,8 @@ public class TradingCommandService {
     private OrderResponse response(Orders order, Executions execution, BigDecimal cashBalance) {
         OrderResponse.ExecutionResponse executionResponse = execution == null ? null
                 : new OrderResponse.ExecutionResponse(
-                execution.getId(), execution.getExecutedQuantity(), execution.getExecutedPrice(),
-                execution.getExecutedAmount(), execution.getMarketTime()
+                execution.getId(), execution.getExecutedPrice(), execution.getExecutedQuantity(),
+                execution.getExecutedAmount(), execution.getRealizedProfit()
         );
         return new OrderResponse(
                 order.getId(),
