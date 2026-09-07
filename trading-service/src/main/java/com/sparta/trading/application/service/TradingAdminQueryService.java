@@ -12,19 +12,19 @@ import com.sparta.trading.domain.repository.accounts.TradingAccountsQueryReposit
 import com.sparta.trading.domain.repository.execution.TradingExecutionQueryRepository;
 import com.sparta.trading.domain.repository.order.TradingOrderQueryRepository;
 import com.sparta.trading.domain.repository.outboxEvent.TradingOutboxEventsQueryRepository;
+import com.sparta.trading.domain.repository.position.PositionRepository;
 import com.sparta.trading.global.exception.CustomException;
 import com.sparta.trading.global.exception.GlobalErrorCode;
+import com.sparta.trading.global.exception.TradingErrorCode;
 import com.sparta.trading.global.util.PageableUtil;
 import com.sparta.trading.infrastructure.persistence.repository.stocks.StocksRepository;
-import com.sparta.trading.presentation.dto.response.TradigAdminOrderResponseDto;
-import com.sparta.trading.presentation.dto.response.TradingAccountsResponseDto;
-import com.sparta.trading.presentation.dto.response.TradingAdminExecutionResponseDto;
-import com.sparta.trading.presentation.dto.response.TradingAdminOutboxEventResponseDto;
+import com.sparta.trading.presentation.dto.response.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -43,7 +43,10 @@ public class TradingAdminQueryService {
     private final TradingOrderQueryRepository tradingOrderQueryRepository;
     private final TradingExecutionQueryRepository tradingExecutionQueryRepository;
     private final TradingOutboxEventsQueryRepository tradingOutboxEventsQueryRepository;
+    private final PositionRepository positionRepository;
     private final StocksRepository stocksRepository;
+    private final StringRedisTemplate redisTemplate;
+
 
     public Page<TradingAccountsResponseDto> search(TradingSearchAccountsQuery tradingSearchAccountsQuery) {
         Pageable pageable = PageableUtil.createDescPageable(
@@ -285,6 +288,97 @@ public class TradingAdminQueryService {
 
         return new TradingAdminOutboxEventQueryResult(summary,responseDtoPage);
     }
+
+
+    public TradingAdminAccountByUserResponseDto searchAccountByUser(UUID userId, Boolean includePosition) {
+
+        Accounts account = tradingAccountsQueryRepository.findByUserId(userId)
+                .orElseThrow(() -> new CustomException(GlobalErrorCode.USER_NOT_FOUND, "계좌를 찾을 수 없습니다."));
+
+        boolean shouldIncludePositions = Boolean.TRUE.equals(includePosition);
+
+        List<TradingAdminAccountByUserResponseDto.PositionDto> positionDtos = Collections.emptyList();
+        BigDecimal evaluationAmount = BigDecimal.ZERO;
+        Instant valuationAt = null;
+
+        //includePosition이 true이면 positions, stocks, Redis 순서대로 조회
+        if (shouldIncludePositions) {
+            List<Positions> positions = positionRepository.findAllByAccountIdAndStatus(account.getId(), "OPEN");
+
+            if (!positions.isEmpty()) {
+                valuationAt = Instant.now();
+
+                // [N+1 해결 1] 모든 stockId 수집 후 stocks 테이블 1번만 배치 조회 (IN 쿼리)
+                List<Long> stockIds = positions.stream().map(Positions::getStockId).toList();
+                List<Stocks> stocksList = stocksRepository.findAllById(stockIds);
+
+                // 빠른 조회를 위해 Map으로 변환 (Key: stockId, Value: Stocks)
+                Map<Long, Stocks> stockMap = stocksList.stream()
+                        .collect(Collectors.toMap(Stocks::getId, s -> s));
+
+                // [N+1 해결 2] Redis 조회용 키 목록("price:AAPL", "price:NVDA") 일괄 생성
+                List<String> redisKeys = positions.stream()
+                        .map(p -> "price:" + stockMap.get(p.getStockId()).getSymbol())
+                        .toList();
+
+                // Redis 네트워크 요청 1번으로 일괄 조회 (multiGet)
+                List<String> pricesFromRedis = redisTemplate.opsForValue().multiGet(redisKeys);
+
+                List<TradingAdminAccountByUserResponseDto.PositionDto> dtos = new ArrayList<>();
+
+                // 메모리 내 계산 및 DTO 변환 (추가 DB/Redis 조회 0건)
+                for (int i = 0; i < positions.size(); i++) {
+                    Positions p = positions.get(i);
+                    Stocks stock = stockMap.get(p.getStockId());
+                    String symbol = stock.getSymbol();
+
+                    // Redis 값 매핑 (없으면 평균매수가로 fallback)
+                    String priceStr = (pricesFromRedis != null) ? pricesFromRedis.get(i) : null;
+                    BigDecimal currentPrice = (priceStr != null)
+                            ? new BigDecimal(priceStr)
+                            : p.getAverageEntryPrice();
+
+                    // 평가손익 = (현재가 - 평균매수가) * 수량
+                    BigDecimal unrealizedProfit = currentPrice.subtract(p.getAverageEntryPrice())
+                            .multiply(BigDecimal.valueOf(p.getQuantity()));
+
+                    // 종목 평가금액 합산
+                    BigDecimal posEvalAmount = currentPrice.multiply(BigDecimal.valueOf(p.getQuantity()));
+                    evaluationAmount = evaluationAmount.add(posEvalAmount);
+
+                    dtos.add(new TradingAdminAccountByUserResponseDto.PositionDto(
+                            p.getId(),
+                            symbol,
+                            p.getQuantity(),
+                            p.getAverageEntryPrice(),
+                            currentPrice,
+                            unrealizedProfit
+                    ));
+                }
+                positionDtos = dtos;
+            }
+        }
+
+        // 자산 계산 (총자산 = 예수금 + 평가금액)
+        BigDecimal cashBalance = account.getCashBalance();
+        BigDecimal orderableAmount = cashBalance;
+        BigDecimal totalAsset = cashBalance.add(evaluationAmount);
+
+        //응답 반환
+        return new TradingAdminAccountByUserResponseDto(
+                account.getId(),
+                account.getUserId(),
+                cashBalance,
+                orderableAmount,
+                account.getInitialDeposit(),
+                evaluationAmount,
+                totalAsset,
+                valuationAt,
+                positionDtos,
+                account.getCreatedAt()
+        );
+    }
+
 
 
     //날짜 검증

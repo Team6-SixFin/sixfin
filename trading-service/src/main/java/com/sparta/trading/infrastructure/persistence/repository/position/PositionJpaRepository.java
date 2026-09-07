@@ -23,4 +23,6 @@ interface PositionJpaRepository extends JpaRepository<Positions, UUID> {
                           and p.deletedAt is null
             """)
     List<Positions> findAllOpenByAccountId(UUID accountId);
+
+    List<Positions> findAllByAccountIdAndStatus(UUID id, String status);
 }
