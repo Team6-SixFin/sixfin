@@ -3,11 +3,13 @@ package com.sparta.trading.infrastructure.persistence.repository.cashledger;
 import com.sparta.trading.domain.entity.CashLedgerTxType;
 import com.sparta.trading.domain.entity.CashLedgers;
 import com.sparta.trading.domain.repository.cashledger.CashLedgerRepository;
+import com.sparta.trading.domain.repository.cashledger.LedgerSequenceMismatchGroup;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.UUID;
 
 @Repository
@@ -32,5 +34,10 @@ public class CashLedgerRepositoryImpl implements CashLedgerRepository {
                 txType,
                 pageable
         );
+    }
+
+    @Override
+    public List<LedgerSequenceMismatchGroup> findLedgerSequenceMismatches(UUID accountId) {
+        return cashLedgerJpaRepository.findLedgerSequenceMismatches(accountId);
     }
 }

@@ -3,15 +3,23 @@ package com.sparta.trading.application.service;
 import com.sparta.trading.application.dto.query.TradingAdminSearchExecutionQuery;
 import com.sparta.trading.application.dto.query.TradingAdminSearchOrderQuery;
 import com.sparta.trading.application.dto.query.TradingAdminSearchOutboxEventQurey;
+import com.sparta.trading.application.dto.query.TradingReconciliationQuery;
 import com.sparta.trading.application.dto.query.TradingSearchAccountsQuery;
 import com.sparta.trading.application.dto.result.TradingAdminExecutionQueryResult;
 import com.sparta.trading.application.dto.result.TradingAdminOrderQueryResult;
 import com.sparta.trading.application.dto.result.TradingAdminOutboxEventQueryResult;
 import com.sparta.trading.domain.entity.*;
 import com.sparta.trading.domain.repository.accounts.TradingAccountsQueryRepository;
+import com.sparta.trading.domain.repository.cashledger.CashLedgerRepository;
+import com.sparta.trading.domain.repository.accounts.CashLedgersAccountsGroup;
+import com.sparta.trading.domain.repository.cashledger.LedgerSequenceMismatchGroup;
 import com.sparta.trading.domain.repository.execution.TradingExecutionQueryRepository;
+import com.sparta.trading.domain.repository.order.DuplicateRequestGroup;
+import com.sparta.trading.domain.repository.order.OrderRepository;
 import com.sparta.trading.domain.repository.order.TradingOrderQueryRepository;
 import com.sparta.trading.domain.repository.outboxEvent.TradingOutboxEventsQueryRepository;
+import com.sparta.trading.domain.repository.position.DuplicateOpenPositionGroup;
+import com.sparta.trading.domain.repository.position.PositionQuantityMismatchGroup;
 import com.sparta.trading.domain.repository.position.PositionRepository;
 import com.sparta.trading.global.exception.CustomException;
 import com.sparta.trading.global.exception.GlobalErrorCode;
@@ -23,7 +31,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,6 +39,8 @@ import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
+import java.util.function.Function;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 @Service
@@ -45,7 +54,12 @@ public class TradingAdminQueryService {
     private final TradingOutboxEventsQueryRepository tradingOutboxEventsQueryRepository;
     private final PositionRepository positionRepository;
     private final StocksRepository stocksRepository;
+    private final OrderRepository orderRepository;
+    private final CashLedgerRepository cashLedgerRepository;
+
     private final StringRedisTemplate redisTemplate;
+
+    private static final int MAX_DETAIL_ITEMS = 100;
 
 
     public Page<TradingAccountsResponseDto> search(TradingSearchAccountsQuery tradingSearchAccountsQuery) {
@@ -380,6 +394,292 @@ public class TradingAdminQueryService {
     }
 
 
+    /** 원장·예수금 대조 등 정합성 검증을 일괄 실행한다. checks 미지정 시 전체 항목을 실행한다. */
+    public TradingReconciliationResponse reconciliation(TradingReconciliationQuery query) {
+        Instant checkedAt = Instant.now();
+        long startNanos = System.nanoTime();
+
+        List<ReconciliationCheckCode> requestedChecks = resolveCheckCodes(query.checks());
+        boolean includeDetails = Boolean.TRUE.equals(query.includeDetails());
+        UUID accountId = query.accountId();
+
+        // account 404 메세지 전송
+        if(accountId != null) {
+            tradingAccountsQueryRepository.findById(accountId)
+                    .orElseThrow(() -> new CustomException(TradingErrorCode.ACCOUNT_NOT_FOUND));
+        }
+
+        // 해당 하는 검사 하나씩 실행
+        List<TradingReconciliationResponse.CheckResult> results = requestedChecks.stream()
+                .map(checkCode -> runCheck(checkCode, accountId, includeDetails))
+                .toList();
+
+        ReconciliationStatus overallStatus = results.stream()
+                .anyMatch(result -> result.status() == ReconciliationStatus.MISMATCH)
+                ? ReconciliationStatus.MISMATCH
+                : ReconciliationStatus.OK;
+
+        int totalAccounts = accountId != null ? 1 : (int) tradingAccountsQueryRepository.count();
+        long elapsedMs = (System.nanoTime() - startNanos) / 1_000_000;
+
+        return new TradingReconciliationResponse(
+                checkedAt,
+                accountId != null ? accountId.toString() : "ALL",
+                totalAccounts,
+                overallStatus,
+                elapsedMs,
+                results
+        );
+    }
+
+    // "check=NEGATIVE_CASH,NEGATIVE_QUANTITY,DUPLICATE_REQUEST,DUPLICATE_OPEN_POSITION&..."
+    // 이런 형태로 쿼리 요청 와야함.
+    private List<ReconciliationCheckCode> resolveCheckCodes(String checksParam) {
+        if (checksParam == null || checksParam.isBlank()) {
+            return List.of(ReconciliationCheckCode.values());
+        }
+        return Arrays.stream(checksParam.split(","))
+                .map(String::trim)
+                .filter(code -> !code.isEmpty())
+                .map(this::parseCheckCode)
+                .toList();
+    }
+
+    private ReconciliationCheckCode parseCheckCode(String rawCode) {
+        try {
+            return ReconciliationCheckCode.valueOf(rawCode);
+        } catch (IllegalArgumentException e) {
+            throw new CustomException(TradingErrorCode.INVALID_CHECK_CODE, "지원하지 않는 검사 항목입니다: " + rawCode);
+        }
+    }
+
+    // 각 테스트는 대체로 JPQL 조인 쿼리 1번으로 감사확인
+    private TradingReconciliationResponse.CheckResult runCheck(
+            ReconciliationCheckCode checkCode, UUID accountId, boolean includeDetails
+    ) {
+        return switch (checkCode) {
+            case NEGATIVE_CASH -> checkNegativeCash(accountId, includeDetails);
+            case NEGATIVE_QUANTITY -> checkNegativeQuantity(accountId, includeDetails);
+            case DUPLICATE_REQUEST -> checkDuplicateRequest(accountId, includeDetails);
+            case DUPLICATE_OPEN_POSITION -> checkDuplicateOpenPosition(accountId, includeDetails);
+            case OUTBOX_PENDING -> checkOutboxPending(includeDetails);
+            case LEDGER_BALANCE -> checkLedgerBalance(accountId, includeDetails);
+            case POSITION_QUANTITY -> checkPositionQuantity(accountId, includeDetails);
+            case LEDGER_SEQUENCE -> checkLedgerSequence(accountId, includeDetails);
+        };
+    }
+
+    // ===== 검사 항목 =====
+    /**
+     * includeDetails 공용 처리 로직. 8개 검사 항목이 전부 이 규칙을 공유하므로 한 곳에만 둔다.
+     * includeDetails=false면 상세 조회 쿼리 자체를 실행하지 않는다(count만으로 충분하므로).
+     * true일 때 실행되는 조회는 호출부에서 Pageable로 최대 100건을 이미 제한해서 넘겨야 한다.
+     */
+    private <T> List<Map<String, Object>> buildDetails(
+            boolean includeDetails, Supplier<List<T>> detailFetcher, Function<T, Map<String, Object>> toDetail
+    ) {
+        if (!includeDetails) {
+            return List.of();
+        }
+        // Pageable로 이미 DB에서 잘라오는 조회든, 그렇지 않은 조회든 여기서 한 번 더 방어적으로 캡을 건다.
+        return detailFetcher.get().stream().limit(MAX_DETAIL_ITEMS).map(toDetail).toList();
+    }
+
+    /** accounts.cash_balance < 0 인 계좌. accountId가 null이면 전체 계좌 대상. */
+    private TradingReconciliationResponse.CheckResult checkNegativeCash(UUID accountId, boolean includeDetails) {
+        long mismatchedCount = tradingAccountsQueryRepository.countNegativeCashBalance(accountId);
+
+        Supplier<List<Accounts>> negativeAccountsFinder = () -> tradingAccountsQueryRepository.findNegativeCashBalance(accountId, PageRequest.of(0, MAX_DETAIL_ITEMS));
+
+        List<Map<String, Object>> details = buildDetails(
+                includeDetails,
+                negativeAccountsFinder,
+                account -> Map.of(
+                        "accountId", account.getId(),
+                        "userId", account.getUserId(),
+                        "cashBalance", account.getCashBalance()
+                )
+        );
+
+        ReconciliationStatus status = mismatchedCount == 0 ? ReconciliationStatus.OK : ReconciliationStatus.MISMATCH;
+        return new TradingReconciliationResponse.CheckResult(
+                ReconciliationCheckCode.NEGATIVE_CASH,
+                ReconciliationCheckCode.NEGATIVE_CASH.getDescription(),
+                status,
+                (int) mismatchedCount,
+                details
+        );
+    }
+
+
+    /** positions.quantity < 0 인 포지션 */
+    private TradingReconciliationResponse.CheckResult checkNegativeQuantity(UUID accountId, boolean includeDetails) {
+        long mismatchedCount = positionRepository.countNegativeQuantityByAccountId(accountId);
+
+        List<Map<String, Object>> details = buildDetails(
+                includeDetails,
+                () -> positionRepository.findNegativeQuantityByAccountId(accountId, PageRequest.of(0, MAX_DETAIL_ITEMS)),
+                position -> Map.of(
+                        "positionId", position.getId(),
+                        "accountId", position.getAccountId(),
+                        "userId", position.getUserId(),
+                        "quantity", position.getQuantity()
+                )
+        );
+
+        ReconciliationStatus status = mismatchedCount == 0 ? ReconciliationStatus.OK : ReconciliationStatus.MISMATCH;
+        return new TradingReconciliationResponse.CheckResult(
+                ReconciliationCheckCode.NEGATIVE_QUANTITY,
+                ReconciliationCheckCode.NEGATIVE_QUANTITY.getDescription(),
+                status,
+                (int) mismatchedCount,
+                details
+        );
+    }
+
+    /** 동일 orders.request_id 가 2건 이상 */
+    private TradingReconciliationResponse.CheckResult checkDuplicateRequest(UUID accountId, boolean includeDetails) {
+        List<DuplicateRequestGroup> duplicateGroups = orderRepository.findDuplicateRequestGroups(accountId);
+
+        List<Map<String, Object>> details = buildDetails(includeDetails,
+                () -> duplicateGroups,
+                group -> Map.of(
+                "requestId", group.getRequestId(),
+                "duplicateCount", group.getDuplicateCount()
+        ));
+
+        ReconciliationStatus status = duplicateGroups.isEmpty() ? ReconciliationStatus.OK : ReconciliationStatus.MISMATCH;
+        return new TradingReconciliationResponse.CheckResult(
+                ReconciliationCheckCode.DUPLICATE_REQUEST,
+                ReconciliationCheckCode.DUPLICATE_REQUEST.getDescription(),
+                status,
+                duplicateGroups.size(),
+                details
+        );
+    }
+
+    /**
+     * 동일 계좌·종목에 OPEN 포지션이 2건 이상.
+     */
+    private TradingReconciliationResponse.CheckResult checkDuplicateOpenPosition(UUID accountId, boolean includeDetails) {
+        List<DuplicateOpenPositionGroup> duplicateGroups = positionRepository.findDuplicateOpenPositionGroups(accountId);
+
+        List<Map<String, Object>> details = buildDetails(includeDetails,
+                () -> duplicateGroups,
+                group -> Map.of(
+                "accountId", group.getAccountId(),
+                "stockId", group.getStockId(),
+                "duplicateCount", group.getDuplicateCount()
+        ));
+
+        ReconciliationStatus status = duplicateGroups.isEmpty() ? ReconciliationStatus.OK : ReconciliationStatus.MISMATCH;
+        return new TradingReconciliationResponse.CheckResult(
+                ReconciliationCheckCode.DUPLICATE_OPEN_POSITION,
+                ReconciliationCheckCode.DUPLICATE_OPEN_POSITION.getDescription(),
+                status,
+                duplicateGroups.size(),
+                details
+        );
+    }
+
+    /** 미발행(published가 아닌) Outbox 적체. 임계치는 별도로 두지 않고 0건 초과면 바로 MISMATCH로 판정한다. */
+    private TradingReconciliationResponse.CheckResult checkOutboxPending(boolean includeDetails) {
+        long pendingCount = tradingOutboxEventsQueryRepository.countUnpublished();
+
+        Supplier<List<OutboxEvents>> unpublishedOutboxFinder =
+                () -> tradingOutboxEventsQueryRepository.findUnpublished(PageRequest.of(0, MAX_DETAIL_ITEMS));
+
+        List<Map<String, Object>> details = buildDetails(
+                includeDetails,
+                unpublishedOutboxFinder,
+                event -> Map.of(
+                        "outboxId", event.getId(),
+                        "eventType", event.getEventType(),
+                        "status", event.getStatus(),
+                        "retryCount", event.getRetryCount()
+                )
+        );
+
+        ReconciliationStatus status = pendingCount > 0 ? ReconciliationStatus.MISMATCH : ReconciliationStatus.OK;
+        return new TradingReconciliationResponse.CheckResult(
+                ReconciliationCheckCode.OUTBOX_PENDING,
+                ReconciliationCheckCode.OUTBOX_PENDING.getDescription(),
+                status,
+                (int) pendingCount,
+                details
+        );
+    }
+
+    /** SUM(cash_ledgers.amount) = accounts.cash_balance */
+    private TradingReconciliationResponse.CheckResult checkLedgerBalance(UUID accountId, boolean includeDetails) {
+        List<CashLedgersAccountsGroup> mismatched =
+                tradingAccountsQueryRepository.findLedgerBalanceMismatches(accountId);
+
+        List<Map<String, Object>> details = buildDetails(includeDetails, () -> mismatched, group -> Map.of(
+                "accountId", group.getAccountId(),
+                "userId", group.getUserId(),
+                "cashBalance", group.getCashBalance(),
+                "ledgerSum", group.getLedgerSum(),
+                "diff", group.getCashBalance().subtract(group.getLedgerSum())
+        ));
+
+        ReconciliationStatus status = mismatched.isEmpty() ? ReconciliationStatus.OK : ReconciliationStatus.MISMATCH;
+        return new TradingReconciliationResponse.CheckResult(
+                ReconciliationCheckCode.LEDGER_BALANCE,
+                ReconciliationCheckCode.LEDGER_BALANCE.getDescription(),
+                status,
+                mismatched.size(),
+                details
+        );
+    }
+
+    /** positions.quantity = 매수 체결 합계 − 매도 체결 합계 */
+    private TradingReconciliationResponse.CheckResult checkPositionQuantity(UUID accountId, boolean includeDetails) {
+        List<PositionQuantityMismatchGroup> mismatched = positionRepository.findPositionQuantityMismatches(accountId);
+
+        List<Map<String, Object>> details = buildDetails(includeDetails,
+                () -> mismatched,
+                group -> Map.of(
+                        "accountId", group.getAccountId(),
+                        "positionId", group.getPositionId(),
+                        "positionQuantity", group.getPositionQuantity(),
+                        "executionNetQuantity", group.getExecutionNetQuantity()
+                ));
+
+        ReconciliationStatus status = mismatched.isEmpty() ? ReconciliationStatus.OK : ReconciliationStatus.MISMATCH;
+        return new TradingReconciliationResponse.CheckResult(
+                ReconciliationCheckCode.POSITION_QUANTITY,
+                ReconciliationCheckCode.POSITION_QUANTITY.getDescription(),
+                status,
+                mismatched.size(),
+                details
+        );
+    }
+
+    /** 직전 balance_after + amount = 현재 balance_after */
+    private TradingReconciliationResponse.CheckResult checkLedgerSequence(UUID accountId, boolean includeDetails) {
+
+        List<LedgerSequenceMismatchGroup> mismatchGroupList = cashLedgerRepository.findLedgerSequenceMismatches(accountId);
+
+        List<Map<String, Object>> details = buildDetails(includeDetails,
+                () -> mismatchGroupList,
+                group -> Map.of(
+                        "accountId", group.getAccountId(),
+                        "ledgerId", group.getLedgerId(),
+                        "amount", group.getAmount(),
+                        "balanceAfter", group.getBalanceAfter(),
+                        "previousBalanceAfter", group.getPrevBalanceAfter()
+                ));
+
+        ReconciliationStatus status = mismatchGroupList.isEmpty() ? ReconciliationStatus.OK : ReconciliationStatus.MISMATCH;
+        return new TradingReconciliationResponse.CheckResult(
+                ReconciliationCheckCode.LEDGER_SEQUENCE,
+                ReconciliationCheckCode.LEDGER_SEQUENCE.getDescription(),
+                status,
+                mismatchGroupList.size(),
+                details
+        );
+    }
 
     //날짜 검증
     public static void validateDateRange(Instant from, Instant to) {

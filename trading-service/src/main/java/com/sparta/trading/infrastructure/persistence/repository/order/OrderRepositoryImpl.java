@@ -1,12 +1,14 @@
 package com.sparta.trading.infrastructure.persistence.repository.order;
 
 import com.sparta.trading.domain.entity.Orders;
+import com.sparta.trading.domain.repository.order.DuplicateRequestGroup;
 import com.sparta.trading.domain.repository.order.OrderRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -29,5 +31,10 @@ public class OrderRepositoryImpl implements OrderRepository {
     @Override
     public Orders save(Orders order) {
         return orderJpaRepository.save(order);
+    }
+
+    @Override
+    public List<DuplicateRequestGroup> findDuplicateRequestGroups(UUID accountId) {
+        return orderJpaRepository.findDuplicateRequestGroups(accountId);
     }
 }
