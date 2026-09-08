@@ -17,4 +17,14 @@ public interface TradingAccountsQueryRepository {
     List<Accounts> findAllByUserId(UUID uuid);
 
     Optional<Accounts> findByUserId (UUID userId);
+
+    Optional<Accounts> findById(UUID accountId);
+
+    long countNegativeCashBalance(UUID accountId);
+
+    List<Accounts> findNegativeCashBalance(UUID accountId, Pageable pageable);
+
+    List<CashLedgersAccountsGroup> findLedgerBalanceMismatches(UUID accountId);
+
+    long count();
 }

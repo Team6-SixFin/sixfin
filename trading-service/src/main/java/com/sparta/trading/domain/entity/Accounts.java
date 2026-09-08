@@ -79,4 +79,9 @@ public class Accounts extends AuditableEntity {
         return cashBalance;
     }
 
+    /** 관리자 초기화. 예수금과 초기 지급액 기준선을 함께 재설정한다. */
+    public void reset(BigDecimal targetDeposit) {
+        this.cashBalance = targetDeposit.setScale(4, RoundingMode.HALF_UP);
+        this.initialDeposit = targetDeposit.setScale(4, RoundingMode.HALF_UP);
+    }
 }
