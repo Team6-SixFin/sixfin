@@ -41,14 +41,16 @@ class LearningCommandServiceTest {
 
     private LearningCommandService learningCommandService;
 
-    @Mock private AiClientPort aiClientPort;
+    // [수정됨] AiClientPort, AiRequestRepository 제거 및 AiFeedbackProcessor 추가
+    @Mock private AiFeedbackProcessor aiFeedbackProcessor;
     @Mock private FeedbackRepository feedbackRepository;
-    @Mock private AiRequestRepository aiRequestRepository;
     @Mock private ExecutionSnapshotRepository executionSnapshotRepository;
     @Mock private DiagnosisResultRepository diagnosisResultRepository;
     @Mock private ClosedPositionSnapshotRepository closedPositionSnapshotRepository;
-    @Mock private FeedbackDiagnosisRepository feedbackDiagnosisRepository; // 중간 테이블 리포지토리 추가
+    @Mock private FeedbackDiagnosisRepository feedbackDiagnosisRepository;
     @Mock private TransactionTemplate transactionTemplate;
+    @Mock private AiClientPort aiClientPort;
+    @Mock private AiRequestRepository aiRequestRepository;
 
     // 가짜DB 역할을 할 map
     private java.util.Map<String, Feedback> fakeFeedbackDb = new java.util.HashMap<>();
@@ -64,7 +66,7 @@ class LearningCommandServiceTest {
         positionId = UUID.randomUUID();
         userId = UUID.randomUUID();
 
-        // 1. 수동 객체 주입
+        // 1. 수동 객체 주입 (생성자 파라미터 변경 반영)
         learningCommandService = new LearningCommandService(
                 aiClientPort,
                 objectMapper,
@@ -73,8 +75,9 @@ class LearningCommandServiceTest {
                 executionSnapshotRepository,
                 diagnosisResultRepository,
                 closedPositionSnapshotRepository,
-                feedbackDiagnosisRepository, // 주입
-                transactionTemplate
+                feedbackDiagnosisRepository,
+                transactionTemplate,
+                aiFeedbackProcessor
         );
 
         // 2. TransactionTemplate Mocking (트랜잭션 실행 우회)
@@ -155,26 +158,21 @@ class LearningCommandServiceTest {
     // 신규 로직에 맞춘 공통 Mock 설정 (가짜 DB 환경 구축)
     // =========================================================================
     private void setupCommonMocksForProcess() {
-        // 테스트가 실행될 때마다 가짜 DB를 비워줍니다.
         fakeFeedbackDb.clear();
 
-        // 1. [조회 Mock] 가짜 DB(Map)에서 키로 조회하여 반환
         lenient().when(feedbackRepository.findByFeedbackKey(anyString())).thenAnswer(invocation -> {
             String requestedKey = invocation.getArgument(0);
             return Optional.ofNullable(fakeFeedbackDb.get(requestedKey));
         });
 
-        // 2. [저장 Mock] 전달받은 객체를 가짜 DB(Map)에 넣고 그대로 반환
         lenient().when(feedbackRepository.save(any(Feedback.class))).thenAnswer(invocation -> {
             Feedback feedback = invocation.getArgument(0);
             fakeFeedbackDb.put(feedback.getFeedbackKey(), feedback);
             return feedback;
         });
 
-        // 중간 테이블 매핑 데이터 저장 Mocking
         lenient().when(feedbackDiagnosisRepository.saveAll(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
-        // 최근 피드백 조회 로직 Mocking (기본적으로 empty 반환)
         lenient().when(feedbackRepository.findTopByPositionIdAndStatusOrderByCompletedAtDesc(any(UUID.class), any()))
                 .thenReturn(Optional.empty());
 
@@ -182,7 +180,9 @@ class LearningCommandServiceTest {
                 "요약", "총평", List.of("잘함"), List.of("개선점"), List.of("다음행동"), List.of("질문")
         );
 
-        lenient().when(aiClientPort.requestAiFeedback(any(), any(), any())).thenReturn(mockAiResponse);
+        // [수정됨] AiClientPort 대신 AiFeedbackProcessor가 CompletableFuture를 반환하도록 모킹
+        lenient().when(aiFeedbackProcessor.processAiFeedbackAsync(any()))
+                .thenReturn(CompletableFuture.completedFuture(mockAiResponse));
     }
 
     // =========================================================================
@@ -204,17 +204,17 @@ class LearningCommandServiceTest {
         when(diagnosisResultRepository.findAllByPositionId(positionId))
                 .thenReturn(List.of(diagEntry, diagTrade));
 
-        // when: 반환 타입이 CompletableFuture로 변경됨
+        // when
         CompletableFuture<AiFeedbackResponse> futureResponse = learningCommandService.createEntryFeedback(positionId, userId);
 
-        // 비동기 작업이 끝날 때까지 대기하고 결과를 가져옵니다.
+        // 비동기 작업 결과 추출
         AiFeedbackResponse response = futureResponse.join();
 
         // then
-        assertNotNull(response); // 반환값 검증
+        assertNotNull(response);
         assertEquals("요약", response.summary());
 
-        verify(feedbackDiagnosisRepository, times(1)).saveAll(any()); // 중간 테이블 저장 검증
+        verify(feedbackDiagnosisRepository, times(1)).saveAll(any());
 
         ArgumentCaptor<AiFeedbackRequestDto> captor = ArgumentCaptor.forClass(AiFeedbackRequestDto.class);
         verify(objectMapper, atLeastOnce()).writeValueAsString(captor.capture());
@@ -252,8 +252,8 @@ class LearningCommandServiceTest {
         AiFeedbackResponse response = learningCommandService.createOnDemandFeedback(positionId, userId);
 
         // then
-        assertNotNull(response); // 반환값 검증
-        verify(feedbackDiagnosisRepository, times(1)).saveAll(any()); // 중간 테이블 저장 검증
+        assertNotNull(response);
+        verify(feedbackDiagnosisRepository, times(1)).saveAll(any());
 
         ArgumentCaptor<AiFeedbackRequestDto> captor = ArgumentCaptor.forClass(AiFeedbackRequestDto.class);
         verify(objectMapper, atLeastOnce()).writeValueAsString(captor.capture());
@@ -288,15 +288,15 @@ class LearningCommandServiceTest {
         when(closedPositionSnapshotRepository.findByPositionId(positionId))
                 .thenReturn(Optional.of(closedSnapshot));
 
-        // when: 반환 타입이 CompletableFuture로 변경됨
+        // when
         CompletableFuture<AiFeedbackResponse> futureResponse = learningCommandService.createPositionReviewFeedback(positionId, userId);
 
         // 비동기 작업 결과 대기 및 추출
         AiFeedbackResponse response = futureResponse.join();
 
         // then
-        assertNotNull(response); // 반환값 검증
-        verify(feedbackDiagnosisRepository, times(1)).saveAll(any()); // 중간 테이블 저장 검증
+        assertNotNull(response);
+        verify(feedbackDiagnosisRepository, times(1)).saveAll(any());
 
         ArgumentCaptor<AiFeedbackRequestDto> captor = ArgumentCaptor.forClass(AiFeedbackRequestDto.class);
         verify(objectMapper, atLeastOnce()).writeValueAsString(captor.capture());
