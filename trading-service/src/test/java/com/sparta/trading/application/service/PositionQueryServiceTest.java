@@ -172,6 +172,29 @@ class PositionQueryServiceTest {
     }
 
     @Test
+    void getPositions_throwsWhenQuoteContainsUnexpectedStockId() {
+        UUID userId = UUID.randomUUID();
+        PageRequest pageable = PageRequest.of(0, 20);
+        Positions position = positionWithStockId(1L);
+        Stocks stock = stockWithSymbol(1L, "AAPL");
+        Quote unexpectedQuote = quoteOf(2L, "MSFT", "220.0000");
+        Page<Positions> positionPage = new PageImpl<>(List.of(position), pageable, 1);
+
+        when(positionRepository.findAllByUserIdAndStatus(userId, PositionStatus.OPEN, pageable))
+                .thenReturn(positionPage);
+        when(stocksRepository.findAllById(List.of(1L))).thenReturn(List.of(stock));
+        when(quoteReader.readAll(List.of("AAPL"))).thenReturn(List.of(unexpectedQuote));
+
+        assertThatThrownBy(() -> positionQueryService.getPositions(
+                userId,
+                PositionStatus.OPEN,
+                pageable
+        )).isInstanceOfSatisfying(CustomException.class, exception ->
+                assertThat(exception.getErrorCode())
+                        .isEqualTo(TradingErrorCode.PRICE_CANDLE_NOT_FOUND_FOR_SEQ));
+    }
+
+    @Test
     void getPositionDetail_returnsOpenPositionWithCurrentPriceAndUnrealizedProfit() {
         UUID userId = UUID.randomUUID();
         UUID positionId = UUID.randomUUID();
