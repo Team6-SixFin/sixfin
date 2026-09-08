@@ -2,6 +2,7 @@ package com.sparta.learning.domain.entity;
 
 import com.sparta.learning.domain.model.ResourceProvider;
 import com.sparta.learning.domain.model.ResourceStatus;
+import com.sparta.learning.domain.model.ResourceType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -18,8 +19,6 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 import java.time.OffsetDateTime;
-
-import org.hibernate.annotations.CreationTimestamp;
 
 @Getter
 @Entity
@@ -47,6 +46,10 @@ public class LearningResource {
     @Enumerated(EnumType.STRING)
     @Column(name = "provider", nullable = false, length = 30)
     private ResourceProvider provider;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "resource_type", nullable = false, length = 20)
+    private ResourceType resourceType;
 
     @Column(name = "external_id", nullable = false, length = 100)
     private String externalId;
@@ -82,7 +85,6 @@ public class LearningResource {
     @Column(name = "status", nullable = false, length = 20)
     private ResourceStatus status;
 
-    @CreationTimestamp
     @Column(name = "searched_at", nullable = false)
     private OffsetDateTime searchedAt;
 
@@ -97,6 +99,7 @@ public class LearningResource {
             String ruleCode,
             String searchQuery,
             ResourceProvider provider,
+            ResourceType resourceType,
             String externalId,
             String title,
             String description,
@@ -114,6 +117,7 @@ public class LearningResource {
         this.ruleCode = ruleCode;
         this.searchQuery = searchQuery;
         this.provider = provider;
+        this.resourceType = resourceType;
         this.externalId = externalId;
         this.title = title;
         this.description = description;
@@ -125,7 +129,39 @@ public class LearningResource {
         this.durationSeconds = durationSeconds;
         this.viewCount = viewCount;
         this.status = ResourceStatus.ACTIVE;
+        this.searchedAt = searchedAt;
         this.lastVerifiedAt = lastVerifiedAt;
+        this.expiresAt = expiresAt;
+    }
+
+    /** 동일한 외부 자료가 다시 검색되면 행을 추가하지 않고 최신 메타데이터로 갱신합니다. */
+    public void refresh(
+            String searchQuery,
+            String title,
+            String description,
+            String channelId,
+            String channelName,
+            String url,
+            String thumbnailUrl,
+            OffsetDateTime publishedAt,
+            Integer durationSeconds,
+            Long viewCount,
+            OffsetDateTime refreshedAt,
+            OffsetDateTime expiresAt
+    ) {
+        this.searchQuery = searchQuery;
+        this.title = title;
+        this.description = description;
+        this.channelId = channelId;
+        this.channelName = channelName;
+        this.url = url;
+        this.thumbnailUrl = thumbnailUrl;
+        this.publishedAt = publishedAt;
+        this.durationSeconds = durationSeconds;
+        this.viewCount = viewCount;
+        this.status = ResourceStatus.ACTIVE;
+        this.searchedAt = refreshedAt;
+        this.lastVerifiedAt = refreshedAt;
         this.expiresAt = expiresAt;
     }
 

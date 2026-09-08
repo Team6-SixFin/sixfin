@@ -401,7 +401,7 @@ INSERT INTO ai_requests (
 
 -- 상세 조회에서 확인할 활성 YouTube 학습 자료
 INSERT INTO learning_resources (
-    id, rule_code, search_query, provider, external_id, title,
+    id, rule_code, search_query, provider, resource_type, external_id, title,
     description, channel_id, channel_name, url, thumbnail_url,
     published_at, duration_seconds, view_count, status,
     searched_at, last_verified_at, expires_at
@@ -411,6 +411,7 @@ INSERT INTO learning_resources (
     'HIGH_CHASING_BUY',
     '고점 추격 매수 투자 습관',
     'YOUTUBE',
+    'VIDEO',
     'fixture-video-high-chasing',
     '고점 추격 매수를 피하는 방법',
     '가격 위치를 확인하고 매수 계획을 세우는 방법을 설명합니다.',
@@ -431,6 +432,7 @@ INSERT INTO learning_resources (
     'STOP_LOSS_ADHERENCE',
     '손절 원칙 준수 투자 습관',
     'YOUTUBE',
+    'VIDEO',
     'fixture-video-stop-loss',
     '손절 계획을 지키는 방법',
     '손절 기준을 미리 정하고 실행하는 방법을 설명합니다.',
