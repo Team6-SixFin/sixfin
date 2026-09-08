@@ -16,6 +16,12 @@ spring:
       hibernate:
         jdbc:
           time_zone: UTC
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      connect-timeout: ${REDIS_CONNECT_TIMEOUT:2s}
+      timeout: ${REDIS_TIMEOUT:2s}
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     consumer:
@@ -46,6 +52,21 @@ learning:
   kafka:
     topics:
       trade-events: ${TRADE_EVENTS_TOPIC:trade-events.v1}
+  resources:
+    cache:
+      ttl: ${LEARNING_RESOURCE_CACHE_TTL:24h}
+      pool-size: ${LEARNING_RESOURCE_CACHE_POOL_SIZE:20}
+      recent-recommendation-days: ${LEARNING_RESOURCE_RECENT_DAYS:30}
+    freshness:
+      video-ttl: ${LEARNING_RESOURCE_VIDEO_TTL:7d}
+      document-ttl: ${LEARNING_RESOURCE_DOCUMENT_TTL:30d}
+    youtube:
+      enabled: ${YOUTUBE_SEARCH_ENABLED:false}
+      api-key: ${YOUTUBE_API_KEY:}
+      base-url: ${YOUTUBE_API_BASE_URL:https://www.googleapis.com/youtube/v3}
+      max-results: ${YOUTUBE_SEARCH_MAX_RESULTS:20}
+      relevance-language: ${YOUTUBE_RELEVANCE_LANGUAGE:ko}
+      region-code: ${YOUTUBE_REGION_CODE:KR}
 
 server:
   port: ${SERVER_PORT:19094}
