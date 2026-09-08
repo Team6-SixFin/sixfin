@@ -7,6 +7,7 @@ import com.sparta.learning.application.service.LearningCommandService;
 import com.sparta.learning.application.service.TradeEventIngestionService;
 import com.sparta.learning.domain.entity.ClosedPositionSnapshot;
 import com.sparta.learning.domain.entity.ExecutionSnapshot;
+import com.sparta.learning.domain.model.TradeType;
 import com.sparta.learning.infrastructure.messaging.kafka.dto.TradingEventEnvelope;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -16,6 +17,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -158,5 +160,22 @@ class TradeEventFacadeTest {
         IngestionResult result = facade.handle(event);
 
         assertThat(result).isSameAs(expected);
+    }
+
+    // 중복 이벤트 시 기존 피드백이 생성 중이면 null 완료 결과를 오류로 기록하지 않는다
+    @Test
+    void 생성_중인_피드백의_중복_요청은_안전하게_건너뛴다() {
+        ExecutionSnapshot snapshot = mock(ExecutionSnapshot.class);
+        UUID positionId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        when(snapshot.getTradeType()).thenReturn(TradeType.BUY);
+        when(snapshot.isNewPosition()).thenReturn(true);
+        when(snapshot.getPositionId()).thenReturn(positionId);
+        when(snapshot.getUserId()).thenReturn(userId);
+        when(ingestionService.ingest(event)).thenReturn(IngestionResult.duplicate(snapshot));
+        when(learningCommandService.createEntryFeedback(positionId, userId))
+                .thenReturn(CompletableFuture.completedFuture(null));
+
+        assertThatCode(() -> facade.handle(event)).doesNotThrowAnyException();
     }
 }
