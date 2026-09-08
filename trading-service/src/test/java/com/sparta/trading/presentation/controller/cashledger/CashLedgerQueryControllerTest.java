@@ -2,6 +2,7 @@ package com.sparta.trading.presentation.controller.cashledger;
 
 import com.sparta.trading.application.service.CashLedgerQueryService;
 import com.sparta.trading.domain.entity.CashLedgerTxType;
+import com.sparta.trading.global.exception.GlobalExceptionHandler;
 import com.sparta.trading.global.response.PageResponse;
 import com.sparta.trading.presentation.dto.response.CashLedgerResponse;
 import org.junit.jupiter.api.BeforeEach;
@@ -44,6 +45,7 @@ class CashLedgerQueryControllerTest {
     @BeforeEach
     void setUp() {
         mockMvc = MockMvcBuilders.standaloneSetup(new CashLedgerQueryController(cashLedgerQueryService))
+                .setControllerAdvice(new GlobalExceptionHandler())
                 .setCustomArgumentResolvers(new PageableHandlerMethodArgumentResolver())
                 .build();
     }
@@ -111,6 +113,14 @@ class CashLedgerQueryControllerTest {
     @Test
     void getCashLedgers_rejectsRequestWithoutUserIdHeader() throws Exception {
         mockMvc.perform(get("/api/trading/cash-ledgers"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void getCashLedgers_rejectsInvalidTxType() throws Exception {
+        mockMvc.perform(get("/api/trading/cash-ledgers")
+                        .header("X-User-Id", UUID.randomUUID())
+                        .param("txType", "INVALID"))
                 .andExpect(status().isBadRequest());
     }
 
