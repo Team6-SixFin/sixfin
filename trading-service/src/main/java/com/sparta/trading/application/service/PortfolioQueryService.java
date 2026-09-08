@@ -18,8 +18,10 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -78,15 +80,8 @@ public class PortfolioQueryService {
         // 모든 종목의 현재가를 한번에 조회
         List<Quote> quotes = quoteReader.readAll(symbols);
 
-        // stockId 기준으로 Map 변환
-        Map<Long, Quote> quoteByStockId = quotes.stream()
-                .filter(quote -> quote.stockId() != null)
-                .collect(Collectors.toMap(Quote::stockId, Function.identity()));
-
-        // 일부 종목의 현재가가 없을시
-        if (quoteByStockId.size() != stockIds.size()) {
-            throw new CustomException(TradingErrorCode.PRICE_CANDLE_NOT_FOUND_FOR_SEQ);
-        }
+        // 요청한 종목의 시세만 정확히 포함하는지 검증한 뒤 stockId로 색인
+        Map<Long, Quote> quoteByStockId = indexQuotes(quotes, stockIds);
 
         BigDecimal stockValuation = ZERO; // 현재 보유주식 총 가치
         BigDecimal unrealizedProfit = ZERO; // 아직 팔지 않은 주식의 총 손익
@@ -143,6 +138,37 @@ public class PortfolioQueryService {
                 money(unrealizedReturnRate),
                 marketTime
         );
+    }
+
+    /**
+     * QuoteReader가 반환한 시세가 요청한 종목과 정확히 일치하는지 검증하고
+     * 이후 빠르게 조회할 수 있도록 stockId를 키로 하는 Map으로 변환
+     */
+    private Map<Long, Quote> indexQuotes(
+            List<Quote> quotes,
+            List<Long> requestedStockIds
+    ) {
+        Map<Long, Quote> quoteByStockId = new HashMap<>();
+
+        for (Quote quote : quotes) {
+            // quote가 null 이거나 stockId가 null 이면 거절
+            if (quote == null || quote.stockId() == null) {
+                throw new CustomException(TradingErrorCode.PRICE_CANDLE_NOT_FOUND_FOR_SEQ);
+            }
+
+            Quote previous = quoteByStockId.putIfAbsent(quote.stockId(), quote);
+            // 같은 종목에 대한 시세가 둘 이상이면 어느 값을 사용해야 할지 몰라 거절
+            if (previous != null) {
+                throw new CustomException(TradingErrorCode.PRICE_CANDLE_NOT_FOUND_FOR_SEQ);
+            }
+        }
+
+        // Map의 키 집합과 요청 종목 ID 집합이 같은지 비교
+        if (!quoteByStockId.keySet().equals(Set.copyOf(requestedStockIds))) {
+            throw new CustomException(TradingErrorCode.PRICE_CANDLE_NOT_FOUND_FOR_SEQ);
+        }
+
+        return quoteByStockId;
     }
 
     private BigDecimal money(BigDecimal value) {

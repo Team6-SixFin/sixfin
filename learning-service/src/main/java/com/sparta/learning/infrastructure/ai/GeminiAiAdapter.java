@@ -9,8 +9,8 @@ import com.sparta.learning.global.exception.LearningErrorCode;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.prompt.Prompt;
-import org.springframework.ai.chat.prompt.SystemPromptTemplate;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.stereotype.Component;
@@ -37,7 +37,7 @@ public class GeminiAiAdapter implements AiClientPort {
     public AiFeedbackResponse requestAiFeedback(UUID positionId, FeedbackType type, String contextJson) {
 
         // 1. 시스템 메시지 설정
-        Message systemMessage = new SystemPromptTemplate(PromptTemplate.SYSTEM_PROMPT).createMessage();
+        Message systemMessage = new SystemMessage(PromptTemplate.SYSTEM_PROMPT);
 
         // 피드백 타입별 프롬프트 분기 처리
         Message userMessage = getMessage(positionId, type, contextJson);

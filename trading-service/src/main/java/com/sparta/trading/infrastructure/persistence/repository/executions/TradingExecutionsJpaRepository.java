@@ -1,6 +1,5 @@
 package com.sparta.trading.infrastructure.persistence.repository.executions;
 
-import com.sparta.trading.application.dto.query.TradingAdminSearchExecutionQuery;
 import com.sparta.trading.domain.entity.Executions;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -9,6 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
  interface TradingExecutionsJpaRepository extends JpaRepository<Executions, UUID> {
@@ -32,4 +32,4 @@ import java.util.UUID;
              @Param("to") Instant to,
              Pageable pageable
      );
-}
+ }

@@ -324,6 +324,7 @@ ALTER TABLE trading_service.p_executions
     ALTER COLUMN user_id SET NOT NULL,
     ALTER COLUMN candle_seq SET NOT NULL,
     ALTER COLUMN market_time SET NOT NULL;
+    ALTER COLUMN created_by SET NOT NULL;
 
 UPDATE trading_service.p_executions
 SET created_by = user_id

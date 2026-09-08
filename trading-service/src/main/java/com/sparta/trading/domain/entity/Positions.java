@@ -190,6 +190,13 @@ public class Positions extends BaseEntity {
         return realizedProfit.multiply(BigDecimal.valueOf(100))
                 .divide(totalBuyAmount, 4, RoundingMode.HALF_UP);
     }
+      
+    /** 관리자 계좌 초기화 등으로 포지션을 강제 종료한다. 손익 정산 없이 상태만 닫는다. */
+    public void close(Instant closedAt, UUID userId) {
+        this.status = PositionStatus.CLOSED.name();
+        this.closedAt = closedAt;
+        markUpdatedBy(userId);
+    }
 
     private static BigDecimal money(BigDecimal value) {
         return value.setScale(4, RoundingMode.HALF_UP);

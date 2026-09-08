@@ -2,6 +2,8 @@ package com.sparta.trading.infrastructure.persistence.repository.position;
 
 import com.sparta.trading.domain.entity.PositionStatus;
 import com.sparta.trading.domain.entity.Positions;
+import com.sparta.trading.domain.repository.position.DuplicateOpenPositionGroup;
+import com.sparta.trading.domain.repository.position.PositionQuantityMismatchGroup;
 import com.sparta.trading.domain.repository.position.PositionRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -56,6 +58,26 @@ public class PositionRepositoryImpl implements PositionRepository {
 
     @Override
     public List<Positions> findAllByAccountIdAndStatus(UUID id, String status) {
-        return positionJpaRepository.findAllByAccountIdAndStatus(id,status);
+        return positionJpaRepository.findAllByAccountIdAndStatus(id, status);
+    }
+
+    @Override
+    public long countNegativeQuantityByAccountId(UUID accountId) {
+        return positionJpaRepository.countNegativeQuantityByAccountId(accountId);
+    }
+
+    @Override
+    public List<Positions> findNegativeQuantityByAccountId(UUID accountId, Pageable pageable) {
+        return positionJpaRepository.findNegativeQuantityByAccountId(accountId, pageable);
+    }
+
+    @Override
+    public List<DuplicateOpenPositionGroup> findDuplicateOpenPositionGroups(UUID accountId) {
+        return positionJpaRepository.findDuplicateOpenPositionGroups(accountId);
+    }
+
+    @Override
+    public List<PositionQuantityMismatchGroup> findPositionQuantityMismatches(UUID accountId) {
+        return positionJpaRepository.findPositionQuantityMismatches(accountId);
     }
 }
