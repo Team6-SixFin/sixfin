@@ -42,6 +42,7 @@ public class AuditableEntity {
         this.updatedBy = actor;
     }
 
+    /** 데이터를 수정한 사용자의 ID를 updatedBy에 기록한다. */
     protected void markUpdatedBy(UUID actorId) {
         this.updatedBy = Objects.requireNonNull(actorId, "actorId must not be null");
     }

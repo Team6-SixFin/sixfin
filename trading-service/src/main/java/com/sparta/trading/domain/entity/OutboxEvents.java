@@ -68,11 +68,12 @@ public class OutboxEvents extends AuditableEntity {
     @Column(name = "last_error", length = 500)
     private String lastError;
 
-    private OutboxEvents(UUID eventId, UUID executionId, UUID userId, JsonNode payload, Instant occurredAt) {
+    private OutboxEvents(UUID eventId, String aggregateType, UUID aggregateId, String eventType,
+                         UUID userId, JsonNode payload, Instant occurredAt) {
         this.eventId = eventId;
-        this.aggregateType = "EXECUTION";
-        this.aggregateId = executionId;
-        this.eventType = "BUY_EXECUTED";
+        this.aggregateType = aggregateType;
+        this.aggregateId = aggregateId;
+        this.eventType = eventType;
         this.eventVersion = 1;
         this.partitionKey = userId.toString();
         this.payload = payload;
@@ -82,8 +83,24 @@ public class OutboxEvents extends AuditableEntity {
         initializeAudit(userId);
     }
 
+    // 매수 체결 완료 이벤트를 Outbox 이벤트로 생성
     public static OutboxEvents buyExecuted(UUID eventId, UUID executionId, UUID userId,
                                             JsonNode payload, Instant occurredAt) {
-        return new OutboxEvents(eventId, executionId, userId, payload, occurredAt);
+        return new OutboxEvents(eventId, "EXECUTION", executionId, "BUY_EXECUTED",
+                userId, payload, occurredAt);
+    }
+
+    // 매도 체결 완료 이벤트를 Outbox 이벤트로 생성
+    public static OutboxEvents sellExecuted(UUID eventId, UUID executionId, UUID userId,
+                                             JsonNode payload, Instant occurredAt) {
+        return new OutboxEvents(eventId, "EXECUTION", executionId, "SELL_EXECUTED",
+                userId, payload, occurredAt);
+    }
+
+    // 포지션 종료 이벤트를 Outbox 이벤트로 생성
+    public static OutboxEvents positionClosed(UUID eventId, UUID positionId, UUID userId,
+                                               JsonNode payload, Instant occurredAt) {
+        return new OutboxEvents(eventId, "POSITION", positionId, "POSITION_CLOSED",
+                userId, payload, occurredAt);
     }
 }

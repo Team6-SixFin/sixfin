@@ -65,29 +65,59 @@ public class Executions extends BaseEntity {
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
-    private Executions(UUID orderId, UUID positionId, UUID userId, Long stockId, int executedQuantity,
-                       BigDecimal executedPrice, BigDecimal avgEntryPriceAtExecution,
-                       Long candleSeq, Instant marketTime) {
+    /** 주문 체결 정보를 바탕으로 Executions(체결) 엔티티를 생성 */
+    private Executions(
+            UUID orderId, UUID positionId, UUID userId,
+            Long stockId, OrderSide side, int executedQuantity,
+            BigDecimal executedPrice, BigDecimal avgEntryPriceAtExecution,
+            BigDecimal realizedProfit, Long candleSeq, Instant marketTime
+    ) {
         this.id = UUID.randomUUID();
         this.orderId = orderId;
         this.positionId = positionId;
         this.userId = userId;
         this.stockId = stockId;
-        this.side = OrderSide.BUY.name();
+        this.side = side.name();
         this.executedQuantity = executedQuantity;
         this.executedPrice = executedPrice.setScale(4, RoundingMode.HALF_UP);
+        // 총 체결 금액 계산 (체결 가격 × 체결 수량)
         this.executedAmount = this.executedPrice.multiply(BigDecimal.valueOf(executedQuantity))
                 .setScale(4, RoundingMode.HALF_UP);
+        // 체결 시점의 평균 매입가 저장
         this.avgEntryPriceAtExecution = avgEntryPriceAtExecution == null ? null
                 : avgEntryPriceAtExecution.setScale(4, RoundingMode.HALF_UP);
+        // 이번 체결로 확정된 실현 손익 저장
+        this.realizedProfit = realizedProfit == null ? null
+                : realizedProfit.setScale(4, RoundingMode.HALF_UP);
         this.candleSeq = candleSeq;
         this.marketTime = marketTime;
+        initializeAudit(userId);
     }
 
-    public static Executions buy(UUID orderId, UUID positionId, UUID userId, Long stockId, int executedQuantity,
-                                 BigDecimal executedPrice, BigDecimal avgEntryPriceAtExecution,
-                                 Long candleSeq, Instant marketTime) {
-        return new Executions(orderId, positionId, userId, stockId, executedQuantity, executedPrice,
-                avgEntryPriceAtExecution, candleSeq, marketTime);
+    public static Executions buy(
+            UUID orderId, UUID positionId, UUID userId,
+            Long stockId, int executedQuantity,
+            BigDecimal executedPrice, BigDecimal avgEntryPriceAtExecution,
+            Long candleSeq, Instant marketTime
+    ) {
+        return new Executions(
+                orderId, positionId, userId,
+                stockId, OrderSide.BUY, executedQuantity,
+                executedPrice, avgEntryPriceAtExecution,
+                null, candleSeq, marketTime
+        );
+    }
+
+    public static Executions sell(
+            UUID orderId, UUID positionId, UUID userId, Long stockId, int executedQuantity,
+            BigDecimal executedPrice, BigDecimal avgEntryPriceAtExecution,
+            BigDecimal realizedProfit, Long candleSeq, Instant marketTime
+    ) {
+        return new Executions(
+                orderId, positionId, userId, stockId,
+                OrderSide.SELL, executedQuantity,
+                executedPrice, avgEntryPriceAtExecution, realizedProfit,
+                candleSeq, marketTime
+        );
     }
 }

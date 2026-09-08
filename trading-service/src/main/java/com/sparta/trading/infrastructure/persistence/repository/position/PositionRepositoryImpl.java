@@ -52,7 +52,9 @@ public class PositionRepositoryImpl implements PositionRepository {
                 positionId,
                 userId
         );
-      
+    }
+
+    @Override
     public List<Positions> findAllByAccountIdAndStatus(UUID id, String status) {
         return positionJpaRepository.findAllByAccountIdAndStatus(id,status);
     }

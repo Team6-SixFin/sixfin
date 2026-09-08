@@ -7,13 +7,17 @@ import com.sparta.trading.application.port.Quote;
 import com.sparta.trading.application.port.QuoteReader;
 import com.sparta.trading.domain.entity.Accounts;
 import com.sparta.trading.domain.entity.CashLedgers;
+import com.sparta.trading.domain.entity.CashLedgerTxType;
 import com.sparta.trading.domain.entity.ClockStatus;
+import com.sparta.trading.domain.entity.Executions;
 import com.sparta.trading.domain.entity.OrderRejectReason;
 import com.sparta.trading.domain.entity.Orders;
 import com.sparta.trading.domain.entity.OrderSide;
 import com.sparta.trading.domain.entity.OrderStatus;
 import com.sparta.trading.domain.entity.OrderType;
 import com.sparta.trading.domain.entity.OutboxEvents;
+import com.sparta.trading.domain.entity.PositionStatus;
+import com.sparta.trading.domain.entity.Positions;
 import com.sparta.trading.domain.entity.Stocks;
 import com.sparta.trading.domain.repository.account.AccountRepository;
 import com.sparta.trading.domain.repository.cashledger.CashLedgerRepository;
@@ -171,6 +175,138 @@ class TradingCommandServiceTest {
     }
 
     @Test
+    void placeOrder_partiallySellsOpenPositionAndPublishesSellExecutedEvent() {
+        UUID userId = UUID.randomUUID();
+        Accounts account = accountOf(userId);
+        Positions position = positionOf(account, userId, 10, "100.0000");
+        PlaceOrderCommand command = sellCommand(UUID.randomUUID(), "AAPL", 4);
+        when(orderRepository.findByRequestId(command.requestId())).thenReturn(Optional.empty());
+        when(quoteReader.read("AAPL")).thenReturn(validQuote("120.0000"));
+        when(accountRepository.findByUserIdForUpdate(userId)).thenReturn(Optional.of(account));
+        when(positionRepository.findOpenByAccountIdAndStockIdForUpdate(account.getId(), 1L))
+                .thenReturn(Optional.of(position));
+
+        OrderResponse response = service.placeOrder(userId, command);
+
+        assertThat(response.status()).isEqualTo(OrderStatus.FILLED);
+        assertThat(response.cashBalance()).isEqualByComparingTo("100480.0000");
+        assertThat(response.execution().executedAmount()).isEqualByComparingTo("480.0000");
+        assertThat(response.execution().realizedProfit()).isEqualByComparingTo("80.0000");
+        assertThat(position.getStatus()).isEqualTo(PositionStatus.OPEN.name());
+        assertThat(position.getQuantity()).isEqualTo(6);
+        assertThat(position.getTotalSellQuantity()).isEqualTo(4);
+        assertThat(position.getTotalSellAmount()).isEqualByComparingTo("480.0000");
+        assertThat(position.getRealizedProfit()).isEqualByComparingTo("80.0000");
+
+        ArgumentCaptor<Executions> executionCaptor = ArgumentCaptor.forClass(Executions.class);
+        verify(executionRepository).save(executionCaptor.capture());
+        assertThat(executionCaptor.getValue().getSide()).isEqualTo(OrderSide.SELL.name());
+        assertThat(executionCaptor.getValue().getAvgEntryPriceAtExecution()).isEqualByComparingTo("100.0000");
+        assertThat(executionCaptor.getValue().getRealizedProfit()).isEqualByComparingTo("80.0000");
+
+        ArgumentCaptor<CashLedgers> ledgerCaptor = ArgumentCaptor.forClass(CashLedgers.class);
+        verify(cashLedgerRepository).save(ledgerCaptor.capture());
+        assertThat(ledgerCaptor.getValue().getTxType()).isEqualTo(CashLedgerTxType.SELL);
+        assertThat(ledgerCaptor.getValue().getAmount()).isEqualByComparingTo("480.0000");
+        assertThat(ledgerCaptor.getValue().getBalanceAfter()).isEqualByComparingTo("100480.0000");
+
+        ArgumentCaptor<OutboxEvents> outboxCaptor = ArgumentCaptor.forClass(OutboxEvents.class);
+        verify(outboxEventRepository).save(outboxCaptor.capture());
+        OutboxEvents sellEvent = outboxCaptor.getValue();
+        assertThat(sellEvent.getEventType()).isEqualTo("SELL_EXECUTED");
+        assertThat(sellEvent.getAggregateType()).isEqualTo("EXECUTION");
+        assertThat(sellEvent.getPayload().path("payload").path("positionQuantityAfter").asInt()).isEqualTo(6);
+        assertThat(sellEvent.getPayload().path("payload").path("executionRealizedProfit").decimalValue())
+                .isEqualByComparingTo("80.0000");
+    }
+
+    @Test
+    void placeOrder_fullySellsPositionAndPublishesPositionClosedEvent() {
+        UUID userId = UUID.randomUUID();
+        Accounts account = accountOf(userId);
+        Positions position = positionOf(account, userId, 10, "100.0000");
+        PlaceOrderCommand command = sellCommand(UUID.randomUUID(), "AAPL", 10);
+        when(orderRepository.findByRequestId(command.requestId())).thenReturn(Optional.empty());
+        when(quoteReader.read("AAPL")).thenReturn(validQuote("90.0000"));
+        when(accountRepository.findByUserIdForUpdate(userId)).thenReturn(Optional.of(account));
+        when(positionRepository.findOpenByAccountIdAndStockIdForUpdate(account.getId(), 1L))
+                .thenReturn(Optional.of(position));
+
+        OrderResponse response = service.placeOrder(userId, command);
+
+        assertThat(response.status()).isEqualTo(OrderStatus.FILLED);
+        assertThat(response.cashBalance()).isEqualByComparingTo("100900.0000");
+        assertThat(response.execution().realizedProfit()).isEqualByComparingTo("-100.0000");
+        assertThat(position.getStatus()).isEqualTo(PositionStatus.CLOSED.name());
+        assertThat(position.getQuantity()).isZero();
+        assertThat(position.getClosedAt()).isEqualTo(QUOTE_TIME);
+        assertThat(position.getClosedSeq()).isEqualTo(12L);
+        assertThat(position.getAverageExitPrice()).isEqualByComparingTo("90.0000");
+        assertThat(position.getRealizedReturnRate()).isEqualByComparingTo("-10.0000");
+
+        ArgumentCaptor<OutboxEvents> outboxCaptor = ArgumentCaptor.forClass(OutboxEvents.class);
+        verify(outboxEventRepository, times(2)).save(outboxCaptor.capture());
+        assertThat(outboxCaptor.getAllValues())
+                .extracting(OutboxEvents::getEventType)
+                .containsExactly("SELL_EXECUTED", "POSITION_CLOSED");
+        OutboxEvents positionClosedEvent = outboxCaptor.getAllValues().get(1);
+        assertThat(positionClosedEvent.getAggregateType()).isEqualTo("POSITION");
+        assertThat(positionClosedEvent.getAggregateId()).isEqualTo(position.getId());
+        assertThat(positionClosedEvent.getPayload().path("payload").path("totalQuantity").asLong()).isEqualTo(10L);
+        assertThat(positionClosedEvent.getPayload().path("payload").path("realizedReturnRate").decimalValue())
+                .isEqualByComparingTo("-10.0000");
+    }
+
+    @Test
+    void placeOrder_rejectsSellThatExceedsOpenPositionQuantityWithoutChangingCash() {
+        UUID userId = UUID.randomUUID();
+        Accounts account = accountOf(userId);
+        Positions position = positionOf(account, userId, 3, "100.0000");
+        PlaceOrderCommand command = sellCommand(UUID.randomUUID(), "AAPL", 4);
+        when(orderRepository.findByRequestId(command.requestId())).thenReturn(Optional.empty());
+        when(quoteReader.read("AAPL")).thenReturn(validQuote("120.0000"));
+        when(accountRepository.findByUserIdForUpdate(userId)).thenReturn(Optional.of(account));
+        when(positionRepository.findOpenByAccountIdAndStockIdForUpdate(account.getId(), 1L))
+                .thenReturn(Optional.of(position));
+
+        OrderResponse response = service.placeOrder(userId, command);
+
+        assertThat(response.status()).isEqualTo(OrderStatus.REJECTED);
+        assertThat(response.rejectReason()).isEqualTo(OrderRejectReason.INSUFFICIENT_POSITION_QUANTITY.name());
+        assertThat(response.cashBalance()).isEqualByComparingTo("100000.0000");
+        assertThat(position.getQuantity()).isEqualTo(3);
+        verify(executionRepository, never()).save(any());
+        verify(cashLedgerRepository, never()).save(any());
+        verify(outboxEventRepository, never()).save(any());
+
+        ArgumentCaptor<Orders> orderCaptor = ArgumentCaptor.forClass(Orders.class);
+        verify(orderRepository).save(orderCaptor.capture());
+        assertThat(orderCaptor.getValue().getSide()).isEqualTo(OrderSide.SELL.name());
+    }
+
+    @Test
+    void placeOrder_throwsConflictWhenMarketIsStopped() {
+        UUID userId = UUID.randomUUID();
+        Accounts account = accountOf(userId);
+        PlaceOrderCommand command = command(UUID.randomUUID(), "AAPL", 1);
+        when(orderRepository.findByRequestId(command.requestId())).thenReturn(Optional.empty());
+        when(quoteReader.read("AAPL")).thenReturn(new Quote(
+                "AAPL", new BigDecimal("100.0000"), 12L, QUOTE_TIME, ClockStatus.STOPPED,
+                new BigDecimal("110.0000"), new BigDecimal("90.0000"), new BigDecimal("3.2500"),
+                EXECUTED_AT, 1L, "Apple Inc."
+        ));
+        when(accountRepository.findByUserIdForUpdate(userId)).thenReturn(Optional.of(account));
+
+        assertThatThrownBy(() -> service.placeOrder(userId, command))
+                .isInstanceOf(CustomException.class)
+                .satisfies(exception -> assertThat(((CustomException) exception).getErrorCode())
+                        .isEqualTo(TradingErrorCode.MARKET_STOPPED));
+        verify(orderRepository, never()).save(any());
+        verify(positionRepository, never()).save(any());
+        verify(executionRepository, never()).save(any());
+    }
+
+    @Test
     void placeOrder_returnsSavedResultForSameRequestIdWithoutReadingQuoteAgain() {
         UUID userId = UUID.randomUUID();
         Accounts account = accountOf(userId);
@@ -229,6 +365,11 @@ class TradingCommandServiceTest {
                 quantity, new BigDecimal("90.0000"), "장기 성장 기대");
     }
 
+    private PlaceOrderCommand sellCommand(UUID requestId, String symbol, int quantity) {
+        return new PlaceOrderCommand(requestId, symbol, OrderSide.SELL, OrderType.MARKET,
+                quantity, null, null);
+    }
+
     private Quote validQuote(String price) {
         return new Quote(
                 "AAPL", new BigDecimal(price), 12L, QUOTE_TIME, ClockStatus.RUNNING,
@@ -241,6 +382,20 @@ class TradingCommandServiceTest {
         Accounts account = Accounts.create(userId);
         ReflectionTestUtils.setField(account, "id", UUID.randomUUID());
         return account;
+    }
+
+    private Positions positionOf(Accounts account, UUID userId, int quantity, String averageEntryPrice) {
+        return Positions.open(
+                account.getId(),
+                1L,
+                quantity,
+                new BigDecimal(averageEntryPrice),
+                new BigDecimal("80.0000"),
+                "장기 성장 기대",
+                QUOTE_TIME.minusSeconds(3600),
+                10L,
+                userId
+        );
     }
 
     private Stocks stock(Long id) {

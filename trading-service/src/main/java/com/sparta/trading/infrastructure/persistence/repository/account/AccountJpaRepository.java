@@ -13,7 +13,7 @@ interface AccountJpaRepository extends JpaRepository<Accounts, UUID> {
 
     Optional<Accounts> findByUserId(UUID userId);
 
-    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Lock(LockModeType.PESSIMISTIC_WRITE) // 비관적 쓰기 잠금
     @Query("select a from Accounts a where a.userId = :userId")
     Optional<Accounts> findByUserIdForUpdate(UUID userId);
 }
