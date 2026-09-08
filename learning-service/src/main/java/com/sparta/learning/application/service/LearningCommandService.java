@@ -3,6 +3,7 @@ package com.sparta.learning.application.service;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sparta.learning.application.content.FeedbackLearningResourceService;
 import com.sparta.learning.application.dto.request.AiFeedbackRequestDto;
 import com.sparta.learning.application.dto.request.AiFeedbackRequestDto.*;
 import com.sparta.learning.application.dto.response.AiFeedbackResponse;
@@ -35,6 +36,7 @@ public class LearningCommandService {
     private final ExecutionSnapshotRepository executionSnapshotRepository;
     private final DiagnosisResultRepository diagnosisResultRepository;
     private final ClosedPositionSnapshotRepository closedPositionSnapshotRepository;
+    private final FeedbackLearningResourceService feedbackLearningResourceService;
 
     // Spring AOP 자기 호출(Self-Invocation) 이슈를 방지하고
     // 프로그래밍 방식으로 안전하게 트랜잭션을 관리하기 위한 템플릿
@@ -136,7 +138,10 @@ public class LearningCommandService {
         if (context.isAlreadyCompleted()) {
             log.info("이미 존재하는 피드백입니다. 기존 데이터를 반환합니다. Key: {}", context.feedback().getFeedbackKey());
             try {
-                return objectMapper.treeToValue(context.feedback().getContent(), AiFeedbackResponse.class);
+                AiFeedbackResponse existingResponse =
+                        objectMapper.treeToValue(context.feedback().getContent(), AiFeedbackResponse.class);
+                recommendLearningResourcesSafely(context.feedback());
+                return existingResponse;
             } catch (Exception e) {
                 log.error("기존 피드백 Content 파싱 실패", e);
             }
@@ -174,7 +179,31 @@ public class LearningCommandService {
             throw new CustomException(LearningErrorCode.AI_RESPONSE_GENERATION_FAILED);
         }
 
+        recommendLearningResourcesSafely(context.feedback());
         return aiResponse;
+    }
+
+    /** 학습 자료 추천 실패가 이미 완료된 AI 피드백의 성공 상태와 응답을 변경하지 않게 격리합니다. */
+    private void recommendLearningResourcesSafely(Feedback feedback) {
+        try {
+            int linkedCount = feedbackLearningResourceService.recommendAndLink(
+                    feedback.getFeedbackKey(),
+                    feedback.getUserId(),
+                    feedback.getPositionId(),
+                    feedback.getFeedbackType()
+            );
+            log.info(
+                    "피드백 학습 자료 연결 완료. feedbackKey={}, linkedCount={}",
+                    feedback.getFeedbackKey(),
+                    linkedCount
+            );
+        } catch (RuntimeException exception) {
+            log.warn(
+                    "피드백 학습 자료 추천 실패, AI 피드백은 유지합니다. feedbackKey={}",
+                    feedback.getFeedbackKey(),
+                    exception
+            );
+        }
     }
 
     // =================================================================================

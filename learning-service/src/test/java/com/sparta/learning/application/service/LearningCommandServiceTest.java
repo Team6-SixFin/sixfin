@@ -2,6 +2,7 @@ package com.sparta.learning.application.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sparta.learning.application.content.FeedbackLearningResourceService;
 import com.sparta.learning.application.dto.request.AiFeedbackRequestDto;
 import com.sparta.learning.application.dto.response.AiFeedbackResponse;
 import com.sparta.learning.application.port.AiClientPort;
@@ -48,6 +49,7 @@ class LearningCommandServiceTest {
     @Mock private ExecutionSnapshotRepository executionSnapshotRepository;
     @Mock private DiagnosisResultRepository diagnosisResultRepository;
     @Mock private ClosedPositionSnapshotRepository closedPositionSnapshotRepository;
+    @Mock private FeedbackLearningResourceService feedbackLearningResourceService;
     @Mock private TransactionTemplate transactionTemplate;
 
     @Spy
@@ -70,6 +72,7 @@ class LearningCommandServiceTest {
                 executionSnapshotRepository,
                 diagnosisResultRepository,
                 closedPositionSnapshotRepository,
+                feedbackLearningResourceService,
                 transactionTemplate
         );
 
@@ -212,6 +215,12 @@ class LearningCommandServiceTest {
         assertEquals(1, capturedDto.diagnoses().size());
         assertEquals("OPEN", capturedDto.position().status());
         assertNull(capturedDto.closedInfo(), "ENTRY 피드백에는 closedInfo가 없어야 합니다.");
+        verify(feedbackLearningResourceService).recommendAndLink(
+                anyString(),
+                eq(userId),
+                eq(positionId),
+                eq(FeedbackType.ENTRY_FEEDBACK)
+        );
     }
 
     @Test
@@ -289,5 +298,31 @@ class LearningCommandServiceTest {
 
         assertNotNull(capturedDto.closedInfo(), "POSITION_REVIEW 피드백에는 closedInfo가 포함되어야 합니다.");
         assertEquals(BigDecimal.valueOf(160.0), capturedDto.closedInfo().averageExitPrice());
+    }
+
+    @Test
+    @DisplayName("학습 자료 추천 실패는 완료된 AI 피드백 응답에 영향을 주지 않는다")
+    void keepsAiFeedbackWhenLearningResourceRecommendationFails() {
+        setupCommonMocksForProcess();
+        ExecutionSnapshot latestExecution = createExecutionSnapshot(TradeType.BUY);
+
+        when(executionSnapshotRepository.findFirstByPositionIdAndUserIdOrderByExecutedAtDescIdDesc(positionId, userId))
+                .thenReturn(Optional.of(latestExecution));
+        when(executionSnapshotRepository.findAllByPositionIdOrderByExecutedAtAscIdAsc(positionId))
+                .thenReturn(List.of(latestExecution));
+        when(diagnosisResultRepository.findAllByPositionId(positionId)).thenReturn(List.of());
+        when(feedbackLearningResourceService.recommendAndLink(
+                anyString(),
+                eq(userId),
+                eq(positionId),
+                eq(FeedbackType.ON_DEMAND_FEEDBACK)
+        )).thenThrow(new IllegalStateException("YouTube 추천 실패"));
+
+        AiFeedbackResponse response = assertDoesNotThrow(
+                () -> learningCommandService.createOnDemandFeedback(positionId, userId)
+        );
+
+        assertEquals("요약", response.summary());
+        verify(aiRequestRepository, times(1)).save(any(AiRequest.class));
     }
 }
