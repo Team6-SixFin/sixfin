@@ -116,4 +116,8 @@ public class Feedback extends BaseEntity {
         this.failureReason = failureReason;
         this.completedAt = OffsetDateTime.now();
     }
+
+    public void updateStatus(FeedbackStatus status) {
+        this.status = status;
+    }
 }
