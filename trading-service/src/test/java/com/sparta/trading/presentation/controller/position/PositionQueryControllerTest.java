@@ -2,6 +2,7 @@ package com.sparta.trading.presentation.controller.position;
 
 import com.sparta.trading.application.service.PositionQueryService;
 import com.sparta.trading.domain.entity.PositionStatus;
+import com.sparta.trading.global.exception.GlobalExceptionHandler;
 import com.sparta.trading.global.response.PageResponse;
 import com.sparta.trading.presentation.dto.response.PositionDetailResponse;
 import com.sparta.trading.presentation.dto.response.PositionResponse;
@@ -43,6 +44,7 @@ class PositionQueryControllerTest {
     @BeforeEach
     void setUp() {
         mockMvc = MockMvcBuilders.standaloneSetup(new PositionQueryController(positionQueryService))
+                .setControllerAdvice(new GlobalExceptionHandler())
                 .setCustomArgumentResolvers(new PageableHandlerMethodArgumentResolver())
                 .build();
     }
@@ -107,6 +109,14 @@ class PositionQueryControllerTest {
     @Test
     void getPositions_rejectsRequestWithoutUserIdHeader() throws Exception {
         mockMvc.perform(get("/api/trading/positions"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void getPositions_rejectsInvalidStatus() throws Exception {
+        mockMvc.perform(get("/api/trading/positions")
+                        .header("X-User-Id", UUID.randomUUID())
+                        .param("status", "INVALID"))
                 .andExpect(status().isBadRequest());
     }
 

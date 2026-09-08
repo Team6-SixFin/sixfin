@@ -66,6 +66,15 @@ public class LearningMetrics {
         stopDiagnosisTimer(sample, phaseTag, SUCCESS);
     }
 
+    // 재시도를 모두 소진해 DLT로 보낸 이벤트를 기록한다
+    public void recordDeadLetter(TradeEventType eventType, Throwable cause) {
+        meterRegistry.counter(  // 이 값이 0보다 크면 진단 또는 수집이 누락된 이벤트가 있다는 뜻이므로 알림 대상
+                "learning.trade.events.dead.letter",
+                "event_type", enumName(eventType),
+                "exception", cause == null ? UNKNOWN : cause.getClass().getSimpleName() // 예외 메시지는 값이 계속 달라지므로 클래스 이름만 태그로 사용
+        ).increment();
+    }
+
     public void recordDiagnosisFailure(DiagnosisPhase phase, Timer.Sample sample) {
         String phaseTag = enumName(phase);
 
