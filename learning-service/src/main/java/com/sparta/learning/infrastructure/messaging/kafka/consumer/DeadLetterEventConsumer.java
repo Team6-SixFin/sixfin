@@ -10,6 +10,7 @@ import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.support.KafkaHeaders;
 import org.springframework.stereotype.Component;
 
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 
 /* DLT에 보관된 이벤트를 DB로 옮긴다. 운영자가 조회하고 재처리할 수 있도록 failed_events 테이블에 적재한다. */
@@ -54,42 +55,13 @@ public class DeadLetterEventConsumer {
         return header == null ? null : new String(header.value(), StandardCharsets.UTF_8);
     }
 
-    // 헤더는 문자열로 실려오는 경우와 4바이트 정수로 실려오는 경우가 있다
     private Integer intHeader(ConsumerRecord<?, ?> record, String name) {
         Header header = record.headers().lastHeader(name);
-        if (header == null) {
-            return null;
-        }
-        byte[] value = header.value();
-        if (value.length == Integer.BYTES) {
-            return java.nio.ByteBuffer.wrap(value).getInt();
-        }
-        return parseInt(new String(value, StandardCharsets.UTF_8));
+        return header == null ? null : ByteBuffer.wrap(header.value()).getInt();
     }
 
     private Long longHeader(ConsumerRecord<?, ?> record, String name) {
         Header header = record.headers().lastHeader(name);
-        if (header == null) {
-            return null;
-        }
-        byte[] value = header.value();
-        if (value.length == Long.BYTES) {
-            return java.nio.ByteBuffer.wrap(value).getLong();
-        }
-        if (value.length == Integer.BYTES) {
-            return (long) java.nio.ByteBuffer.wrap(value).getInt();
-        }
-        Integer parsed = parseInt(new String(value, StandardCharsets.UTF_8));
-        return parsed == null ? null : parsed.longValue();
-    }
-
-    // 헤더 형식이 바뀌어도 적재 자체는 멈추지 않게 파싱 실패는 null로 둔다
-    private Integer parseInt(String value) {
-        try {
-            return Integer.valueOf(value.trim());
-        } catch (NumberFormatException exception) {
-            log.warn("DLT 헤더 숫자 변환에 실패했습니다. value={}", value);
-            return null;
-        }
+        return header == null ? null : ByteBuffer.wrap(header.value()).getLong();
     }
 }
