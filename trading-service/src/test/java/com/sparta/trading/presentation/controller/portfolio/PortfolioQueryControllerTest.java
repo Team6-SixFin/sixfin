@@ -1,6 +1,7 @@
 package com.sparta.trading.presentation.controller.portfolio;
 
 import com.sparta.trading.application.service.PortfolioQueryService;
+import com.sparta.trading.global.exception.GlobalExceptionHandler;
 import com.sparta.trading.presentation.dto.response.PortfolioResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -30,7 +31,10 @@ class PortfolioQueryControllerTest {
 
     @BeforeEach
     void setUp() {
-        mockMvc = MockMvcBuilders.standaloneSetup(new PortfolioQueryController(portfolioQueryService)).build();
+        mockMvc = MockMvcBuilders
+                .standaloneSetup(new PortfolioQueryController(portfolioQueryService))
+                .setControllerAdvice(new GlobalExceptionHandler())
+                .build();
     }
 
     @Test
