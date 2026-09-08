@@ -47,7 +47,7 @@ spring:
             - id: learning-service
               uri: lb://learning-service
               predicates:
-                - Path=/api/learnings/**, /api/feedbacks/**, /api/reports/**, /api/missions/**, /api/contents/**, /api/stats/**, /api/rankings/**
+                - Path=/api/learnings/**, /api/feedbacks/**, /api/positions/**, /api/reports/**, /api/missions/**, /api/contents/**, /api/stats/**, /api/rankings/**
               filters:
                 - JwtAuthenticationFilter
 
