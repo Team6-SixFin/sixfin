@@ -2,7 +2,11 @@ package com.sparta.learning.infrastructure.persistence.repository;
 
 import com.sparta.learning.domain.entity.Feedback;
 import com.sparta.learning.domain.model.FeedbackStatus;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
@@ -16,4 +20,8 @@ public interface FeedbackRepository extends JpaRepository<Feedback, Long> {
 
     // [리뷰 반영 추가] 특정 포지션의 가장 최근에 완료된 피드백을 완료 시각(completedAt) 기준으로 조회
     Optional<Feedback> findTopByPositionIdAndStatusOrderByCompletedAtDesc(UUID positionId, FeedbackStatus status);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select feedback from Feedback feedback where feedback.id = :feedbackId")
+    Optional<Feedback> findByIdForUpdate(@Param("feedbackId") Long feedbackId);
 }
