@@ -151,6 +151,26 @@ class PortfolioQueryServiceTest {
                                 .isEqualTo(TradingErrorCode.PRICE_CANDLE_NOT_FOUND_FOR_SEQ));
     }
 
+    @Test
+    void getPortfolio_throwsWhenQuoteContainsUnexpectedStockId() {
+        UUID userId = UUID.randomUUID();
+        UUID accountId = UUID.randomUUID();
+        Accounts account = accountOf(accountId, userId, "100000.0000");
+        Positions position = positionOf(accountId, userId, 1L, 10, "200.0000");
+        Stocks stock = stockOf(1L, "AAPL");
+        Quote unexpectedQuote = quoteOf(2L, "MSFT", "220.0000");
+
+        when(accountRepository.findByUserId(userId)).thenReturn(Optional.of(account));
+        when(positionRepository.findAllOpenByAccountId(accountId)).thenReturn(List.of(position));
+        when(stocksRepository.findAllById(List.of(1L))).thenReturn(List.of(stock));
+        when(quoteReader.readAll(List.of("AAPL"))).thenReturn(List.of(unexpectedQuote));
+
+        assertThatThrownBy(() -> portfolioQueryService.getPortfolio(userId))
+                .isInstanceOfSatisfying(CustomException.class, exception ->
+                        assertThat(exception.getErrorCode())
+                                .isEqualTo(TradingErrorCode.PRICE_CANDLE_NOT_FOUND_FOR_SEQ));
+    }
+
     private Accounts accountOf(UUID accountId, UUID userId, String cashBalance) {
         Accounts account = org.mockito.Mockito.mock(Accounts.class);
         when(account.getId()).thenReturn(accountId);
