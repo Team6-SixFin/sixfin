@@ -3,6 +3,17 @@ spring:
     name: trading-service
   profiles:
     active: local
+  datasource:
+    url: jdbc:postgresql://${DB_HOST}:5432/sixfin?currentSchema=trading_service
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    jpa:
+      hibernate:
+        ddl-auto: validate
+      properties:
+        hibernate:
+          format_sql: true
+      show-sql: true
   kafka:
     bootstrap-servers: localhost:9092
     producer:
@@ -22,6 +33,9 @@ market:
     end-seq: 7393       # recent_20d_high가 NULL 되기 직전. 일봉 보강 시 7783으로 확장
     speed-factor: 1
     cache-refresh-interval-ms: 1000
+
+market-data:
+  csv-dir: ${MARKET_DATA_DIR:../tools/market-data-collector/out}
 
 server:
   port: 19093

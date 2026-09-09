@@ -52,6 +52,10 @@ x-app-env: &app-env
   #kafka
   KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS}
 
+  #Redis
+  REDIS_HOST: ${REDIS_HOST}
+  SPRING_DATA_REDIS_HOST: ${REDIS_HOST}
+
   # ── 공통 서비스 설정 ──────────────────────────────────────────────────────────
 x-app-base: &app-base
   restart: unless-stopped
@@ -154,7 +158,7 @@ services:
       <<: *app-env
       JAVA_TOOL_OPTIONS: "-Xmx768m -XX:MaxMetaspaceSize=256m"
     healthcheck:
-      test: ["CMD-SHELL", "nc -z 127.0.0.1 19094"]
+      test: [ "CMD-SHELL", "bash -c 'echo > /dev/tcp/127.0.0.1/19094'" ]
       <<: *healthcheck-defaults
 
 

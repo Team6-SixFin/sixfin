@@ -55,8 +55,8 @@ jwt:
   # user-service와 동일한 값이어야 서명 검증이 성립한다
   secret: ${JWT_SECRET}
   whitelist:
-    - /api/v1/auth/login
-    - /api/v1/auth/signup
+    - /api/auth/login
+    - /api/auth/signup
     - /actuator/health
 
 eureka:
