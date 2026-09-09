@@ -8,7 +8,6 @@ import jakarta.persistence.Table;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import org.hibernate.annotations.CreationTimestamp;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -60,10 +59,6 @@ public class Executions extends BaseEntity {
 
     @Column(name = "market_time", nullable = false)
     private Instant marketTime;
-
-    @CreationTimestamp
-    @Column(name = "created_at", nullable = false, updatable = false)
-    private Instant createdAt;
 
     /** 주문 체결 정보를 바탕으로 Executions(체결) 엔티티를 생성 */
     private Executions(
