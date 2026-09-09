@@ -1,0 +1,170 @@
+# =============================================================================
+# App EC2 전용 — Spring 애플리케이션 11개 + Zipkin (상태를 갖지 않는 것)
+# =============================================================================
+#
+# 사용법
+#   App EC2      : docker compose -f docker-compose.app.yml up -d
+#   로컬 전체검증 : docker compose -f docker-compose.data.yml -f docker-compose.app.yml up
+#
+# ── 설계 원칙 ────────────────────────────────────────────────────────────────
+# 각 서비스의 application.yml을 수정하지 않는다.
+# Spring Boot는 OS 환경변수가 application.yml / application-{profile}.yml 보다
+# 우선순위가 높으므로, 아래 환경변수만으로 하드코딩된 값을 전부 덮어쓴다.
+# 팀원들이 각자 브랜치에서 작업 중이라 파일 수정은 병합 충돌을 만든다.
+#
+#   yml 프로퍼티                                → 환경변수
+#   eureka.client.service-url.defaultZone       → EUREKA_CLIENT_SERVICEURL_DEFAULTZONE
+#   management.zipkin.tracing.endpoint          → MANAGEMENT_ZIPKIN_TRACING_ENDPOINT
+#   spring.profiles.active                      → SPRING_PROFILES_ACTIVE
+#   spring.rabbitmq.host                        → SPRING_RABBITMQ_HOST
+#   spring.datasource.hikari.maximum-pool-size  → SPRING_DATASOURCE_HIKARI_MAXIMUMPOOLSIZE
+#
+# 값이 yml에 안 보이는 것이 이 방식의 단점이다. 실제 적용 여부는 반드시
+# 실측으로 확인할 것:
+#   docker compose ... exec user-service env | grep EUREKA_CLIENT_SERVICEURL
+#
+#
+# ── 기대값 ────────────────────────────────────────────────
+#   앱 컨테이너 12 (+ Zipkin = 13) / Eureka 등록 11 / Gateway 라우트 10
+
+name: sixfin
+
+# ── 공통 환경변수 ─────────────────────────────────────────────────────────────
+x-app-env: &app-env
+  SPRING_PROFILES_ACTIVE: prod
+
+  # 8GB 박스에 11개 JVM이 올라간다. 명시하지 않으면 JVM이 "RAM의 1/4"인 2GB를
+  # 잡으려 들어 4~5개째부터 OOM Killer에 죽는다.
+  JAVA_TOOL_OPTIONS: "-Xmx256m -XX:MaxMetaspaceSize=128m"
+
+  # 컨테이너 안에서 localhost는 자기 자신이라 yml의 하드코딩 값이 통하지 않는다
+  EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: "http://eureka-server:19090/eureka/"
+
+  # 기본 풀 10 × DB 사용 9서비스 = 90. PostgreSQL max_connections 100에 근접하고
+  # 커넥션당 백엔드 프로세스가 ~8MB라 메모리도 잡아먹는다. 3으로 낮춰 27.
+  SPRING_DATASOURCE_HIKARI_MAXIMUMPOOLSIZE: "3"
+
+  # application-prod.yml이 ${DB_HOST} 형태로 참조한다
+  DB_HOST: ${DB_HOST}
+  DB_USERNAME: ${DB_USERNAME}
+  DB_PASSWORD: ${DB_PASSWORD}
+
+  #kafka
+  KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS}
+
+  #Redis
+  REDIS_HOST: ${REDIS_HOST}
+  SPRING_DATA_REDIS_HOST: ${REDIS_HOST}
+
+  # ── 공통 서비스 설정 ──────────────────────────────────────────────────────────
+x-app-base: &app-base
+  restart: unless-stopped
+  # 초과 시 즉시 죽으므로 메모리 초과를 배포 후가 아니라 여기서 발견한다
+  mem_limit: 600m
+  networks: [sixfin]
+  depends_on:
+    eureka-server:
+      condition: service_healthy
+
+  # 포트가 열렸는지만 확인한다. alpine 베이스라 bash가 없어 busybox의 nc를 쓴다.
+x-healthcheck-defaults: &healthcheck-defaults
+  interval: 15s
+  timeout: 5s
+  retries: 20
+  start_period: 60s
+
+services:
+
+# ── 인프라 ─────────────────────────────────────────────────────────────────
+  eureka-server:
+    build:
+      context: .
+      dockerfile: eureka-server/Dockerfile
+    image: ${IMAGE_REGISTRY:-sixfin}/eureka-server:${IMAGE_TAG:-latest}
+    container_name: sixfin-eureka-server
+    restart: unless-stopped
+    mem_limit: 600m
+    networks: [sixfin]
+    ports:
+      - "19090:19090"
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      JAVA_TOOL_OPTIONS: "-Xmx256m -XX:MaxMetaspaceSize=128m"
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 19090"]
+      <<: *healthcheck-defaults
+
+  gateway-service:
+    <<: *app-base
+    build:
+      context: .
+      dockerfile: gateway-service/Dockerfile
+    image: ${IMAGE_REGISTRY:-sixfin}/gateway-service:${IMAGE_TAG:-latest}
+    container_name: sixfin-gateway-service
+    ports:
+      - "19091:19091"   # 외부 진입점. SG에서 본인 IP만 허용
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      JAVA_TOOL_OPTIONS: "-Xmx256m -XX:MaxMetaspaceSize=128m"
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: "http://eureka-server:19090/eureka/"
+      JWT_SECRET: ${JWT_SECRET}
+    healthcheck:
+      test: [ "CMD-SHELL", "nc -z 127.0.0.1 19091" ]
+      <<: *healthcheck-defaults
+
+  # ── 비즈니스 서비스 9개 ────────────────────────────────────────────────────
+  user-service:
+    <<: *app-base
+    build:
+      context: .
+      dockerfile: user-service/Dockerfile
+    image: ${IMAGE_REGISTRY:-sixfin}/user-service:${IMAGE_TAG:-latest}
+    container_name: sixfin-user-service
+    environment:
+      <<: *app-env
+      JWT_SECRET: ${JWT_SECRET}
+      # 최초 MASTER 계정 부트스트랩. app.master.slack-id 는 대시가 제거되어
+      # APP_MASTER_SLACKID 가 된다 (APP_MASTER_SLACK_ID 아님).
+      APP_MASTER_USERNAME: ${MASTER_USERNAME}
+      APP_MASTER_PASSWORD: ${MASTER_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 19092"]
+      <<: *healthcheck-defaults
+
+  trading-service:
+    <<: *app-base
+    build:
+      context: .
+      dockerfile: trading-service/Dockerfile
+    image: ${IMAGE_REGISTRY:-sixfin}/trading-service:${IMAGE_TAG:-latest}
+    container_name: sixfin-trading-service
+    environment:
+      <<: *app-env
+    volumes:
+      - ./tools/market-data-collector/out:/tools/market-data-collector/out
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 19093"]
+      <<: *healthcheck-defaults
+
+  learning-service:
+    <<: *app-base
+    mem_limit: 1024m
+    build:
+      context: .
+      dockerfile: learning-service/Dockerfile
+    image: ${IMAGE_REGISTRY:-sixfin}/learning-service:${IMAGE_TAG:-latest}
+    container_name: sixfin-learning-service
+    environment:
+      <<: *app-env
+      JAVA_TOOL_OPTIONS: "-Xmx768m -XX:MaxMetaspaceSize=256m"
+      AI_API_KEY: ${AI_API_KEY}
+      YOUTUBE_API_KEY: ${YOUTUBE_API_KEY:-}
+      YOUTUBE_SEARCH_ENABLED: ${YOUTUBE_SEARCH_ENABLED:-false}
+    healthcheck:
+      test: [ "CMD-SHELL", "bash -c 'echo > /dev/tcp/127.0.0.1/19094'" ]
+      <<: *healthcheck-defaults
+
+
+networks:
+  sixfin:
+    driver: bridge
