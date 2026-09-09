@@ -1,12 +1,15 @@
 package com.sparta.learning.application.service;
 
 import com.sparta.learning.domain.entity.FailedEvent;
+import com.sparta.learning.domain.model.FailedEventStatus;
 import com.sparta.learning.global.exception.CustomException;
 import com.sparta.learning.global.exception.LearningErrorCode;
 import com.sparta.learning.infrastructure.persistence.repository.FailedEventRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.time.OffsetDateTime;
 
 /* 실패 이벤트의 조회와 상태 변경만 담당한다 */
 @Service
@@ -15,12 +18,20 @@ public class FailedEventStatusUpdater {
 
     private final FailedEventRepository failedEventRepository;
 
-    @Transactional(readOnly = true)
-    public FailedEvent loadPending(Long id) {
-        FailedEvent failedEvent = findById(id);
+    /*
+     * 재처리를 선점한다. 조건부 UPDATE라 동시에 들어온 요청 중 하나만 성공한다.
+     * 조회 후 상태를 확인하는 방식은 두 요청이 같은 PENDING을 보고 모두 통과할 수 있다.
+     */
+    @Transactional
+    public FailedEvent claimForRetry(Long id) {
+        int claimed = failedEventRepository.claimForRetry(
+                id, FailedEventStatus.PENDING, FailedEventStatus.PROCESSING, OffsetDateTime.now());
 
-        if (failedEvent.isResolved()) {
-            throw new CustomException(LearningErrorCode.FAILED_EVENT_ALREADY_RESOLVED);
+        FailedEvent failedEvent = findById(id);
+        if (claimed == 0) {
+            throw new CustomException(failedEvent.isResolved()
+                    ? LearningErrorCode.FAILED_EVENT_ALREADY_RESOLVED
+                    : LearningErrorCode.FAILED_EVENT_RETRY_IN_PROGRESS);
         }
         return failedEvent;
     }
@@ -33,7 +44,7 @@ public class FailedEventStatusUpdater {
     }
 
     /*
-     * 재처리가 다시 실패한 경우 사유를 갱신한다.
+     * 재처리가 다시 실패한 경우 사유를 갱신하고 선점을 푼다.
      * 재처리 트랜잭션과 분리되어 있어 이 갱신은 롤백되지 않음
      */
     @Transactional

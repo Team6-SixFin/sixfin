@@ -57,7 +57,7 @@ class FailedEventAdminServiceTest {
     @Test
     void 재처리는_보관된_원본으로_파이프라인을_다시_실행한다() throws Exception {
         TradingEventEnvelope event = readEnvelope("events/buy-executed-first.json");
-        when(statusUpdater.loadPending(FAILED_EVENT_ID)).thenReturn(failedEvent(event));
+        when(statusUpdater.claimForRetry(FAILED_EVENT_ID)).thenReturn(failedEvent(event));
         when(statusUpdater.markResolved(FAILED_EVENT_ID)).thenReturn(resolvedFailedEvent(event));
 
         FailedEventRetryResponse response = service.retry(FAILED_EVENT_ID);
@@ -70,7 +70,7 @@ class FailedEventAdminServiceTest {
     @Test
     void 재처리가_실패하면_상태를_해결로_바꾸지_않는다() throws Exception {
         TradingEventEnvelope event = readEnvelope("events/buy-executed-first.json");
-        when(statusUpdater.loadPending(FAILED_EVENT_ID)).thenReturn(failedEvent(event));
+        when(statusUpdater.claimForRetry(FAILED_EVENT_ID)).thenReturn(failedEvent(event));
         doThrow(new IllegalStateException("진단 실패"))
                 .when(tradeEventFacade).handle(any(TradingEventEnvelope.class));
 
@@ -83,7 +83,7 @@ class FailedEventAdminServiceTest {
     @Test
     void 재처리가_실패하면_실패_사유를_갱신한다() throws Exception {
         TradingEventEnvelope event = readEnvelope("events/buy-executed-first.json");
-        when(statusUpdater.loadPending(FAILED_EVENT_ID)).thenReturn(failedEvent(event));
+        when(statusUpdater.claimForRetry(FAILED_EVENT_ID)).thenReturn(failedEvent(event));
         doThrow(new IllegalStateException("진단 실패"))
                 .when(tradeEventFacade).handle(any(TradingEventEnvelope.class));
 
@@ -96,11 +96,24 @@ class FailedEventAdminServiceTest {
 
     @Test
     void 이미_재처리된_이벤트는_다시_실행하지_않는다() {
-        when(statusUpdater.loadPending(FAILED_EVENT_ID))
+        when(statusUpdater.claimForRetry(FAILED_EVENT_ID))
                 .thenThrow(new CustomException(LearningErrorCode.FAILED_EVENT_ALREADY_RESOLVED));
 
         assertThatThrownBy(() -> service.retry(FAILED_EVENT_ID))
                 .isInstanceOf(CustomException.class);
+
+        verify(tradeEventFacade, never()).handle(any());
+    }
+
+    // 동시에 두 요청이 들어오면 선점하지 못한 쪽은 파이프라인을 실행하지 않는다
+    @Test
+    void 선점하지_못하면_재처리하지_않는다() {
+        when(statusUpdater.claimForRetry(FAILED_EVENT_ID))
+                .thenThrow(new CustomException(LearningErrorCode.FAILED_EVENT_RETRY_IN_PROGRESS));
+
+        assertThatThrownBy(() -> service.retry(FAILED_EVENT_ID))
+                .isInstanceOf(CustomException.class)
+                .hasFieldOrPropertyWithValue("errorCode", LearningErrorCode.FAILED_EVENT_RETRY_IN_PROGRESS);
 
         verify(tradeEventFacade, never()).handle(any());
     }
@@ -114,13 +127,34 @@ class FailedEventAdminServiceTest {
                 .eventType(TradeEventType.BUY_EXECUTED)
                 .payload(objectMapper.createObjectNode().put("eventId", "not-a-uuid"))
                 .build();
-        when(statusUpdater.loadPending(FAILED_EVENT_ID)).thenReturn(broken);
+        when(statusUpdater.claimForRetry(FAILED_EVENT_ID)).thenReturn(broken);
 
         assertThatThrownBy(() -> service.retry(FAILED_EVENT_ID))
                 .isInstanceOf(CustomException.class)
                 .hasFieldOrPropertyWithValue("errorCode", LearningErrorCode.FAILED_EVENT_PAYLOAD_BROKEN);
 
         verify(tradeEventFacade, never()).handle(any());
+        // 선점만 하고 끝나면 PROCESSING에 갇혀 다시 시도할 수 없다
+        verify(statusUpdater).markRetryFailed(eq(FAILED_EVENT_ID), org.mockito.ArgumentMatchers.anyString());
+    }
+
+    // 수집 단계에서 본문을 해석하지 못한 이벤트는 원본만 있어 재처리 대상이 아니다
+    @Test
+    void 해석하지_못해_보관된_이벤트는_재처리하지_않는다() {
+        FailedEvent unparsed = FailedEvent.builder()
+                .payload(objectMapper.createObjectNode()
+                        .put("_unparsed", true)
+                        .put("_raw", "{\"eventType\":\"NOT_A_REAL_TYPE\""))
+                .originalTopic("trade-events.v1")
+                .build();
+        when(statusUpdater.claimForRetry(FAILED_EVENT_ID)).thenReturn(unparsed);
+
+        assertThatThrownBy(() -> service.retry(FAILED_EVENT_ID))
+                .isInstanceOf(CustomException.class)
+                .hasFieldOrPropertyWithValue("errorCode", LearningErrorCode.FAILED_EVENT_PAYLOAD_BROKEN);
+
+        verify(tradeEventFacade, never()).handle(any());
+        verify(statusUpdater).markRetryFailed(eq(FAILED_EVENT_ID), org.mockito.ArgumentMatchers.anyString());
     }
 
     private FailedEvent failedEvent(TradingEventEnvelope event) {

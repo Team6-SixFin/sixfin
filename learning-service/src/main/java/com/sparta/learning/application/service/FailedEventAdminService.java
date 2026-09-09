@@ -44,17 +44,24 @@ public class FailedEventAdminService {
         return PageResponse.from(failedEventPage, content);
     }
 
-    /* 저장해 둔 원본으로 수집부터 다시 실행 */
+    /**
+     * 저장해 둔 원본으로 수집부터 다시 실행한다. 재처리를 먼저 선점한 요청만 진행해 같은 이벤트가 중복 처리되지 않게 한다.
+     */
     public FailedEventRetryResponse retry(Long id) {
-        TradingEventEnvelope event = toEnvelope(statusUpdater.loadPending(id));
+        FailedEvent claimed = statusUpdater.claimForRetry(id);
 
+        // 선점한 뒤로는 어디서 실패하든 PENDING으로 되돌려야 다시 시도할 수 있다
+        TradingEventEnvelope event;
         try {
+            event = toEnvelope(claimed);
             tradeEventFacade.handle(event);
         } catch (RuntimeException exception) {
             // 재처리 트랜잭션과 분리되어 있어 실패 사유 갱신이 롤백되지 않음
             statusUpdater.markRetryFailed(id, describe(exception));
-            log.error("실패 이벤트 재처리에 실패했습니다. id={}, eventId={}", id, event.eventId(), exception);
-            throw new CustomException(LearningErrorCode.FAILED_EVENT_RETRY_FAILED);
+            log.error("실패 이벤트 재처리에 실패했습니다. id={}", id, exception);
+            throw exception instanceof CustomException customException
+                    ? customException
+                    : new CustomException(LearningErrorCode.FAILED_EVENT_RETRY_FAILED);
         }
 
         FailedEvent resolved = statusUpdater.markResolved(id);
@@ -68,6 +75,12 @@ public class FailedEventAdminService {
      * 이 경우는 파이프라인을 실행조차 못하고 재시도 결과가 동일해 재처리 도중 실패(500)이랑 422로 응답
      */
     private TradingEventEnvelope toEnvelope(FailedEvent failedEvent) {
+        // 수집 단계에서 본문을 해석하지 못한 이벤트는 원본만 보관되어 있어 복원 대상이 아니다
+        if (failedEvent.getPayload() != null && failedEvent.getPayload().path("_unparsed").asBoolean()) {
+            log.error("본문을 해석하지 못해 보관된 이벤트라 재처리할 수 없습니다. id={}", failedEvent.getId());
+            throw new CustomException(LearningErrorCode.FAILED_EVENT_PAYLOAD_BROKEN);
+        }
+
         try {
             return objectMapper.treeToValue(failedEvent.getPayload(), TradingEventEnvelope.class);
         } catch (Exception exception) {
