@@ -15,7 +15,7 @@ public record FailedEventListItemResponse(
         @Schema(description = "Trading이 발행한 원본 이벤트 ID")
         UUID eventId,
 
-        @Schema(description = "이벤트 종류", example = "BUY_EXECUTED")
+        @Schema(description = "이벤트 종류. 본문을 해석하지 못한 경우 비어 있습니다.", example = "BUY_EXECUTED")
         String eventType,
 
         @Schema(description = "이벤트 소유자")
@@ -47,11 +47,12 @@ public record FailedEventListItemResponse(
 ) {
 
     // payload는 크기가 커서 목록에 담지 않는다 (재처리에만 사용)
+    // 역직렬화에 실패해 보관된 이벤트는 eventId·eventType이 비어 있음
     public static FailedEventListItemResponse from(FailedEvent failedEvent) {
         return new FailedEventListItemResponse(
                 failedEvent.getId(),
                 failedEvent.getEventId(),
-                failedEvent.getEventType().name(),
+                failedEvent.getEventType() == null ? null : failedEvent.getEventType().name(),
                 failedEvent.getUserId(),
                 failedEvent.getStatus().name(),
                 failedEvent.getFailureReason(),
