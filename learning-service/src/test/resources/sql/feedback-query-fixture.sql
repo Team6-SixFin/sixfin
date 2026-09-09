@@ -450,13 +450,14 @@ INSERT INTO learning_resources (
 );
 
 INSERT INTO feedback_resources (
-    id, feedback_id, learning_resource_id, display_order,
+    id, feedback_id, learning_resource_id, rule_code, display_order,
     recommendation_reason, created_at
 ) VALUES
 (
     970001,
     920001,
     940001,
+    'HIGH_CHASING_BUY',
     1,
     '고점 추격 매수 경고가 발생해 추천합니다.',
     '2026-08-28T10:31:05+09:00'
@@ -465,6 +466,7 @@ INSERT INTO feedback_resources (
     970002,
     920003,
     940002,
+    'STOP_LOSS_ADHERENCE',
     1,
     '손절 원칙 위반 진단이 발생해 추천합니다.',
     '2026-08-30T11:10:07+09:00'

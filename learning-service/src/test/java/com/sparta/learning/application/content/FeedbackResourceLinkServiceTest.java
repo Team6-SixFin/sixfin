@@ -76,12 +76,13 @@ class FeedbackResourceLinkServiceTest {
         assertThat(captor.getValue())
                 .extracting(
                         link -> link.getLearningResource().getId(),
+                        FeedbackResource::getRuleCode,
                         FeedbackResource::getDisplayOrder,
                         FeedbackResource::getRecommendationReason
                 )
                 .containsExactly(
-                        org.assertj.core.groups.Tuple.tuple(101L, 1, "첫 번째 추천 이유"),
-                        org.assertj.core.groups.Tuple.tuple(102L, 2, "두 번째 추천 이유")
+                        org.assertj.core.groups.Tuple.tuple(101L, "HIGH_CHASING_BUY", 1, "첫 번째 추천 이유"),
+                        org.assertj.core.groups.Tuple.tuple(102L, "HIGH_CHASING_BUY", 2, "두 번째 추천 이유")
                 );
     }
 
@@ -116,6 +117,7 @@ class FeedbackResourceLinkServiceTest {
         verify(feedbackResourceRepository).saveAll(captor.capture());
         assertThat(captor.getValue()).singleElement().satisfies(link -> {
             assertThat(link.getLearningResource()).isSameAs(newResource);
+            assertThat(link.getRuleCode()).isEqualTo("HIGH_CHASING_BUY");
             assertThat(link.getDisplayOrder()).isEqualTo(4);
             assertThat(link.getRecommendationReason()).isEqualTo("새 자료");
         });

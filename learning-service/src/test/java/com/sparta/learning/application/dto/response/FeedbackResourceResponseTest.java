@@ -36,6 +36,7 @@ class FeedbackResourceResponseTest {
         FeedbackResource feedbackResource = FeedbackResource.builder()
                 .feedback(feedback)
                 .learningResource(document)
+                .ruleCode("HIGH_CHASING_BUY")
                 .displayOrder(1)
                 .recommendationReason("현재 진단과 관련된 공식 학습 자료입니다.")
                 .build();

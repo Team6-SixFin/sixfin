@@ -86,6 +86,7 @@ public class FeedbackResourceLinkService {
             newLinks.add(FeedbackResource.builder()
                     .feedback(feedback)
                     .learningResource(managedResourceById.get(entry.getKey()))
+                    .ruleCode(selection.ruleCode())
                     .displayOrder(nextDisplayOrder++)
                     .recommendationReason(selection.recommendationReason())
                     .build());
@@ -98,6 +99,9 @@ public class FeedbackResourceLinkService {
     private void validateSelection(SelectedLearningResource selection) {
         if (selection == null || selection.resource() == null || selection.resource().getId() == null) {
             throw new IllegalArgumentException("저장되지 않은 학습 자료는 피드백에 연결할 수 없습니다.");
+        }
+        if (selection.ruleCode() == null || selection.ruleCode().isBlank()) {
+            throw new IllegalArgumentException("추천 원인이 된 진단 규칙 코드는 비어 있을 수 없습니다.");
         }
     }
 }
