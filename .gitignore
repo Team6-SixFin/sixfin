@@ -48,3 +48,8 @@ out/
 *.tfstate.*
 .terraform/
 terraform.tfvars
+
+
+###pem###
+*.pem
+*.pem.pub
