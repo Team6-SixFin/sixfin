@@ -42,3 +42,14 @@ out/
 
 ### VS Code ###
 .vscode/
+
+### Terraform ###
+*.tfstate
+*.tfstate.*
+.terraform/
+terraform.tfvars
+
+
+###pem###
+*.pem
+*.pem.pub
