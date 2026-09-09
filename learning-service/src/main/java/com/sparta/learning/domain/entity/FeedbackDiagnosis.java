@@ -12,6 +12,7 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import lombok.AccessLevel;
+import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
@@ -43,6 +44,7 @@ public class FeedbackDiagnosis extends BaseEntity {
     @JoinColumn(name = "diagnosis_result_id", nullable = false)
     private DiagnosisResult diagnosisResult;
 
+    @Builder
     public FeedbackDiagnosis(Feedback feedback, DiagnosisResult diagnosisResult) {
         this.feedback = feedback;
         this.diagnosisResult = diagnosisResult;

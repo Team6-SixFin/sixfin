@@ -21,8 +21,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -119,14 +121,35 @@ public class PositionQueryService {
         List<String> symbols = stockIds.stream()
                 .map(stockId -> stockById.get(stockId).getSymbol()).toList();
 
-        // 여러 종목의 현재가를 한 번에 조회
-        // 이후 포지션별로 빠르게 시세를 찾을 수 있도록 stockId를 key로 Map으로 변환함
-        Map<Long, Quote> quoteByStockId = quoteReader.readAll(symbols).stream()
-                .filter(quote -> quote.stockId() != null)
-                .collect(Collectors.toMap(Quote::stockId, Function.identity()));
+        // 요청한 종목의 시세만 정확히 포함하는지 검증한 뒤 stockId로 색인해 반환
+        return indexQuotes(quoteReader.readAll(symbols), stockIds);
+    }
 
-        // 한 종목이라도 현재가가 없으면 예외 처리
-        if (quoteByStockId.size() != stockIds.size()) {
+    /**
+     * QuoteReader가 반환한 시세가 요청한 종목과 정확히 일치하는지 검증하고
+     * 이후 빠르게 조회할 수 있도록 stockId를 키로 하는 Map으로 변환
+     */
+    private Map<Long, Quote> indexQuotes(
+            List<Quote> quotes,
+            List<Long> requestedStockIds
+    ) {
+        Map<Long, Quote> quoteByStockId = new HashMap<>();
+
+        for (Quote quote : quotes) {
+            // quote가 null 이거나 stockId가 null 이면 거절
+            if (quote == null || quote.stockId() == null) {
+                throw new CustomException(TradingErrorCode.PRICE_CANDLE_NOT_FOUND_FOR_SEQ);
+            }
+
+            Quote previous = quoteByStockId.putIfAbsent(quote.stockId(), quote);
+            // 같은 종목에 대한 시세가 둘 이상이면 어느 값을 사용해야 할지 몰라 거절
+            if (previous != null) {
+                throw new CustomException(TradingErrorCode.PRICE_CANDLE_NOT_FOUND_FOR_SEQ);
+            }
+        }
+
+        // Map의 키 집합과 요청 종목 ID 집합이 같은지 비교
+        if (!quoteByStockId.keySet().equals(Set.copyOf(requestedStockIds))) {
             throw new CustomException(TradingErrorCode.PRICE_CANDLE_NOT_FOUND_FOR_SEQ);
         }
 

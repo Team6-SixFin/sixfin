@@ -3,10 +3,14 @@ package com.sparta.trading.infrastructure.persistence.repository.executions;
 import com.sparta.trading.application.dto.query.TradingAdminSearchExecutionQuery;
 import com.sparta.trading.domain.entity.Executions;
 import com.sparta.trading.domain.repository.execution.TradingExecutionQueryRepository;
+import com.sparta.trading.domain.repository.position.PositionQuantityMismatchGroup;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Repository;
+
+import java.util.List;
+import java.util.UUID;
 
 @Repository
 @RequiredArgsConstructor

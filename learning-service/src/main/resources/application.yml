@@ -42,6 +42,13 @@ spring:
       ack-mode: record
 
   ai:
+    retry:
+      max-attempts: 3 # 최대 재시도 횟수 (최초 1회 + 재시도 2회)
+      backoff:
+        initial-interval: 2000 # 첫 실패 시 2초 대기 후 재시도
+        multiplier: 2 # 대기 시간 증가 배수 (2초 -> 4초)
+        max-interval: 10000 # 최대 대기 시간 (10초)
+      exclude-on-http-codes: 400, 401, 403, 404 # 클라이언트 잘못인 경우 재시도 안 함
     openai:
       api-key: ${AI_API_KEY}
       base-url: https://generativelanguage.googleapis.com/v1beta/openai/

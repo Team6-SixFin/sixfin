@@ -1,11 +1,11 @@
 package com.sparta.trading.infrastructure.persistence.repository.accounts;
 
 import com.sparta.trading.domain.entity.Accounts;
+import com.sparta.trading.domain.repository.accounts.CashLedgersAccountsGroup;
 import com.sparta.trading.domain.repository.accounts.TradingAccountsQueryRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.SearchResults;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -36,5 +36,30 @@ public class TradingAccountsQueryRepositoryImpl implements TradingAccountsQueryR
     @Override
     public Optional<Accounts> findByUserId(UUID userId) {
         return tradingAccountsJpaRepository.findByUserId(userId);
+    }
+
+    @Override
+    public Optional<Accounts> findById(UUID accountId) {
+        return tradingAccountsJpaRepository.findById(accountId);
+    }
+
+    @Override
+    public long countNegativeCashBalance(UUID accountId) {
+        return tradingAccountsJpaRepository.countNegativeCashBalance(accountId);
+    }
+
+    @Override
+    public List<Accounts> findNegativeCashBalance(UUID accountId, Pageable pageable) {
+        return tradingAccountsJpaRepository.findNegativeCashBalance(accountId, pageable);
+    }
+
+    @Override
+    public List<CashLedgersAccountsGroup> findLedgerBalanceMismatches(UUID accountId) {
+        return tradingAccountsJpaRepository.findLedgerBalanceMismatches(accountId);
+    }
+
+    @Override
+    public long count(){
+        return tradingAccountsJpaRepository.count();
     }
 }

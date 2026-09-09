@@ -103,4 +103,16 @@ public class CashLedgers {
                 .balanceAfter(balanceAfter)
                 .build();
     }
+
+    /** 관리자 계좌 초기화 상계 행. 삭제 대신 상계를 남겨 SUM(amount) = cash_balance 등식을 유지한다. */
+    public static CashLedgers reset(Accounts account, BigDecimal adjustmentAmount, BigDecimal balanceAfter) {
+        Objects.requireNonNull(account, "account must not be null");
+
+        return CashLedgers.builder()
+                .account(account)
+                .txType(CashLedgerTxType.RESET)
+                .amount(adjustmentAmount)
+                .balanceAfter(balanceAfter)
+                .build();
+    }
 }

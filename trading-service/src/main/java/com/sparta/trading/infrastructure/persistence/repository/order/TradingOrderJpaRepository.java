@@ -1,6 +1,7 @@
 package com.sparta.trading.infrastructure.persistence.repository.order;
 
 import com.sparta.trading.domain.entity.Orders;
+import com.sparta.trading.domain.repository.order.DuplicateRequestGroup;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -32,4 +33,14 @@ import java.util.UUID;
                               @Param("from") Instant from,
                               @Param("to") Instant to,
                               Pageable pageable);
+
+     @Query("""
+        SELECT o.requestId AS requestId, COUNT(o) AS duplicateCount
+        FROM Orders o
+        WHERE o.deletedAt IS NULL
+            AND (:accountId IS NULL OR o.accountId = :accountId)
+        GROUP BY o.requestId
+            HAVING COUNT(o) >= 2
+    """)
+     List<DuplicateRequestGroup> findDuplicateRequestGroups(UUID accountId);
  }

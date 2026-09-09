@@ -2,15 +2,16 @@ package com.sparta.learning.application.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.sparta.learning.application.content.FeedbackLearningResourceService;
 import com.sparta.learning.application.dto.request.AiFeedbackRequestDto;
 import com.sparta.learning.application.dto.response.AiFeedbackResponse;
-import com.sparta.learning.application.port.AiClientPort;
 import com.sparta.learning.domain.entity.*;
 import com.sparta.learning.domain.model.DiagnosisPhase;
 import com.sparta.learning.domain.model.DiagnosisStatus;
+import com.sparta.learning.domain.model.FeedbackStatus;
 import com.sparta.learning.domain.model.FeedbackType;
 import com.sparta.learning.domain.model.TradeType;
+import com.sparta.learning.global.exception.CustomException;
+import com.sparta.learning.global.exception.LearningErrorCode;
 import com.sparta.learning.infrastructure.persistence.repository.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -26,11 +27,10 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -43,14 +43,17 @@ class LearningCommandServiceTest {
 
     private LearningCommandService learningCommandService;
 
-    @Mock private AiClientPort aiClientPort;
+    // [수정됨] AiClientPort, AiRequestRepository 제거 및 AiFeedbackProcessor 추가
+    @Mock private AiFeedbackProcessor aiFeedbackProcessor;
     @Mock private FeedbackRepository feedbackRepository;
-    @Mock private AiRequestRepository aiRequestRepository;
     @Mock private ExecutionSnapshotRepository executionSnapshotRepository;
     @Mock private DiagnosisResultRepository diagnosisResultRepository;
     @Mock private ClosedPositionSnapshotRepository closedPositionSnapshotRepository;
-    @Mock private FeedbackLearningResourceService feedbackLearningResourceService;
+    @Mock private FeedbackDiagnosisRepository feedbackDiagnosisRepository;
     @Mock private TransactionTemplate transactionTemplate;
+
+    // 가짜DB 역할을 할 map
+    private java.util.Map<String, Feedback> fakeFeedbackDb = new java.util.HashMap<>();
 
     @Spy
     private ObjectMapper objectMapper = new ObjectMapper();
@@ -63,17 +66,16 @@ class LearningCommandServiceTest {
         positionId = UUID.randomUUID();
         userId = UUID.randomUUID();
 
-        // 1. 수동 객체 주입
+        // 1. 수동 객체 주입 (생성자 파라미터 변경 반영)
         learningCommandService = new LearningCommandService(
-                aiClientPort,
                 objectMapper,
                 feedbackRepository,
-                aiRequestRepository,
                 executionSnapshotRepository,
                 diagnosisResultRepository,
                 closedPositionSnapshotRepository,
-                feedbackLearningResourceService,
-                transactionTemplate
+                feedbackDiagnosisRepository,
+                transactionTemplate,
+                aiFeedbackProcessor
         );
 
         // 2. TransactionTemplate Mocking (트랜잭션 실행 우회)
@@ -154,26 +156,21 @@ class LearningCommandServiceTest {
     // 신규 로직에 맞춘 공통 Mock 설정 (가짜 DB 환경 구축)
     // =========================================================================
     private void setupCommonMocksForProcess() {
-        // [완벽 해결 1] findByFeedbackKey가 호출될 때, 키를 분석하여 알맞은 타입의 Feedback을 생성해줍니다.
+        fakeFeedbackDb.clear();
+
         lenient().when(feedbackRepository.findByFeedbackKey(anyString())).thenAnswer(invocation -> {
             String requestedKey = invocation.getArgument(0);
-
-            // 키(예: "ENTRY_FEEDBACK:uuid:uuid")에서 타입 추출
-            String typeString = requestedKey.split(":")[0];
-            FeedbackType type = FeedbackType.valueOf(typeString);
-
-            Feedback pendingFeedback = Feedback.builder()
-                    .feedbackKey(requestedKey)
-                    .positionId(positionId)
-                    .userId(userId)
-                    .feedbackType(type) // 타입이 누락되어 AI 호출 매핑이 실패하던 현상 해결!
-                    .build();
-            return Optional.of(pendingFeedback);
+            return Optional.ofNullable(fakeFeedbackDb.get(requestedKey));
         });
 
-        lenient().when(feedbackRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        lenient().when(feedbackRepository.save(any(Feedback.class))).thenAnswer(invocation -> {
+            Feedback feedback = invocation.getArgument(0);
+            fakeFeedbackDb.put(feedback.getFeedbackKey(), feedback);
+            return feedback;
+        });
 
-        // 최근 피드백 조회 로직 Mocking (메서드명 및 파라미터 변경)
+        lenient().when(feedbackDiagnosisRepository.saveAll(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
         lenient().when(feedbackRepository.findTopByPositionIdAndStatusOrderByCompletedAtDesc(any(UUID.class), any()))
                 .thenReturn(Optional.empty());
 
@@ -181,15 +178,17 @@ class LearningCommandServiceTest {
                 "요약", "총평", List.of("잘함"), List.of("개선점"), List.of("다음행동"), List.of("질문")
         );
 
-        // [완벽 해결 2] Mockito의 엄격한 매칭(any(Class)) 대신 any()를 사용하여 무조건 모의 응답을 반환하도록 강제
-        lenient().when(aiClientPort.requestAiFeedback(any(), any(), any())).thenReturn(mockAiResponse);
+        // [수정됨] AiClientPort 대신 AiFeedbackProcessor가 CompletableFuture를 반환하도록 모킹
+        lenient().when(aiFeedbackProcessor.processAiFeedbackAsync(any()))
+                .thenReturn(CompletableFuture.completedFuture(mockAiResponse));
     }
+
     // =========================================================================
     // 테스트 케이스
     // =========================================================================
 
     @Test
-    @DisplayName("ENTRY_FEEDBACK: 첫 번째 체결 내역 1건과 ENTRY 진단 결과만 AI에 전달된다")
+    @DisplayName("ENTRY_FEEDBACK: 첫 번째 체결 내역과 ENTRY 진단 결과가 전달되고 저장 로직이 수행된다")
     void testCreateEntryFeedback() throws JsonProcessingException {
         // given
         setupCommonMocksForProcess();
@@ -204,9 +203,17 @@ class LearningCommandServiceTest {
                 .thenReturn(List.of(diagEntry, diagTrade));
 
         // when
-        learningCommandService.createEntryFeedback(positionId, userId);
+        CompletableFuture<AiFeedbackResponse> futureResponse = learningCommandService.createEntryFeedback(positionId, userId);
+
+        // 비동기 작업 결과 추출
+        AiFeedbackResponse response = futureResponse.join();
 
         // then
+        assertNotNull(response);
+        assertEquals("요약", response.summary());
+
+        verify(feedbackDiagnosisRepository, times(1)).saveAll(any());
+
         ArgumentCaptor<AiFeedbackRequestDto> captor = ArgumentCaptor.forClass(AiFeedbackRequestDto.class);
         verify(objectMapper, atLeastOnce()).writeValueAsString(captor.capture());
 
@@ -215,12 +222,6 @@ class LearningCommandServiceTest {
         assertEquals(1, capturedDto.diagnoses().size());
         assertEquals("OPEN", capturedDto.position().status());
         assertNull(capturedDto.closedInfo(), "ENTRY 피드백에는 closedInfo가 없어야 합니다.");
-        verify(feedbackLearningResourceService).recommendAndLink(
-                anyString(),
-                eq(userId),
-                eq(positionId),
-                eq(FeedbackType.ENTRY_FEEDBACK)
-        );
     }
 
     @Test
@@ -246,9 +247,12 @@ class LearningCommandServiceTest {
                 .thenReturn(List.of(diagEntry, diagTrade, diagClose));
 
         // when
-        learningCommandService.createOnDemandFeedback(positionId, userId);
+        AiFeedbackResponse response = learningCommandService.createOnDemandFeedback(positionId, userId);
 
         // then
+        assertNotNull(response);
+        verify(feedbackDiagnosisRepository, times(1)).saveAll(any());
+
         ArgumentCaptor<AiFeedbackRequestDto> captor = ArgumentCaptor.forClass(AiFeedbackRequestDto.class);
         verify(objectMapper, atLeastOnce()).writeValueAsString(captor.capture());
 
@@ -259,7 +263,7 @@ class LearningCommandServiceTest {
     }
 
     @Test
-    @DisplayName("POSITION_REVIEW: ClosedPositionSnapshot 활용 및 전체 데이터 전달된다")
+    @DisplayName("POSITION_REVIEW: ClosedPositionSnapshot 활용 및 전체 데이터가 전달된다")
     void testCreatePositionReviewFeedback() throws JsonProcessingException {
         // given
         setupCommonMocksForProcess();
@@ -283,9 +287,15 @@ class LearningCommandServiceTest {
                 .thenReturn(Optional.of(closedSnapshot));
 
         // when
-        learningCommandService.createPositionReviewFeedback(positionId, userId);
+        CompletableFuture<AiFeedbackResponse> futureResponse = learningCommandService.createPositionReviewFeedback(positionId, userId);
+
+        // 비동기 작업 결과 대기 및 추출
+        AiFeedbackResponse response = futureResponse.join();
 
         // then
+        assertNotNull(response);
+        verify(feedbackDiagnosisRepository, times(1)).saveAll(any());
+
         ArgumentCaptor<AiFeedbackRequestDto> captor = ArgumentCaptor.forClass(AiFeedbackRequestDto.class);
         verify(objectMapper, atLeastOnce()).writeValueAsString(captor.capture());
 
@@ -301,28 +311,60 @@ class LearningCommandServiceTest {
     }
 
     @Test
-    @DisplayName("학습 자료 추천 실패는 완료된 AI 피드백 응답에 영향을 주지 않는다")
-    void keepsAiFeedbackWhenLearningResourceRecommendationFails() {
+    @DisplayName("요청형 피드백이 이미 생성 중이면 409 오류를 반환한다")
+    void rejectsOnDemandFeedbackAlreadyInProgress() {
         setupCommonMocksForProcess();
         ExecutionSnapshot latestExecution = createExecutionSnapshot(TradeType.BUY);
-
         when(executionSnapshotRepository.findFirstByPositionIdAndUserIdOrderByExecutedAtDescIdDesc(positionId, userId))
                 .thenReturn(Optional.of(latestExecution));
         when(executionSnapshotRepository.findAllByPositionIdOrderByExecutedAtAscIdAsc(positionId))
                 .thenReturn(List.of(latestExecution));
         when(diagnosisResultRepository.findAllByPositionId(positionId)).thenReturn(List.of());
-        when(feedbackLearningResourceService.recommendAndLink(
-                anyString(),
-                eq(userId),
-                eq(positionId),
-                eq(FeedbackType.ON_DEMAND_FEEDBACK)
-        )).thenThrow(new IllegalStateException("YouTube 추천 실패"));
 
-        AiFeedbackResponse response = assertDoesNotThrow(
+        Feedback processingFeedback = Feedback.builder()
+                .feedbackKey(String.format(
+                        "%s:%s:%s",
+                        FeedbackType.ON_DEMAND_FEEDBACK,
+                        positionId,
+                        latestExecution.getExecutionId()
+                ))
+                .userId(userId)
+                .positionId(positionId)
+                .feedbackType(FeedbackType.ON_DEMAND_FEEDBACK)
+                .basedOnExecutionId(latestExecution.getExecutionId())
+                .build();
+        processingFeedback.updateStatus(FeedbackStatus.PROCESSING);
+        fakeFeedbackDb.put(processingFeedback.getFeedbackKey(), processingFeedback);
+
+        CustomException exception = assertThrows(
+                CustomException.class,
                 () -> learningCommandService.createOnDemandFeedback(positionId, userId)
         );
 
-        assertEquals("요약", response.summary());
-        verify(aiRequestRepository, times(1)).save(any(AiRequest.class));
+        assertEquals(LearningErrorCode.FEEDBACK_GENERATION_IN_PROGRESS, exception.getErrorCode());
+        verifyNoInteractions(aiFeedbackProcessor);
+    }
+
+    @Test
+    @DisplayName("요청형 비동기 AI 오류의 CustomException을 그대로 전달한다")
+    void unwrapsOnDemandAsyncCustomException() {
+        setupCommonMocksForProcess();
+        ExecutionSnapshot latestExecution = createExecutionSnapshot(TradeType.BUY);
+        when(executionSnapshotRepository.findFirstByPositionIdAndUserIdOrderByExecutedAtDescIdDesc(positionId, userId))
+                .thenReturn(Optional.of(latestExecution));
+        when(executionSnapshotRepository.findAllByPositionIdOrderByExecutedAtAscIdAsc(positionId))
+                .thenReturn(List.of(latestExecution));
+        when(diagnosisResultRepository.findAllByPositionId(positionId)).thenReturn(List.of());
+
+        CustomException aiFailure = new CustomException(LearningErrorCode.AI_RESPONSE_GENERATION_FAILED);
+        when(aiFeedbackProcessor.processAiFeedbackAsync(any()))
+                .thenReturn(CompletableFuture.failedFuture(aiFailure));
+
+        CustomException exception = assertThrows(
+                CustomException.class,
+                () -> learningCommandService.createOnDemandFeedback(positionId, userId)
+        );
+
+        assertSame(aiFailure, exception);
     }
 }
