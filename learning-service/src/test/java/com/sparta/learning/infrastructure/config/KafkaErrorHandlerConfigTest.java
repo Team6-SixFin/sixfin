@@ -29,6 +29,7 @@ class KafkaErrorHandlerConfigTest {
     private static final String TOPIC = "trade-events.v1";
 
     private KafkaOperations<String, TradingEventEnvelope> kafkaOperations;
+    private KafkaOperations<String, byte[]> rawKafkaOperations;
     private SimpleMeterRegistry meterRegistry;
     private DefaultErrorHandler errorHandler;
 
@@ -36,14 +37,17 @@ class KafkaErrorHandlerConfigTest {
     @BeforeEach
     void setUp() {
         kafkaOperations = mock(KafkaOperations.class);
+        rawKafkaOperations = mock(KafkaOperations.class);
 
         // recoverer가 발행 완료를 기다리므로 이미 완료된 future를 돌려준다
         when(kafkaOperations.send(any(ProducerRecord.class)))
                 .thenReturn(CompletableFuture.completedFuture(null));
+        when(rawKafkaOperations.send(any(ProducerRecord.class)))
+                .thenReturn(CompletableFuture.completedFuture(null));
 
         meterRegistry = new SimpleMeterRegistry();
-        errorHandler = new KafkaErrorHandlerConfig()
-                .kafkaErrorHandler(kafkaOperations, new LearningMetrics(meterRegistry));
+        errorHandler = new KafkaErrorHandlerConfig().kafkaErrorHandler(
+                kafkaOperations, rawKafkaOperations, new LearningMetrics(meterRegistry));
     }
 
 
@@ -114,7 +118,8 @@ class KafkaErrorHandlerConfigTest {
 
         recoverer().accept(record, new InvalidTradeEventException("역직렬화 실패"));
 
-        verify(kafkaOperations).send(any(ProducerRecord.class));
+        // 값이 없으면 첫 템플릿(byte[])이 쓰인다
+        verify(rawKafkaOperations).send(any(ProducerRecord.class));
         assertThat(meterRegistry.get("learning.trade.events.dead.letter")
                 .tag("event_type", "UNKNOWN")
                 .counter()
@@ -123,7 +128,7 @@ class KafkaErrorHandlerConfigTest {
 
     private ConsumerRecordRecoverer recoverer() {
         return new KafkaErrorHandlerConfig().deadLetterRecoverer(
-                kafkaOperations, new LearningMetrics(meterRegistry));
+                kafkaOperations, rawKafkaOperations, new LearningMetrics(meterRegistry));
     }
 
     private BackOff backOff() {
