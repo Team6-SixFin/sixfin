@@ -4,9 +4,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sparta.learning.application.content.FeedbackLearningResourceService;
 import com.sparta.learning.application.dto.response.AiFeedbackResponse;
 import com.sparta.learning.application.port.AiClientPort;
+import com.sparta.learning.domain.entity.AiRequest;
 import com.sparta.learning.domain.entity.Feedback;
 import com.sparta.learning.domain.model.FeedbackStatus;
 import com.sparta.learning.domain.model.FeedbackType;
+import com.sparta.learning.global.exception.CustomException;
+import com.sparta.learning.global.exception.LearningErrorCode;
 import com.sparta.learning.infrastructure.persistence.repository.AiRequestRepository;
 import com.sparta.learning.infrastructure.persistence.repository.FeedbackRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -25,6 +28,9 @@ import java.util.function.Consumer;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentCaptor.forClass;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
@@ -121,6 +127,40 @@ class AiFeedbackProcessorTest {
 
         assertEquals(aiResponse, result);
         assertEquals(FeedbackStatus.COMPLETED, feedback.getStatus());
+    }
+
+    @Test
+    @DisplayName("AI 실패 원인과 기존 오류 코드를 보존하여 실패 이력에 저장한다")
+    void preservesAiFailureCauseAndErrorCode() {
+        Feedback feedback = createProcessingFeedback();
+        IllegalArgumentException rootCause = new IllegalArgumentException("invalid response JSON");
+        CustomException aiFailure = new CustomException(
+                LearningErrorCode.AI_RESPONSE_GENERATION_FAILED,
+                rootCause
+        );
+        when(aiClientPort.requestAiFeedback(
+                feedback.getPositionId(),
+                feedback.getFeedbackType(),
+                "{}"
+        )).thenThrow(aiFailure);
+        when(feedbackRepository.findByFeedbackKey(feedback.getFeedbackKey()))
+                .thenReturn(Optional.of(feedback));
+
+        CustomException thrown = assertThrows(CustomException.class, () ->
+                aiFeedbackProcessor.processAiFeedbackAsync(
+                        new LearningCommandService.GenerationContext(feedback, "{}", false)
+                )
+        );
+
+        var requestCaptor = forClass(AiRequest.class);
+        verify(aiRequestRepository).save(requestCaptor.capture());
+
+        assertSame(aiFailure, thrown);
+        assertEquals(FeedbackStatus.FAILED, feedback.getStatus());
+        assertEquals(
+                "IllegalArgumentException: invalid response JSON",
+                requestCaptor.getValue().getErrorMessage()
+        );
     }
 
     private Feedback createProcessingFeedback() {

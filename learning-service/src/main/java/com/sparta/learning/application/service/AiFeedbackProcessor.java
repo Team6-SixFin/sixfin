@@ -77,11 +77,15 @@ public class AiFeedbackProcessor {
 
         } catch (Exception e) {
             log.error("피드백 생성/파싱 실패", e);
+            String failureReason = describeFailure(e);
             transactionTemplate.executeWithoutResult(status ->
-                    failFeedback(feedbackKey, context.contextJsonStr(), e.getMessage(), requestId, modelName, promptVersion)
+                    failFeedback(feedbackKey, context.contextJsonStr(), failureReason, requestId, modelName, promptVersion)
             );
-            // 예외를 던져 TradeEventFacade의 exceptionally가 잡도록 함
-            throw new CustomException(LearningErrorCode.AI_RESPONSE_GENERATION_FAILED);
+            // 이미 분류된 도메인 오류는 유지하고, 예상하지 못한 오류만 공통 AI 오류로 변환합니다.
+            if (e instanceof CustomException customException) {
+                throw customException;
+            }
+            throw new CustomException(LearningErrorCode.AI_RESPONSE_GENERATION_FAILED, e);
         }
 
         return CompletableFuture.completedFuture(aiResponse);
@@ -112,13 +116,28 @@ public class AiFeedbackProcessor {
 
 
     private void validateAiResponse(AiFeedbackResponse response) {
-        if (response.summary() == null || response.summary().isBlank() ||
+        if (response == null ||
+                response.summary() == null || response.summary().isBlank() ||
                 response.overview() == null || response.overview().isBlank() ||
                 response.strengths() == null || response.strengths().isEmpty() ||
                 response.improvements() == null || response.improvements().isEmpty() ||
                 response.nextActions() == null || response.nextActions().isEmpty()) {
             throw new CustomException(LearningErrorCode.AI_RESPONSE_INCOMPLETE);
         }
+    }
+
+    /** DB 실패 이력에는 공통 메시지가 아닌 가장 안쪽 예외 유형과 메시지를 남깁니다. */
+    private String describeFailure(Throwable exception) {
+        Throwable rootCause = exception;
+        while (rootCause.getCause() != null && rootCause.getCause() != rootCause) {
+            rootCause = rootCause.getCause();
+        }
+
+        String message = rootCause.getMessage();
+        if (message == null || message.isBlank()) {
+            return rootCause.getClass().getSimpleName();
+        }
+        return rootCause.getClass().getSimpleName() + ": " + message;
     }
 
     private void completeFeedback(String feedbackKey, String contextJson, AiFeedbackResponse aiResponse, String reqId, String model, String version) {

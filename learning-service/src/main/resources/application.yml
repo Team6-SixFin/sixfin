@@ -54,6 +54,9 @@ spring:
       base-url: https://generativelanguage.googleapis.com/v1beta/openai/
       chat:
         model: gemini-3.5-flash
+        # 프롬프트 지시만 의존하지 않고 Gemini가 JSON 객체로 응답하도록 강제합니다.
+        response-format:
+          type: JSON_OBJECT
 
 learning:
   kafka:
