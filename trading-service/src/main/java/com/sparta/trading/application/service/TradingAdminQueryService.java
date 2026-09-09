@@ -213,6 +213,7 @@ public class TradingAdminQueryService {
 
         BigDecimal totalRealizedProfit = list.stream()
                 .map(Executions::getRealizedProfit)
+                .filter(Objects::nonNull)
                 .reduce(BigDecimal.ZERO,BigDecimal::add);
 
         Map<String, BigDecimal> summary = Map.of(

@@ -10,7 +10,7 @@ spring:
     properties:
       hibernate:
         format_sql: true
-    show-sql: true
+    show-sql: false
 
 market-data:
   csv-dir: ${MARKET_DATA_DIR:../tools/market-data-collector/out}
