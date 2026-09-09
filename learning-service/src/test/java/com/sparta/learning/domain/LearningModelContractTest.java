@@ -52,7 +52,8 @@ class LearningModelContractTest {
         assertThat(FeedbackStatus.values()).containsExactly(
                 FeedbackStatus.PENDING,
                 FeedbackStatus.COMPLETED,
-                FeedbackStatus.FAILED
+                FeedbackStatus.FAILED,
+                FeedbackStatus.PROCESSING
         );
         assertThat(ResourceProvider.values()).containsExactly(ResourceProvider.YOUTUBE);
         assertThat(ResourceStatus.values()).containsExactly(
