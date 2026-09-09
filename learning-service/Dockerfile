@@ -7,7 +7,7 @@ COPY . .
 RUN ./gradlew :learning-service:bootJar -x test
 
 # 2단계: 경량 JRE 환경으로 결과물(jar)만 가져와서 실행
-FROM eclipse-temurin:21-jre-alpine
+FROM eclipse-temurin:21-jre
 WORKDIR /app
 COPY --from=build /app/learning-service/build/libs/*.jar app.jar
 

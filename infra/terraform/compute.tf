@@ -73,7 +73,7 @@ resource "aws_instance" "data" {
 
 resource "aws_instance" "app" {
   ami                    = data.aws_ssm_parameter.al2023_ami.value
-  instance_type          = "t3.micro" # 필요시 비용 고려하여 t3.medium 등으로 조정 가능하나 이전 설정을 따름
+  instance_type          = "m5.large"
   subnet_id              = aws_subnet.public.id
   vpc_security_group_ids = [aws_security_group.app.id]
   key_name               = aws_key_pair.main.key_name
