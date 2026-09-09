@@ -1,6 +1,7 @@
 package com.sparta.learning.application.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.sparta.learning.domain.entity.FailedEvent;
 import com.sparta.learning.infrastructure.messaging.kafka.dto.TradingEventEnvelope;
 import com.sparta.learning.infrastructure.persistence.repository.FailedEventRepository;
@@ -22,17 +23,25 @@ public class FailedEventRecordService {
     @Transactional
     public void record(
             TradingEventEnvelope event,
+            String rawValue,
             String originalTopic,
             Integer originalPartition,
             Long originalOffset,
             String failureReason
     ) {
+        // 역직렬화에 실패하면 eventId/eventType을 모르지만, 보관하지 않으면 offset이 커밋되어 유실된다
         if (event == null) {
-            // 역직렬화 단계에서 실패하면 본문이 없다. (로그로만 알림)
             log.error(
-                    "본문이 없는 DLT 메시지라 기록할 수 없습니다. topic={}, offset={}, reason={}",
-                    originalTopic, originalOffset, failureReason
+                    "본문을 해석할 수 없는 DLT 메시지를 원본만 보관합니다. topic={}, partition={}, offset={}, reason={}",
+                    originalTopic, originalPartition, originalOffset, failureReason
             );
+            failedEventRepository.save(FailedEvent.builder()
+                    .payload(unparsedPayload(rawValue))
+                    .failureReason(failureReason)
+                    .originalTopic(originalTopic)
+                    .originalPartition(originalPartition)
+                    .originalOffset(originalOffset)
+                    .build());
             return;
         }
 
@@ -47,5 +56,15 @@ public class FailedEventRecordService {
                 .originalPartition(originalPartition)
                 .originalOffset(originalOffset)
                 .build());
+    }
+
+    /** payload는 NOT NULL이고 재처리 API가 이 값을 TradingEventEnvelope로 복원한다.
+     * 해석하지 못한 원본은 복원 대상이 아니므로 감싸서 저장하고, 재처리 시 422로 걸러지게 둔다.
+     */
+    private ObjectNode unparsedPayload(String rawValue) {
+        ObjectNode payload = objectMapper.createObjectNode();
+        payload.put("_unparsed", true);
+        payload.put("_raw", rawValue);
+        return payload;
     }
 }

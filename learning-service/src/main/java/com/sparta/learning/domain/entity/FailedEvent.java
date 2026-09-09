@@ -42,11 +42,11 @@ public class FailedEvent extends BaseEntity {
     private Long id;
 
     // 같은 이벤트가 서로 다른 원인으로 여러 번 실패할 수 있어 UNIQUE를 걸지 않음
-    @Column(name = "event_id", nullable = false)
+    @Column(name = "event_id")
     private UUID eventId;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "event_type", nullable = false, length = 50)
+    @Column(name = "event_type", length = 50)
     private TradeEventType eventType;
 
     @Column(name = "user_id")
