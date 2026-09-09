@@ -81,12 +81,29 @@ public class Orders extends BaseEntity {
         initializeAudit(userId);
     }
 
-    public static Orders filled(UUID requestId, UUID accountId, Long stockId,
+    public static Orders filled(OrderSide side, UUID requestId, UUID accountId, Long stockId,
                                 UUID positionId, int quantity, BigDecimal plannedStopLossPrice,
                                 String investmentReason, Instant marketTime, Long candleSeq,
                                 UUID userId) {
         return new Orders(requestId, accountId, stockId, positionId,
-                OrderSide.BUY, OrderType.MARKET, quantity, OrderStatus.FILLED, null,
+                side, OrderType.MARKET, quantity, OrderStatus.FILLED, null,
+                plannedStopLossPrice, investmentReason, marketTime, candleSeq, userId);
+    }
+
+    public static Orders filled(UUID requestId, UUID accountId, Long stockId,
+                                UUID positionId, int quantity, BigDecimal plannedStopLossPrice,
+                                String investmentReason, Instant marketTime, Long candleSeq,
+                                UUID userId) {
+        return filled(OrderSide.BUY, requestId, accountId, stockId, positionId, quantity,
+                plannedStopLossPrice, investmentReason, marketTime, candleSeq, userId);
+    }
+
+    public static Orders rejected(OrderSide side, UUID requestId, UUID accountId, Long stockId,
+                                  int quantity, BigDecimal plannedStopLossPrice,
+                                  String investmentReason, Instant marketTime, Long candleSeq,
+                                  OrderRejectReason rejectReason, UUID userId) {
+        return new Orders(requestId, accountId, stockId, null,
+                side, OrderType.MARKET, quantity, OrderStatus.REJECTED, rejectReason,
                 plannedStopLossPrice, investmentReason, marketTime, candleSeq, userId);
     }
 
@@ -94,11 +111,11 @@ public class Orders extends BaseEntity {
                                   int quantity, BigDecimal plannedStopLossPrice,
                                   String investmentReason, Instant marketTime, Long candleSeq,
                                   OrderRejectReason rejectReason, UUID userId) {
-        return new Orders(requestId, accountId, stockId, null,
-                OrderSide.BUY, OrderType.MARKET, quantity, OrderStatus.REJECTED, rejectReason,
-                plannedStopLossPrice, investmentReason, marketTime, candleSeq, userId);
+        return rejected(OrderSide.BUY, requestId, accountId, stockId, quantity,
+                plannedStopLossPrice, investmentReason, marketTime, candleSeq, rejectReason, userId);
     }
 
+    // 주문을 생성한 계좌와 전달받은 계좌가 같은지 확인
     public boolean belongsTo(UUID accountId) {
         return this.accountId.equals(accountId);
     }
