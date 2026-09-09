@@ -4,12 +4,14 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sparta.learning.application.dto.request.AiFeedbackRequestDto;
 import com.sparta.learning.application.dto.response.AiFeedbackResponse;
-import com.sparta.learning.application.port.AiClientPort;
 import com.sparta.learning.domain.entity.*;
 import com.sparta.learning.domain.model.DiagnosisPhase;
 import com.sparta.learning.domain.model.DiagnosisStatus;
+import com.sparta.learning.domain.model.FeedbackStatus;
 import com.sparta.learning.domain.model.FeedbackType;
 import com.sparta.learning.domain.model.TradeType;
+import com.sparta.learning.global.exception.CustomException;
+import com.sparta.learning.global.exception.LearningErrorCode;
 import com.sparta.learning.infrastructure.persistence.repository.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -49,8 +51,6 @@ class LearningCommandServiceTest {
     @Mock private ClosedPositionSnapshotRepository closedPositionSnapshotRepository;
     @Mock private FeedbackDiagnosisRepository feedbackDiagnosisRepository;
     @Mock private TransactionTemplate transactionTemplate;
-    @Mock private AiClientPort aiClientPort;
-    @Mock private AiRequestRepository aiRequestRepository;
 
     // 가짜DB 역할을 할 map
     private java.util.Map<String, Feedback> fakeFeedbackDb = new java.util.HashMap<>();
@@ -68,10 +68,8 @@ class LearningCommandServiceTest {
 
         // 1. 수동 객체 주입 (생성자 파라미터 변경 반영)
         learningCommandService = new LearningCommandService(
-                aiClientPort,
                 objectMapper,
                 feedbackRepository,
-                aiRequestRepository,
                 executionSnapshotRepository,
                 diagnosisResultRepository,
                 closedPositionSnapshotRepository,
@@ -310,5 +308,63 @@ class LearningCommandServiceTest {
 
         assertNotNull(capturedDto.closedInfo(), "POSITION_REVIEW 피드백에는 closedInfo가 포함되어야 합니다.");
         assertEquals(BigDecimal.valueOf(160.0), capturedDto.closedInfo().averageExitPrice());
+    }
+
+    @Test
+    @DisplayName("요청형 피드백이 이미 생성 중이면 409 오류를 반환한다")
+    void rejectsOnDemandFeedbackAlreadyInProgress() {
+        setupCommonMocksForProcess();
+        ExecutionSnapshot latestExecution = createExecutionSnapshot(TradeType.BUY);
+        when(executionSnapshotRepository.findFirstByPositionIdAndUserIdOrderByExecutedAtDescIdDesc(positionId, userId))
+                .thenReturn(Optional.of(latestExecution));
+        when(executionSnapshotRepository.findAllByPositionIdOrderByExecutedAtAscIdAsc(positionId))
+                .thenReturn(List.of(latestExecution));
+        when(diagnosisResultRepository.findAllByPositionId(positionId)).thenReturn(List.of());
+
+        Feedback processingFeedback = Feedback.builder()
+                .feedbackKey(String.format(
+                        "%s:%s:%s",
+                        FeedbackType.ON_DEMAND_FEEDBACK,
+                        positionId,
+                        latestExecution.getExecutionId()
+                ))
+                .userId(userId)
+                .positionId(positionId)
+                .feedbackType(FeedbackType.ON_DEMAND_FEEDBACK)
+                .basedOnExecutionId(latestExecution.getExecutionId())
+                .build();
+        processingFeedback.updateStatus(FeedbackStatus.PROCESSING);
+        fakeFeedbackDb.put(processingFeedback.getFeedbackKey(), processingFeedback);
+
+        CustomException exception = assertThrows(
+                CustomException.class,
+                () -> learningCommandService.createOnDemandFeedback(positionId, userId)
+        );
+
+        assertEquals(LearningErrorCode.FEEDBACK_GENERATION_IN_PROGRESS, exception.getErrorCode());
+        verifyNoInteractions(aiFeedbackProcessor);
+    }
+
+    @Test
+    @DisplayName("요청형 비동기 AI 오류의 CustomException을 그대로 전달한다")
+    void unwrapsOnDemandAsyncCustomException() {
+        setupCommonMocksForProcess();
+        ExecutionSnapshot latestExecution = createExecutionSnapshot(TradeType.BUY);
+        when(executionSnapshotRepository.findFirstByPositionIdAndUserIdOrderByExecutedAtDescIdDesc(positionId, userId))
+                .thenReturn(Optional.of(latestExecution));
+        when(executionSnapshotRepository.findAllByPositionIdOrderByExecutedAtAscIdAsc(positionId))
+                .thenReturn(List.of(latestExecution));
+        when(diagnosisResultRepository.findAllByPositionId(positionId)).thenReturn(List.of());
+
+        CustomException aiFailure = new CustomException(LearningErrorCode.AI_RESPONSE_GENERATION_FAILED);
+        when(aiFeedbackProcessor.processAiFeedbackAsync(any()))
+                .thenReturn(CompletableFuture.failedFuture(aiFailure));
+
+        CustomException exception = assertThrows(
+                CustomException.class,
+                () -> learningCommandService.createOnDemandFeedback(positionId, userId)
+        );
+
+        assertSame(aiFailure, exception);
     }
 }

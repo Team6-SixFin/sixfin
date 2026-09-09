@@ -95,14 +95,21 @@ class FeedbackQueryControllerTest {
         assertThat(queryCaptor.getValue().status()).isEqualTo(FeedbackStatus.COMPLETED);
     }
 
-    // 현재 지원하지 않는 피드백 상태는 서비스 호출 전에 400 응답으로 변환되는지 확인
+    // 비동기 AI 생성 중인 피드백도 상태 필터로 전달되는지 확인
     @Test
-    void rejectsUnsupportedFeedbackStatus() throws Exception {
+    void getsProcessingFeedbacks() throws Exception {
+        when(feedbackQueryService.getFeedbacks(any(FeedbackListQuery.class)))
+                .thenReturn(new PageResponse<>(List.of(), 0, 20, 0, 0, false));
+
         mockMvc.perform(get("/api/feedbacks")
                         .header("X-User-Id", USER_ID)
                         .param("status", "PROCESSING"))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("INVALID_FEEDBACK_STATUS"));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content").isEmpty());
+
+        ArgumentCaptor<FeedbackListQuery> queryCaptor = ArgumentCaptor.forClass(FeedbackListQuery.class);
+        verify(feedbackQueryService).getFeedbacks(queryCaptor.capture());
+        assertThat(queryCaptor.getValue().status()).isEqualTo(FeedbackStatus.PROCESSING);
     }
 
     // 상세 API가 공통 성공 wrapper 없이 피드백 상세 데이터를 직접 반환하는지 확인

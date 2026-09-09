@@ -35,6 +35,11 @@ public class LearningCommandController {
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "요청형 피드백 생성 또는 기존 결과 반환 성공"),
             @ApiResponse(
+                    responseCode = "409",
+                    description = "동일한 체결 기준의 피드백을 이미 생성하고 있음",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))
+            ),
+            @ApiResponse(
                     responseCode = "404",
                     description = "포지션의 최신 체결을 찾을 수 없거나 AI 피드백 생성에 실패함",
                     content = @Content(schema = @Schema(implementation = ErrorResponse.class))

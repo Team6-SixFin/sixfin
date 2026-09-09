@@ -5,7 +5,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sparta.learning.application.dto.request.AiFeedbackRequestDto;
 import com.sparta.learning.application.dto.request.AiFeedbackRequestDto.*;
 import com.sparta.learning.application.dto.response.AiFeedbackResponse;
-import com.sparta.learning.application.port.AiClientPort;
 import com.sparta.learning.domain.entity.*;
 import com.sparta.learning.domain.model.DiagnosisPhase;
 import com.sparta.learning.domain.model.FeedbackStatus;
@@ -22,16 +21,15 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class LearningCommandService {
 
-    private final AiClientPort aiClientPort;
     private final ObjectMapper objectMapper;
     private final FeedbackRepository feedbackRepository;
-    private final AiRequestRepository aiRequestRepository;
     private final ExecutionSnapshotRepository executionSnapshotRepository;
     private final DiagnosisResultRepository diagnosisResultRepository;
     private final ClosedPositionSnapshotRepository closedPositionSnapshotRepository;
@@ -51,8 +49,12 @@ public class LearningCommandService {
         GenerationContext context = transactionTemplate.execute(status ->
                 prepareGenerationContext(positionId, userId, FeedbackType.ON_DEMAND_FEEDBACK)
         );
-        // [수정됨] 사용자 API 요청이므로 비동기 호출 후 join()으로 결과를 대기하여 동기 반환
-        return aiFeedbackProcessor.processAiFeedbackAsync(context).join();
+        if (isProcessing(context)) {
+            throw new CustomException(LearningErrorCode.FEEDBACK_GENERATION_IN_PROGRESS);
+        }
+
+        // 사용자 API 요청은 결과를 기다리되 비동기 예외의 원인을 복원해 기존 오류 응답을 유지한다.
+        return awaitFeedback(aiFeedbackProcessor.processAiFeedbackAsync(context));
     }
 
     /**
@@ -294,6 +296,23 @@ public class LearningCommandService {
 
     private DiagnosisDto mapToDiagnosisDto(DiagnosisResult diag) {
         return new DiagnosisDto(diag.getRuleCode(), diag.getRuleVersion(), diag.getResult().name(), diag.getMetricValue(), diag.getThresholdValue(), diag.getMetrics(), diag.getEvidence());
+    }
+
+    private boolean isProcessing(GenerationContext context) {
+        return context.isAlreadyProcessed()
+                && context.feedback().getStatus() == FeedbackStatus.PROCESSING
+                && context.feedback().getContent() == null;
+    }
+
+    private AiFeedbackResponse awaitFeedback(CompletableFuture<AiFeedbackResponse> future) {
+        try {
+            return future.join();
+        } catch (CompletionException exception) {
+            if (exception.getCause() instanceof RuntimeException runtimeException) {
+                throw runtimeException;
+            }
+            throw exception;
+        }
     }
 
 

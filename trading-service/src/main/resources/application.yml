@@ -3,11 +3,18 @@ spring:
     name: trading-service
   profiles:
     active: local
-  Kafka:
+  kafka:
     bootstrap-servers: localhost:9092
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.apache.kafka.common.serialization.StringSerializer
+
+trading:
+  outbox:
+    publisher:
+      topic: trade-events.v1
+      batch-size: 100
+      max-retry: 5
 
 market:
   clock:

@@ -9,7 +9,6 @@ import org.springframework.data.repository.query.Param;
 
 import java.time.Instant;
 import java.util.List;
-import java.util.UUID;
 
 public interface TradingOutboxEventJpaRepository extends JpaRepository<OutboxEvents, Long> {
 
@@ -36,4 +35,7 @@ public interface TradingOutboxEventJpaRepository extends JpaRepository<OutboxEve
 
     @Query("SELECT o FROM OutboxEvents o WHERE o.status <> 'PUBLISHED'")
     List<OutboxEvents> findUnpublished(Pageable pageable);
+
+    @Query("SELECT o.id FROM OutboxEvents o WHERE o.status = 'PENDING' ORDER BY o.occurredAt ASC limit :count")
+    List<Long> findPendingIds(int count);
 }

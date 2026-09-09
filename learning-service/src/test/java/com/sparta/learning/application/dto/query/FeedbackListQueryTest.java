@@ -37,13 +37,19 @@ class FeedbackListQueryTest {
         assertThat(query.status()).isEqualTo(FeedbackStatus.COMPLETED);
     }
 
-    // 존재하지 않는 PROCESSING 상태는 현재 FeedbackStatus 계약에 없으므로 400 대상이 되는지 확인
+    // 비동기 AI 생성 중인 피드백도 상태 필터로 조회할 수 있는지 확인
     @Test
-    void rejectsUnsupportedFeedbackStatus() {
-        assertThatThrownBy(() -> FeedbackListQuery.of(USER_ID, null, null, "PROCESSING", 0, 20))
-                .isInstanceOf(CustomException.class)
-                .extracting(exception -> ((CustomException) exception).getErrorCode())
-                .isEqualTo(LearningErrorCode.INVALID_FEEDBACK_STATUS);
+    void parsesProcessingFeedbackStatus() {
+        FeedbackListQuery query = FeedbackListQuery.of(
+                USER_ID,
+                null,
+                null,
+                "PROCESSING",
+                0,
+                20
+        );
+
+        assertThat(query.status()).isEqualTo(FeedbackStatus.PROCESSING);
     }
 
     // 과도한 조회를 막기 위해 페이지 크기가 1~100 범위를 벗어나면 거부하는지 확인

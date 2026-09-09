@@ -38,11 +38,9 @@ public class TradeEventFacade {
             // 최초 매수(신규 포지션)인 경우에만 진입 피드백 생성 (비동기 호출)
             if (snapshot.getTradeType() == TradeType.BUY && snapshot.isNewPosition()) {
                 learningCommandService.createEntryFeedback(snapshot.getPositionId(), snapshot.getUserId())
-                        .thenAccept(feedbackResponse ->
-                                log.info("[최초 매수 진입] AI 피드백 비동기 생성 완료! 요약: {}", feedbackResponse.summary())
-                        )
+                        .thenAccept(feedbackResponse -> logCompletedFeedback("최초 매수 진입", feedbackResponse))
                         .exceptionally(ex -> {
-                            log.error("최초 매수 진입] AI 비동기 처리 중 오류 발생", ex);
+                            log.error("[최초 매수 진입] AI 비동기 처리 중 오류 발생", ex);
                             return null;
                         });
             }
@@ -54,9 +52,7 @@ public class TradeEventFacade {
 
             // 포지션 종료 리뷰 피드백 생성 (비동기 호출)
             learningCommandService.createPositionReviewFeedback(snapshot.getPositionId(), snapshot.getUserId())
-                    .thenAccept(feedbackResponse ->
-                            log.info("[포지션 종료 리뷰] AI 피드백 비동기 생성 완료! 요약: {}", feedbackResponse.summary())
-                    )
+                    .thenAccept(feedbackResponse -> logCompletedFeedback("포지션 종료 리뷰", feedbackResponse))
                     .exceptionally(ex -> {
                         log.error("[포지션 종료 리뷰] AI 비동기 처리 중 오류 발생", ex);
                         return null;
@@ -64,5 +60,13 @@ public class TradeEventFacade {
         }
 
         return result;
+    }
+
+    private void logCompletedFeedback(String feedbackType, AiFeedbackResponse feedbackResponse) {
+        if (feedbackResponse == null) {
+            log.info("[{}] 이미 생성 중인 AI 피드백이 있어 중복 호출을 건너뜁니다.", feedbackType);
+            return;
+        }
+        log.info("[{}] AI 피드백 비동기 생성 완료! 요약: {}", feedbackType, feedbackResponse.summary());
     }
 }
