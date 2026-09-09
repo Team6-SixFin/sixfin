@@ -88,9 +88,14 @@ public class CashLedgers {
                 .build();
     }
 
-    public static CashLedgers buy(Accounts account, UUID executionId,
-                                  BigDecimal spentAmount, BigDecimal balanceAfter) {
+    /** 매수 체결로 인해 현금이 차감된 내역(Cash Ledger)을 생성한다. */
+    public static CashLedgers buy(
+            Accounts account, UUID executionId,
+            BigDecimal spentAmount, BigDecimal balanceAfter
+    ) {
+        // 체결 정보가 Null인 경우 허용 안함
         Objects.requireNonNull(executionId, "executionId must not be null");
+        // 사용한 금액이 0보다 커야함
         if (spentAmount.signum() <= 0) {
             throw new IllegalArgumentException("spentAmount must be positive");
         }
@@ -99,7 +104,38 @@ public class CashLedgers {
                 .account(account)
                 .executionId(executionId)
                 .txType(CashLedgerTxType.BUY)
-                .amount(spentAmount.negate())
+                .amount(spentAmount.negate()) // 차감 금액 (음수로 저장)
+                .balanceAfter(balanceAfter)
+                .build();
+    }
+
+    /** 매도 체결로 인해 현금이 증가한 내역(Cash Ledger)을 생성한다. */
+    public static CashLedgers sell(
+            Accounts account, UUID executionId,
+            BigDecimal receivedAmount, BigDecimal balanceAfter
+    ) {
+        Objects.requireNonNull(executionId, "executionId must not be null");
+        if (receivedAmount.signum() <= 0) {
+            throw new IllegalArgumentException("receivedAmount must be positive");
+        }
+
+        return CashLedgers.builder()
+                .account(account)
+                .executionId(executionId)
+                .txType(CashLedgerTxType.SELL)
+                .amount(receivedAmount)
+                .balanceAfter(balanceAfter)
+                .build();
+    }
+
+    /** 관리자 계좌 초기화 상계 행. 삭제 대신 상계를 남겨 SUM(amount) = cash_balance 등식을 유지한다. */
+    public static CashLedgers reset(Accounts account, BigDecimal adjustmentAmount, BigDecimal balanceAfter) {
+        Objects.requireNonNull(account, "account must not be null");
+
+        return CashLedgers.builder()
+                .account(account)
+                .txType(CashLedgerTxType.RESET)
+                .amount(adjustmentAmount)
                 .balanceAfter(balanceAfter)
                 .build();
     }

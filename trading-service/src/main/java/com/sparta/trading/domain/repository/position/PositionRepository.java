@@ -27,4 +27,12 @@ public interface PositionRepository {
     Optional<Positions> findByIdAndUserId(UUID positionId, UUID userId);
   
     List<Positions> findAllByAccountIdAndStatus(UUID id, String status);
+
+    long countNegativeQuantityByAccountId(UUID accountId);
+
+    List<Positions> findNegativeQuantityByAccountId(UUID accountId, Pageable pageable);
+
+    List<DuplicateOpenPositionGroup> findDuplicateOpenPositionGroups(UUID accountId);
+
+    List<PositionQuantityMismatchGroup> findPositionQuantityMismatches(UUID accountId);
 }

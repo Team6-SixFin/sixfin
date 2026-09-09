@@ -8,6 +8,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
+
 @Repository
 @RequiredArgsConstructor
 public class TradingOutboxEventQueryRepository implements TradingOutboxEventsQueryRepository {
@@ -24,5 +26,20 @@ public class TradingOutboxEventQueryRepository implements TradingOutboxEventsQue
                 query.to(),
                 query.includePayload(),
                 pageable);
+    }
+
+    @Override
+    public long countUnpublished() {
+        return tradingOutboxEventJpaRepository.countUnpublished();
+    }
+
+    @Override
+    public List<OutboxEvents> findUnpublished(Pageable pageable) {
+        return tradingOutboxEventJpaRepository.findUnpublished(pageable);
+    }
+
+    @Override
+    public List<Long> findPendingIds(int count) {
+        return tradingOutboxEventJpaRepository.findPendingIds(count);
     }
 }

@@ -68,15 +68,37 @@ public class Accounts extends AuditableEntity {
         return account;
     }
 
-    /** 계좌 행을 잠근 주문 트랜잭션에서만 호출한다. */
+    /** 예수금 차감: 예수금에서 지정한 금액을 차감하고 잔액 반환 */
+    // 계좌 행을 잠근 주문 트랜잭션에서만 호출한다
     public BigDecimal withdraw(BigDecimal amount) {
+        // 차감할 금액을 소수점 4자리로 맞추고 반올림
         BigDecimal normalizedAmount = amount.setScale(4, RoundingMode.HALF_UP);
+
+        // 차감 금액이 0 이하거나 예수금보다 차감 금액이 더 크면 예외 처리
         if (normalizedAmount.signum() <= 0 || cashBalance.compareTo(normalizedAmount) < 0) {
             throw new IllegalArgumentException("insufficient cash balance");
         }
 
+        // 예수금에서 차감한 후 소수점 4자리 맞추고 반올림
         cashBalance = cashBalance.subtract(normalizedAmount).setScale(4, RoundingMode.HALF_UP);
         return cashBalance;
     }
 
+    /** 예수금 증가: 예수금에 지정한 금액을 추가해 증가 시킨후 잔액 반환 */
+    // 계좌 행을 잠근 주문 트랜잭션에서만 호출한다
+    public BigDecimal deposit(BigDecimal amount) {
+        BigDecimal normalizedAmount = amount.setScale(4, RoundingMode.HALF_UP);
+        if (normalizedAmount.signum() <= 0) {
+            throw new IllegalArgumentException("deposit amount must be positive");
+        }
+
+        cashBalance = cashBalance.add(normalizedAmount).setScale(4, RoundingMode.HALF_UP);
+        return cashBalance;
+    }
+
+    /** 관리자 초기화. 예수금과 초기 지급액 기준선을 함께 재설정한다. */
+    public void reset(BigDecimal targetDeposit) {
+        this.cashBalance = targetDeposit.setScale(4, RoundingMode.HALF_UP);
+        this.initialDeposit = targetDeposit.setScale(4, RoundingMode.HALF_UP);
+    }
 }

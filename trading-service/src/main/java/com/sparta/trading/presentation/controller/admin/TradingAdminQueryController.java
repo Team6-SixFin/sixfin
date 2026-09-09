@@ -3,6 +3,7 @@ package com.sparta.trading.presentation.controller.admin;
 import com.sparta.trading.application.dto.query.TradingAdminSearchExecutionQuery;
 import com.sparta.trading.application.dto.query.TradingAdminSearchOrderQuery;
 import com.sparta.trading.application.dto.query.TradingAdminSearchOutboxEventQurey;
+import com.sparta.trading.application.dto.query.TradingReconciliationQuery;
 import com.sparta.trading.application.dto.query.TradingSearchAccountsQuery;
 import com.sparta.trading.application.dto.result.TradingAdminExecutionQueryResult;
 import com.sparta.trading.application.dto.result.TradingAdminOrderQueryResult;
@@ -148,5 +149,23 @@ public class TradingAdminQueryController {
         TradingAdminAccountByUserResponseDto responseDto = tradingAdminQueryService.searchAccountByUser(userId,includePosition);
 
         return responseDto;
+    }
+
+    /**
+     * 작성자 : 김준서
+     * 최초 작성일 : 26-09-07
+     * 최종 수정일 :
+     * 기능 : 원장·예수금 대조 등 정합성 대사 일괄 실행
+     * 설명 :
+     * @Param: accountId, checks, includeDetails
+     **/
+    @GetMapping("/reconciliation")
+    public TradingReconciliationResponse reconciliation(
+            @RequestParam(required = false) UUID accountId,
+            @RequestParam(required = false) String checks,
+            @RequestParam(required = false) Boolean includeDetails
+    ) {
+        return tradingAdminQueryService.reconciliation(
+                new TradingReconciliationQuery(accountId, checks, includeDetails));
     }
 }

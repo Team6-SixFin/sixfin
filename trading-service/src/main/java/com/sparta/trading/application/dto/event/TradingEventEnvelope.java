@@ -9,6 +9,6 @@ public record TradingEventEnvelope(
         int eventVersion,
         OffsetDateTime occurredAt,
         UUID userId,
-        BuyExecutedPayload payload
+        Object payload
 ) {
 }

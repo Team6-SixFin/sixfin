@@ -22,14 +22,18 @@ public enum TradingErrorCode implements  ErrorCode{
     STOCK_NOT_FOUND(HttpStatus.NOT_FOUND, "존재하지 않는 종목입니다."),
     ACCOUNT_NOT_FOUND(HttpStatus.NOT_FOUND, "사용자 계좌가 존재하지 않습니다. 계좌를 먼저 조회하세요."),
     POSITION_NOT_FOUND(HttpStatus.NOT_FOUND, "존재하지 않는 포지션입니다."),
+    OUTBOX_EVENT_NOT_FOUND(HttpStatus.NOT_FOUND,"존재하지 않는 아웃박스 이벤트입니다"),
     ORDER_REQUEST_ID_CONFLICT(HttpStatus.CONFLICT, "같은 requestId에 다른 주문 내용을 사용할 수 없습니다."),
-    ORDER_SIDE_NOT_SUPPORTED(HttpStatus.BAD_REQUEST, "현재는 BUY 주문만 지원합니다."),
     ORDER_TYPE_NOT_SUPPORTED(HttpStatus.BAD_REQUEST, "현재는 MARKET 주문만 지원합니다."),
+    MARKET_STOPPED(HttpStatus.CONFLICT, "시장 시세 재생이 정지되어 주문할 수 없습니다."),
     ORDER_QUOTE_INVALID(HttpStatus.SERVICE_UNAVAILABLE, "주문에 사용할 수 있는 유효한 시세가 없습니다."),
     ORDER_INCONSISTENT_STATE(HttpStatus.INTERNAL_SERVER_ERROR, "저장된 주문 상태가 일관되지 않습니다."),
     ORDER_NOT_FOUND(HttpStatus.NOT_FOUND, "존재하지 않는 주문입니다."),
-    MARKET_CLOCK_FORBIDDEN(HttpStatus.FORBIDDEN, "관리자만 호출할 수 있습니다.");
-
+    MARKET_CLOCK_FORBIDDEN(HttpStatus.FORBIDDEN, "관리자만 호출할 수 있습니다."),
+    NOTHING_TO_RESET(HttpStatus.CONFLICT, "예수금이 이미 초기값이고 보유 포지션도 없습니다."),
+    INVALID_CHECK_CODE(HttpStatus.BAD_REQUEST, "지원하지 않는 검사 항목입니다."),
+    INVALID_TRANSITION_OF_OUTBOX_STATUS(HttpStatus.INTERNAL_SERVER_ERROR,"불가능한 아웃박스 STATUS 전환입니다."),
+    ;
 
     private final HttpStatus httpStatus;
     private final String message;
