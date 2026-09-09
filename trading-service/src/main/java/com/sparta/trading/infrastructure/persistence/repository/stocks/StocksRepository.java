@@ -11,6 +11,6 @@ public interface StocksRepository extends JpaRepository<Stocks, Long> {
 
     Optional<Stocks> findBySymbol(String symbol);
 
-    @Query("SELECT s.id FROM Stocks s WHERE s.symbol IN :symbolList")
+    @Query("SELECT s.id FROM Stocks s WHERE s.symbol IN :symbolList AND s.active = true")
     List<Long> findIdBySymbolIn(List<String> symbolList);
 }

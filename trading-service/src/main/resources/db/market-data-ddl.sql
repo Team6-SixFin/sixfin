@@ -308,6 +308,11 @@ ALTER TABLE trading_service.p_positions
 
 ALTER TABLE trading_service.p_executions
     ADD COLUMN IF NOT EXISTS user_id UUID,
+    ADD COLUMN IF NOT EXISTS created_by UUID,
+    ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS updated_by UUID,
+    ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS deleted_by UUID,
     ADD COLUMN IF NOT EXISTS avg_entry_price_at_execution NUMERIC(19,4),
     ADD COLUMN IF NOT EXISTS realized_profit NUMERIC(19,4),
     ADD COLUMN IF NOT EXISTS candle_seq BIGINT,
@@ -319,6 +324,13 @@ ALTER TABLE trading_service.p_executions
     ALTER COLUMN user_id SET NOT NULL,
     ALTER COLUMN candle_seq SET NOT NULL,
     ALTER COLUMN market_time SET NOT NULL;
+    ALTER COLUMN created_by SET NOT NULL;
+
+UPDATE trading_service.p_executions
+SET created_by = user_id
+WHERE created_by IS NULL;
+
+ALTER TABLE trading_service.p_executions
     ALTER COLUMN created_by SET NOT NULL;
 
 DO $$

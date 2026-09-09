@@ -19,6 +19,7 @@ import java.time.Instant;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -45,8 +46,8 @@ class TradingCommandControllerTest {
         UUID requestId = UUID.randomUUID();
         when(tradingCommandService.placeOrder(any(), any())).thenReturn(new OrderResponse(
                 UUID.randomUUID(), requestId, UUID.randomUUID(), OrderStatus.FILLED, null,
-                new OrderResponse.ExecutionResponse(UUID.randomUUID(), 2, new BigDecimal("100.0000"),
-                        new BigDecimal("200.0000"), Instant.parse("2026-09-03T13:31:00Z")),
+                new OrderResponse.ExecutionResponse(UUID.randomUUID(), new BigDecimal("100.0000"), 2,
+                        new BigDecimal("200.0000"), null),
                 new BigDecimal("99800.0000"), Instant.parse("2026-09-03T13:30:00Z"), 12L
         ));
 
@@ -57,7 +58,10 @@ class TradingCommandControllerTest {
                                 {"requestId":"%s","symbol":" aapl ","side":"BUY","quantity":2}
                                 """.formatted(requestId)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("FILLED"));
+                .andExpect(jsonPath("$.status").value("FILLED"))
+                .andExpect(jsonPath("$.execution.executedQuantity").value(2))
+                .andExpect(jsonPath("$.execution.realizedProfit").value(nullValue()))
+                .andExpect(jsonPath("$.execution.executedAt").doesNotExist());
 
         ArgumentCaptor<PlaceOrderCommand> commandCaptor = ArgumentCaptor.forClass(PlaceOrderCommand.class);
         verify(tradingCommandService).placeOrder(org.mockito.ArgumentMatchers.eq(userId), commandCaptor.capture());
