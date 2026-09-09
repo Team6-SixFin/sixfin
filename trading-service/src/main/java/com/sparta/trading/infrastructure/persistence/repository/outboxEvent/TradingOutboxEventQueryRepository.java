@@ -37,4 +37,9 @@ public class TradingOutboxEventQueryRepository implements TradingOutboxEventsQue
     public List<OutboxEvents> findUnpublished(Pageable pageable) {
         return tradingOutboxEventJpaRepository.findUnpublished(pageable);
     }
+
+    @Override
+    public List<Long> findPendingIds(int count) {
+        return tradingOutboxEventJpaRepository.findPendingIds(count);
+    }
 }

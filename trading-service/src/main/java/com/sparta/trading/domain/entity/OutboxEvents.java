@@ -2,6 +2,8 @@ package com.sparta.trading.domain.entity;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.sparta.trading.global.entity.AuditableEntity;
+import com.sparta.trading.global.exception.CustomException;
+import com.sparta.trading.global.exception.TradingErrorCode;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -13,6 +15,7 @@ import jakarta.persistence.Table;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
@@ -59,12 +62,14 @@ public class OutboxEvents extends AuditableEntity {
     @Column(name = "occurred_at", nullable = false)
     private Instant occurredAt;
 
+    @Setter
     @Column(name = "published_at")
     private Instant publishedAt;
 
     @Column(name = "retry_count", nullable = false)
     private int retryCount;
 
+    @Setter
     @Column(name = "last_error", length = 500)
     private String lastError;
 
@@ -85,5 +90,29 @@ public class OutboxEvents extends AuditableEntity {
     public static OutboxEvents buyExecuted(UUID eventId, UUID executionId, UUID userId,
                                             JsonNode payload, Instant occurredAt) {
         return new OutboxEvents(eventId, executionId, userId, payload, occurredAt);
+    }
+
+    public void setStatus(OutboxStatus next){
+        if(!this.status.validateNext(next)){
+            throw new CustomException(TradingErrorCode.INVALID_TRANSITION_OF_OUTBOX_STATUS);
+        }
+        this.status = next;
+    }
+
+    public int addRetryCount(){
+        return ++retryCount;
+    }
+
+    public void markPublished(Instant publishedAt) {
+        setStatus(OutboxStatus.PUBLISHED);
+        this.publishedAt = publishedAt;
+    }
+
+    public void markFailedAttempt(String errorMessage, int maxRetry) {
+        addRetryCount();
+        this.lastError = errorMessage;
+        if (retryCount >= maxRetry) {
+            setStatus(OutboxStatus.FAILED);
+        }
     }
 }

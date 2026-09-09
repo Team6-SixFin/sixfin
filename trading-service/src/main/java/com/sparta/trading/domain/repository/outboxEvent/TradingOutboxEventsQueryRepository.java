@@ -14,4 +14,6 @@ public interface TradingOutboxEventsQueryRepository {
     long countUnpublished();
 
     List<OutboxEvents> findUnpublished(Pageable pageable);
+
+    List<Long> findPendingIds(int count);
 }
