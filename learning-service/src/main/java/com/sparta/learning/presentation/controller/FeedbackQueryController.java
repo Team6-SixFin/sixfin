@@ -75,7 +75,7 @@ public class FeedbackQueryController {
             @RequestParam(required = false) UUID positionId,
             @Parameter(
                     description = "피드백 생성 상태. 생략하면 모든 상태를 조회합니다.",
-                    schema = @Schema(allowableValues = {"PENDING", "COMPLETED", "FAILED"}),
+                    schema = @Schema(allowableValues = {"PENDING", "PROCESSING", "COMPLETED", "FAILED"}),
                     example = "COMPLETED"
             )
             @RequestParam(required = false) String status,
