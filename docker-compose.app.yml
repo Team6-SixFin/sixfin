@@ -127,7 +127,6 @@ services:
       # APP_MASTER_SLACKID 가 된다 (APP_MASTER_SLACK_ID 아님).
       APP_MASTER_USERNAME: ${MASTER_USERNAME}
       APP_MASTER_PASSWORD: ${MASTER_PASSWORD}
-      APP_MASTER_SLACKID: ${MASTER_SLACK_ID}
     healthcheck:
       test: ["CMD-SHELL", "nc -z 127.0.0.1 19092"]
       <<: *healthcheck-defaults
@@ -149,6 +148,7 @@ services:
 
   learning-service:
     <<: *app-base
+    mem_limit: 1024m
     build:
       context: .
       dockerfile: learning-service/Dockerfile
@@ -157,6 +157,9 @@ services:
     environment:
       <<: *app-env
       JAVA_TOOL_OPTIONS: "-Xmx768m -XX:MaxMetaspaceSize=256m"
+      AI_API_KEY: ${AI_API_KEY}
+      YOUTUBE_API_KEY: ${YOUTUBE_API_KEY:-}
+      YOUTUBE_SEARCH_ENABLED: ${YOUTUBE_SEARCH_ENABLED:-false}
     healthcheck:
       test: [ "CMD-SHELL", "bash -c 'echo > /dev/tcp/127.0.0.1/19094'" ]
       <<: *healthcheck-defaults
