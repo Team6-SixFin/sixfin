@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - fix/infra-oicd
 
 permissions:
   id-token: write
@@ -32,11 +33,16 @@ jobs:
       - name: Gradle 빌드 (전체 서비스)
         run: ./gradlew build -x test
 
+      - name: OIDC 토큰 디버그
+        run: |
+          curl -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" | python3 -c "import json,sys,base64; data=json.load(sys.stdin); token=data['value']; payload=token.split('.')[1]; payload+='='*(4-len(payload)%4); decoded=base64.urlsafe_b64decode(payload); claims=json.loads(decoded); print('sub:', claims.get('sub')); print('repository:', claims.get('repository')); print('ref:', claims.get('ref'))"
+
       - name: AWS 자격증명 설정 (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
+          role-skip-session-tagging: true
 
       - name: ECR 로그인
         id: ecr-login
