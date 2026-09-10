@@ -1,7 +1,8 @@
 package com.sparta.trading.application.service;
 
 import com.sparta.trading.domain.entity.Accounts;
-import com.sparta.trading.domain.repository.account.AccountRepository;
+import com.sparta.trading.domain.repository.accounts.AccountsCommandRepository;
+import com.sparta.trading.domain.repository.accounts.AccountsQueryRepository;
 import com.sparta.trading.presentation.dto.response.AccountResponse;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -23,19 +24,23 @@ import static org.mockito.Mockito.times;
 class AccountQueryServiceTest {
 
     @Mock
-    private AccountRepository accountRepository;
+    private AccountsCommandRepository accountsCommandRepository;
+
 
     @Mock
-    private AccountCreationService accountCreationService;
+    private AccountsQueryRepository accountsQueryRepository;
+
+    @Mock
+    private AccountsCreationService accountCreationService;
 
     @InjectMocks
-    private AccountQueryService accountQueryService;
+    private AccountsQueryService accountQueryService;
 
     @Test
     void getOrCreateAccount_returnsExistingAccount() {
         UUID userId = UUID.randomUUID();
         Accounts account = Accounts.create(userId);
-        when(accountRepository.findByUserId(userId)).thenReturn(Optional.of(account));
+        when(accountsQueryRepository.findByUserId(userId)).thenReturn(Optional.of(account));
 
         AccountResponse response = accountQueryService.getOrCreateAccount(userId);
 
@@ -48,7 +53,7 @@ class AccountQueryServiceTest {
     void getOrCreateAccount_createsAccountWhenMissing() {
         UUID userId = UUID.randomUUID();
         Accounts account = Accounts.create(userId);
-        when(accountRepository.findByUserId(userId)).thenReturn(Optional.empty());
+        when(accountsQueryRepository.findByUserId(userId)).thenReturn(Optional.empty());
         when(accountCreationService.create(userId)).thenReturn(account);
 
         AccountResponse response = accountQueryService.getOrCreateAccount(userId);
@@ -61,7 +66,7 @@ class AccountQueryServiceTest {
     void getOrCreateAccount_reloadsAccountAfterConcurrentCreation() {
         UUID userId = UUID.randomUUID();
         Accounts account = Accounts.create(userId);
-        when(accountRepository.findByUserId(userId))
+        when(accountsQueryRepository.findByUserId(userId))
                 .thenReturn(Optional.<Accounts>empty())
                 .thenReturn(Optional.of(account));
         when(accountCreationService.create(userId))
@@ -70,6 +75,6 @@ class AccountQueryServiceTest {
         AccountResponse response = accountQueryService.getOrCreateAccount(userId);
 
         assertThat(response.cashBalance()).isEqualByComparingTo("100000.0000");
-        verify(accountRepository, times(2)).findByUserId(userId);
+        verify(accountsQueryRepository, times(2)).findByUserId(userId);
     }
 }

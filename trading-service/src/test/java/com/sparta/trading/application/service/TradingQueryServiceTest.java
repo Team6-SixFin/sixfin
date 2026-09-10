@@ -7,10 +7,10 @@ import com.sparta.trading.domain.entity.Executions;
 import com.sparta.trading.domain.entity.OrderRejectReason;
 import com.sparta.trading.domain.entity.Orders;
 import com.sparta.trading.domain.entity.Stocks;
-import com.sparta.trading.domain.repository.account.AccountRepository;
-import com.sparta.trading.domain.repository.execution.ExecutionRepository;
-import com.sparta.trading.domain.repository.order.OrderRepository;
-import com.sparta.trading.domain.repository.order.TradingOrderQueryRepository;
+import com.sparta.trading.domain.repository.accounts.AccountsQueryRepository;
+import com.sparta.trading.domain.repository.executions.ExecutionsQueryRepository;
+import com.sparta.trading.domain.repository.orders.OrdersCommandRepository;
+import com.sparta.trading.domain.repository.orders.OrdersQueryRepository;
 import com.sparta.trading.global.exception.CustomException;
 import com.sparta.trading.global.exception.GlobalErrorCode;
 import com.sparta.trading.global.exception.TradingErrorCode;
@@ -26,7 +26,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -56,10 +55,9 @@ class TradingQueryServiceTest {
     @Mock private CurrentSeqProvider currentSeqProvider;
     @Mock private StocksRepository stocksRepository;
     @Mock private PriceCandlesRepository priceCandlesRepository;
-    @Mock private OrderRepository orderRepository;
-    @Mock private TradingOrderQueryRepository tradingOrderQueryRepository;
-    @Mock private ExecutionRepository executionRepository;
-    @Mock private AccountRepository accountRepository;
+    @Mock private OrdersQueryRepository ordersQueryRepository;
+    @Mock private ExecutionsQueryRepository executionRepository;
+    @Mock private AccountsQueryRepository accountsQueryRepository;
     @Mock private QuoteReader quoteReader;
 
     private TradingQueryService service;
@@ -70,10 +68,9 @@ class TradingQueryServiceTest {
                 currentSeqProvider,
                 stocksRepository,
                 priceCandlesRepository,
-                orderRepository,
-                tradingOrderQueryRepository,
+                ordersQueryRepository,
                 executionRepository,
-                accountRepository,
+                accountsQueryRepository,
                 quoteReader
         );
     }
@@ -84,13 +81,13 @@ class TradingQueryServiceTest {
 
     @Test
     void searchOrder_returnsEmptyPageWhenAccountMissing() {
-        when(accountRepository.findByUserId(USER_ID)).thenReturn(Optional.empty());
+        when(accountsQueryRepository.findByUserId(USER_ID)).thenReturn(Optional.empty());
 
         PageResponse<TradingOrderResponseDto> result = service.searchOrder(
                 USER_ID, null, null, null, PageRequest.of(0, 20));
 
         assertThat(result.getContent()).isEmpty();
-        verify(tradingOrderQueryRepository, never()).searchOrder(any(), any(), anyList(), any());
+        verify(ordersQueryRepository, never()).searchOrder(any(), any(), anyList(), any());
     }
 
     @Test
@@ -99,7 +96,7 @@ class TradingQueryServiceTest {
                 .isInstanceOf(CustomException.class)
                 .satisfies(e -> assertThat(((CustomException) e).getErrorCode())
                         .isEqualTo(GlobalErrorCode.INVALID_REQUEST));
-        verify(accountRepository, never()).findByUserId(any());
+        verify(accountsQueryRepository, never()).findByUserId(any());
     }
 
     @Test
@@ -119,8 +116,8 @@ class TradingQueryServiceTest {
         Orders msftOrder = filledOrder(account.getId(), msft.getId());
         Pageable pageable = PageRequest.of(0, 20);
 
-        when(accountRepository.findByUserId(USER_ID)).thenReturn(Optional.of(account));
-        when(tradingOrderQueryRepository.searchOrder(any(), eq(null), eq(List.of(account.getId())), eq(pageable)))
+        when(accountsQueryRepository.findByUserId(USER_ID)).thenReturn(Optional.of(account));
+        when(ordersQueryRepository.searchOrder(any(), eq(null), eq(List.of(account.getId())), eq(pageable)))
                 .thenReturn(new PageImpl<>(List.of(aaplOrder, msftOrder), pageable, 2));
         when(stocksRepository.findAllById(anyList())).thenReturn(List.of(aapl, msft));
 
@@ -136,29 +133,29 @@ class TradingQueryServiceTest {
     void searchOrder_passesSentinelStockIdWhenSymbolDoesNotExist() {
         Accounts account = accountOf(USER_ID);
         Pageable pageable = PageRequest.of(0, 20);
-        when(accountRepository.findByUserId(USER_ID)).thenReturn(Optional.of(account));
+        when(accountsQueryRepository.findByUserId(USER_ID)).thenReturn(Optional.of(account));
         when(stocksRepository.findBySymbol("NOPE")).thenReturn(Optional.empty());
-        when(tradingOrderQueryRepository.searchOrder(any(), eq(-1L), eq(List.of(account.getId())), eq(pageable)))
+        when(ordersQueryRepository.searchOrder(any(), eq(-1L), eq(List.of(account.getId())), eq(pageable)))
                 .thenReturn(new PageImpl<>(List.of(), pageable, 0));
 
         PageResponse<TradingOrderResponseDto> result = service.searchOrder(USER_ID, null, null, "NOPE", pageable);
 
         assertThat(result.getContent()).isEmpty();
-        verify(tradingOrderQueryRepository).searchOrder(any(), eq(-1L), eq(List.of(account.getId())), eq(pageable));
+        verify(ordersQueryRepository).searchOrder(any(), eq(-1L), eq(List.of(account.getId())), eq(pageable));
     }
 
     @Test
     void searchOrder_passesStatusAndSideThroughToQuery() {
         Accounts account = accountOf(USER_ID);
         Pageable pageable = PageRequest.of(0, 20);
-        when(accountRepository.findByUserId(USER_ID)).thenReturn(Optional.of(account));
-        when(tradingOrderQueryRepository.searchOrder(any(), any(), anyList(), any()))
+        when(accountsQueryRepository.findByUserId(USER_ID)).thenReturn(Optional.of(account));
+        when(ordersQueryRepository.searchOrder(any(), any(), anyList(), any()))
                 .thenReturn(new PageImpl<>(List.of(), pageable, 0));
 
         service.searchOrder(USER_ID, "FILLED", "BUY", null, pageable);
 
         ArgumentCaptor<TradingAdminSearchOrderQuery> captor = ArgumentCaptor.forClass(TradingAdminSearchOrderQuery.class);
-        verify(tradingOrderQueryRepository).searchOrder(captor.capture(), any(), anyList(), any());
+        verify(ordersQueryRepository).searchOrder(captor.capture(), any(), anyList(), any());
         assertThat(captor.getValue().status()).isEqualTo("FILLED");
         assertThat(captor.getValue().side()).isEqualTo("BUY");
     }
@@ -176,8 +173,8 @@ class TradingQueryServiceTest {
                 order.getId(), order.getPositionId(), USER_ID, stock.getId(),
                 10, new BigDecimal("100.0000"), new BigDecimal("100.0000"), 12L, MARKET_TIME);
 
-        when(accountRepository.findByUserId(USER_ID)).thenReturn(Optional.of(account));
-        when(orderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        when(accountsQueryRepository.findByUserId(USER_ID)).thenReturn(Optional.of(account));
+        when(ordersQueryRepository.findById(order.getId())).thenReturn(Optional.of(order));
         when(stocksRepository.findById(stock.getId())).thenReturn(Optional.of(stock));
         when(executionRepository.findByOrderId(order.getId())).thenReturn(Optional.of(execution));
 
@@ -197,8 +194,8 @@ class TradingQueryServiceTest {
                 UUID.randomUUID(), account.getId(), stock.getId(), 10, null, null,
                 MARKET_TIME, 12L, OrderRejectReason.INSUFFICIENT_CASH, USER_ID);
 
-        when(accountRepository.findByUserId(USER_ID)).thenReturn(Optional.of(account));
-        when(orderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        when(accountsQueryRepository.findByUserId(USER_ID)).thenReturn(Optional.of(account));
+        when(ordersQueryRepository.findById(order.getId())).thenReturn(Optional.of(order));
         when(stocksRepository.findById(stock.getId())).thenReturn(Optional.of(stock));
         when(executionRepository.findByOrderId(order.getId())).thenReturn(Optional.empty());
 
@@ -210,7 +207,7 @@ class TradingQueryServiceTest {
 
     @Test
     void findOrderById_throwsAccountNotFoundWhenNoAccount() {
-        when(accountRepository.findByUserId(USER_ID)).thenReturn(Optional.empty());
+        when(accountsQueryRepository.findByUserId(USER_ID)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.findOrderById(USER_ID, UUID.randomUUID()))
                 .isInstanceOf(CustomException.class)
@@ -222,8 +219,8 @@ class TradingQueryServiceTest {
     void findOrderById_throwsOrderNotFoundWhenOrderMissing() {
         Accounts account = accountOf(USER_ID);
         UUID orderId = UUID.randomUUID();
-        when(accountRepository.findByUserId(USER_ID)).thenReturn(Optional.of(account));
-        when(orderRepository.findById(orderId)).thenReturn(Optional.empty());
+        when(accountsQueryRepository.findByUserId(USER_ID)).thenReturn(Optional.of(account));
+        when(ordersQueryRepository.findById(orderId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.findOrderById(USER_ID, orderId))
                 .isInstanceOf(CustomException.class)
@@ -237,8 +234,8 @@ class TradingQueryServiceTest {
         Accounts otherAccount = accountOf(UUID.randomUUID());
         Orders someoneElsesOrder = filledOrder(otherAccount.getId(), 1L);
 
-        when(accountRepository.findByUserId(USER_ID)).thenReturn(Optional.of(myAccount));
-        when(orderRepository.findById(someoneElsesOrder.getId())).thenReturn(Optional.of(someoneElsesOrder));
+        when(accountsQueryRepository.findByUserId(USER_ID)).thenReturn(Optional.of(myAccount));
+        when(ordersQueryRepository.findById(someoneElsesOrder.getId())).thenReturn(Optional.of(someoneElsesOrder));
 
         assertThatThrownBy(() -> service.findOrderById(USER_ID, someoneElsesOrder.getId()))
                 .isInstanceOf(CustomException.class)

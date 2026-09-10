@@ -4,10 +4,10 @@ import com.sparta.trading.application.dto.query.TradingAdminSearchOrderQuery;
 import com.sparta.trading.application.port.Quote;
 import com.sparta.trading.application.port.QuoteReader;
 import com.sparta.trading.domain.entity.*;
-import com.sparta.trading.domain.repository.account.AccountRepository;
-import com.sparta.trading.domain.repository.execution.ExecutionRepository;
-import com.sparta.trading.domain.repository.order.OrderRepository;
-import com.sparta.trading.domain.repository.order.TradingOrderQueryRepository;
+import com.sparta.trading.domain.repository.accounts.AccountsQueryRepository;
+import com.sparta.trading.domain.repository.executions.ExecutionsQueryRepository;
+import com.sparta.trading.domain.repository.orders.OrdersCommandRepository;
+import com.sparta.trading.domain.repository.orders.OrdersQueryRepository;
 import com.sparta.trading.global.exception.CustomException;
 import com.sparta.trading.global.exception.GlobalErrorCode;
 import com.sparta.trading.global.exception.TradingErrorCode;
@@ -19,7 +19,6 @@ import com.sparta.trading.presentation.dto.response.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -40,10 +39,9 @@ public class TradingQueryService {
     private final CurrentSeqProvider currentSeqProvider;
     private final StocksRepository stocksRepository;
     private final PriceCandlesRepository priceCandlesRepository;
-    private final OrderRepository orderRepository;
-    private final TradingOrderQueryRepository tradingOrderQueryRepository;
-    private final ExecutionRepository executionRepository;
-    private final AccountRepository accountRepository;
+    private final OrdersQueryRepository OrdersQueryRepository;
+    private final ExecutionsQueryRepository executionsQueryRepository;
+    private final AccountsQueryRepository accountsQueryRepository;
     private final QuoteReader quoteReader;
 
     // ==============================
@@ -132,7 +130,7 @@ public class TradingQueryService {
         validateEnumIfPresent(side, OrderSide.class);
 
         // search의 경우에는 계좌가 없으면 그냥 빈 응답 반환
-        Optional<Accounts> account = accountRepository.findByUserId(userId);
+        Optional<Accounts> account = accountsQueryRepository.findByUserId(userId);
         if (account.isEmpty()) {
             return PageResponse.of(Page.empty(normalized));
         }
@@ -143,7 +141,7 @@ public class TradingQueryService {
         // 관리자용 Search Order 로직 사용. 새로 user용 search함수를 만들어봐야 하이버네이트에서 같은 쿼리 생성
         TradingAdminSearchOrderQuery query = new TradingAdminSearchOrderQuery(userId, symbol, side, status,
                 null, null, null, null, null);
-        Page<Orders> orderPage = tradingOrderQueryRepository.searchOrder(
+        Page<Orders> orderPage = OrdersQueryRepository.searchOrder(
                 query, targetStockId, List.of(account.get().getId()), normalized);
 
         Map<Long, Stocks> stockById = findStocksByIds(orderPage.getContent().stream().map(Orders::getStockId));
@@ -153,16 +151,16 @@ public class TradingQueryService {
 
     public TradingOrderDetailResponseDto findOrderById(UUID userId, UUID orderId) {
         // 유저는 자기 계좌만 확인 가능함. 계좌가 없으면 애초에 조회 불가능
-        Accounts account = accountRepository.findByUserId(userId)
+        Accounts account = accountsQueryRepository.findByUserId(userId)
                 .orElseThrow(() -> new CustomException(TradingErrorCode.ACCOUNT_NOT_FOUND));
 
-        Orders order = orderRepository.findById(orderId)
+        Orders order = OrdersQueryRepository.findById(orderId)
                 .filter(o -> o.belongsTo(account.getId()))
                 .orElseThrow(() -> new CustomException(TradingErrorCode.ORDER_NOT_FOUND));
 
         Stocks stock = stocksRepository.findById(order.getStockId())
                 .orElseThrow(() -> new CustomException(TradingErrorCode.STOCK_NOT_FOUND));
-        Executions execution = executionRepository.findByOrderId(order.getId()).orElse(null);
+        Executions execution = executionsQueryRepository.findByOrderId(order.getId()).orElse(null);
 
         return TradingOrderDetailResponseDto.from(stock, order, execution);
     }
@@ -176,7 +174,7 @@ public class TradingQueryService {
 
         Long targetStockId = resolveStockIdOrSentinel(symbol);
 
-        Page<Executions> executionPage = executionRepository.search(userId, positionId, targetStockId, side, normalized);
+        Page<Executions> executionPage = executionsQueryRepository.search(userId, positionId, targetStockId, side, normalized);
 
         Map<Long, Stocks> stockById = findStocksByIds(executionPage.getContent().stream().map(Executions::getStockId));
         return PageResponse.of(

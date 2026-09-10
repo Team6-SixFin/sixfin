@@ -9,18 +9,17 @@ import com.sparta.trading.application.dto.result.TradingAdminExecutionQueryResul
 import com.sparta.trading.application.dto.result.TradingAdminOrderQueryResult;
 import com.sparta.trading.application.dto.result.TradingAdminOutboxEventQueryResult;
 import com.sparta.trading.domain.entity.*;
-import com.sparta.trading.domain.repository.accounts.TradingAccountsQueryRepository;
-import com.sparta.trading.domain.repository.cashledger.CashLedgerRepository;
+import com.sparta.trading.domain.repository.accounts.AccountsQueryRepository;
 import com.sparta.trading.domain.repository.accounts.CashLedgersAccountsGroup;
-import com.sparta.trading.domain.repository.cashledger.LedgerSequenceMismatchGroup;
-import com.sparta.trading.domain.repository.execution.TradingExecutionQueryRepository;
-import com.sparta.trading.domain.repository.order.DuplicateRequestGroup;
-import com.sparta.trading.domain.repository.order.OrderRepository;
-import com.sparta.trading.domain.repository.order.TradingOrderQueryRepository;
-import com.sparta.trading.domain.repository.outboxEvent.TradingOutboxEventsQueryRepository;
-import com.sparta.trading.domain.repository.position.DuplicateOpenPositionGroup;
-import com.sparta.trading.domain.repository.position.PositionQuantityMismatchGroup;
-import com.sparta.trading.domain.repository.position.PositionRepository;
+import com.sparta.trading.domain.repository.cashledgers.CashLedgersQueryRepository;
+import com.sparta.trading.domain.repository.cashledgers.LedgerSequenceMismatchGroup;
+import com.sparta.trading.domain.repository.executions.ExecutionsQueryRepository;
+import com.sparta.trading.domain.repository.orders.DuplicateRequestGroup;
+import com.sparta.trading.domain.repository.orders.OrdersQueryRepository;
+import com.sparta.trading.domain.repository.outboxEvents.OutboxEventsQueryRepository;
+import com.sparta.trading.domain.repository.positions.DuplicateOpenPositionsGroup;
+import com.sparta.trading.domain.repository.positions.PositionsQuantityMismatchGroup;
+import com.sparta.trading.domain.repository.positions.PositionsQueryRepository;
 import com.sparta.trading.global.exception.CustomException;
 import com.sparta.trading.global.exception.GlobalErrorCode;
 import com.sparta.trading.global.exception.TradingErrorCode;
@@ -48,14 +47,13 @@ import java.util.stream.Collectors;
 @Transactional
 public class TradingAdminQueryService {
 
-    private final TradingAccountsQueryRepository tradingAccountsQueryRepository;
-    private final TradingOrderQueryRepository tradingOrderQueryRepository;
-    private final TradingExecutionQueryRepository tradingExecutionQueryRepository;
-    private final TradingOutboxEventsQueryRepository tradingOutboxEventsQueryRepository;
-    private final PositionRepository positionRepository;
+    private final AccountsQueryRepository tradingAccountsQueryRepository;
+    private final OrdersQueryRepository orderRepository;
+    private final ExecutionsQueryRepository tradingExecutionQueryRepository;
+    private final OutboxEventsQueryRepository tradingOutboxEventsQueryRepository;
+    private final PositionsQueryRepository positionRepository;
     private final StocksRepository stocksRepository;
-    private final OrderRepository orderRepository;
-    private final CashLedgerRepository cashLedgerRepository;
+    private final CashLedgersQueryRepository cashLedgersQueryRepository;
 
     private final StringRedisTemplate redisTemplate;
 
@@ -107,7 +105,7 @@ public class TradingAdminQueryService {
         }
 
 
-        Page<Orders> orders = tradingOrderQueryRepository.searchOrder(
+        Page<Orders> orders = orderRepository.searchOrder(
                 tradingAdminSearchOrderQuery,
                 targetStockId,
                 targetAccountIds,
@@ -563,7 +561,7 @@ public class TradingAdminQueryService {
      * 동일 계좌·종목에 OPEN 포지션이 2건 이상.
      */
     private TradingReconciliationResponse.CheckResult checkDuplicateOpenPosition(UUID accountId, boolean includeDetails) {
-        List<DuplicateOpenPositionGroup> duplicateGroups = positionRepository.findDuplicateOpenPositionGroups(accountId);
+        List<DuplicateOpenPositionsGroup> duplicateGroups = positionRepository.findDuplicateOpenPositionGroups(accountId);
 
         List<Map<String, Object>> details = buildDetails(includeDetails,
                 () -> duplicateGroups,
@@ -636,7 +634,7 @@ public class TradingAdminQueryService {
 
     /** positions.quantity = 매수 체결 합계 − 매도 체결 합계 */
     private TradingReconciliationResponse.CheckResult checkPositionQuantity(UUID accountId, boolean includeDetails) {
-        List<PositionQuantityMismatchGroup> mismatched = positionRepository.findPositionQuantityMismatches(accountId);
+        List<PositionsQuantityMismatchGroup> mismatched = positionRepository.findPositionQuantityMismatches(accountId);
 
         List<Map<String, Object>> details = buildDetails(includeDetails,
                 () -> mismatched,
@@ -660,7 +658,7 @@ public class TradingAdminQueryService {
     /** 직전 balance_after + amount = 현재 balance_after */
     private TradingReconciliationResponse.CheckResult checkLedgerSequence(UUID accountId, boolean includeDetails) {
 
-        List<LedgerSequenceMismatchGroup> mismatchGroupList = cashLedgerRepository.findLedgerSequenceMismatches(accountId);
+        List<LedgerSequenceMismatchGroup> mismatchGroupList = cashLedgersQueryRepository.findLedgerSequenceMismatches(accountId);
 
         List<Map<String, Object>> details = buildDetails(includeDetails,
                 () -> mismatchGroupList,
