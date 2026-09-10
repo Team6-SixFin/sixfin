@@ -2,6 +2,7 @@ package com.sparta.trading.domain.repository.cashledgers;
 
 import com.sparta.trading.domain.entity.CashLedgerTxType;
 import com.sparta.trading.domain.entity.CashLedgers;
+import jakarta.ws.rs.HEAD;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
