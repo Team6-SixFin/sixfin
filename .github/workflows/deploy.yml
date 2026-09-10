@@ -33,9 +33,19 @@ jobs:
       - name: Gradle 빌드 (전체 서비스)
         run: ./gradlew build -x test
 
-      - name: OIDC 토큰 디버그
+
+      - name: ID 토큰 요청
+        id: get-id-token
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const token = await core.getIDToken('sts.amazonaws.com');
+            core.setOutput('token', token);
+
+      - name: 토큰 디코딩
         run: |
-          curl -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" | python3 -c "import json,sys,base64; data=json.load(sys.stdin); token=data['value']; payload=token.split('.')[1]; payload+='='*(4-len(payload)%4); decoded=base64.urlsafe_b64decode(payload); claims=json.loads(decoded); print('sub:', claims.get('sub')); print('repository:', claims.get('repository')); print('ref:', claims.get('ref'))"
+          echo "${{ steps.get-id-token.outputs.token }}" | cut -d'.' -f2 | base64 -d 2>/dev/null | python3 -m json.tool
+      
 
       - name: AWS 자격증명 설정 (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
