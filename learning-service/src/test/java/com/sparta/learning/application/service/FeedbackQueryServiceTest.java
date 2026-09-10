@@ -13,6 +13,7 @@ import com.sparta.learning.domain.entity.LearningResource;
 import com.sparta.learning.domain.model.DiagnosisStatus;
 import com.sparta.learning.domain.model.FeedbackStatus;
 import com.sparta.learning.domain.model.FeedbackType;
+import com.sparta.learning.domain.model.ResourceType;
 import com.sparta.learning.domain.model.TradeType;
 import com.sparta.learning.global.exception.CustomException;
 import com.sparta.learning.global.exception.LearningErrorCode;
@@ -166,6 +167,7 @@ class FeedbackQueryServiceTest {
         when(feedbackResource.getLearningResource()).thenReturn(learningResource);
         when(feedbackResource.getRecommendationReason()).thenReturn("고점 추격 매수 습관을 점검하는 자료입니다.");
         when(learningResource.getId()).thenReturn(301L);
+        when(learningResource.getResourceType()).thenReturn(ResourceType.VIDEO);
         when(learningResource.getTitle()).thenReturn("추격 매수를 피하는 방법");
         when(learningResource.getUrl()).thenReturn("https://youtube.com/watch?v=example");
         when(learningResource.getChannelName()).thenReturn("투자교육 채널");

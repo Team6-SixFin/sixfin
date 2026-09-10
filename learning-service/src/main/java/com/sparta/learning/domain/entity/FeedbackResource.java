@@ -45,6 +45,10 @@ public class FeedbackResource extends BaseEntity {
     @JoinColumn(name = "learning_resource_id", nullable = false)
     private LearningResource learningResource;
 
+    /** 이 자료가 해당 피드백에 추천된 원인이 된 진단 규칙 코드 */
+    @Column(name = "rule_code", nullable = false, length = 50)
+    private String ruleCode;
+
     @Column(name = "display_order", nullable = false)
     private int displayOrder;
 
@@ -55,11 +59,13 @@ public class FeedbackResource extends BaseEntity {
     private FeedbackResource(
             Feedback feedback,
             LearningResource learningResource,
+            String ruleCode,
             Integer displayOrder,
             String recommendationReason
     ) {
         this.feedback = feedback;
         this.learningResource = learningResource;
+        this.ruleCode = ruleCode;
         this.displayOrder = displayOrder == null ? 1 : displayOrder;
         this.recommendationReason = recommendationReason;
     }

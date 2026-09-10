@@ -13,6 +13,7 @@ import com.sparta.learning.domain.model.FeedbackStatus;
 import com.sparta.learning.domain.model.FeedbackType;
 import com.sparta.learning.domain.model.ResourceProvider;
 import com.sparta.learning.domain.model.ResourceStatus;
+import com.sparta.learning.domain.model.ResourceType;
 import com.sparta.learning.domain.model.TradeEventType;
 import com.sparta.learning.domain.model.TradeType;
 import jakarta.persistence.Table;
@@ -55,7 +56,16 @@ class LearningModelContractTest {
                 FeedbackStatus.FAILED,
                 FeedbackStatus.PROCESSING
         );
-        assertThat(ResourceProvider.values()).containsExactly(ResourceProvider.YOUTUBE);
+        assertThat(ResourceProvider.values()).containsExactly(
+                ResourceProvider.YOUTUBE,
+                ResourceProvider.OFFICIAL_SITE,
+                ResourceProvider.CURATED_WEB,
+                ResourceProvider.INTERNAL
+        );
+        assertThat(ResourceType.values()).containsExactly(
+                ResourceType.VIDEO,
+                ResourceType.DOCUMENT
+        );
         assertThat(ResourceStatus.values()).containsExactly(
                 ResourceStatus.ACTIVE,
                 ResourceStatus.REJECTED,

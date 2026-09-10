@@ -282,7 +282,7 @@ public class LearningCommandService {
             return objectMapper.writeValueAsString(dto);
         } catch (JsonProcessingException e) {
             log.error("AI 요청 JSON 직렬화 실패: positionId={}", dto.positionId(), e);
-            throw new CustomException(LearningErrorCode.AI_RESPONSE_GENERATION_FAILED);
+            throw new CustomException(LearningErrorCode.AI_RESPONSE_GENERATION_FAILED, e);
         }
     }
 

@@ -3,6 +3,7 @@ package com.sparta.learning.application.service;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sparta.learning.application.content.FeedbackLearningResourceService;
 import com.sparta.learning.application.dto.response.AiFeedbackResponse;
 import com.sparta.learning.application.port.AiClientPort;
 import com.sparta.learning.domain.entity.AiRequest;
@@ -30,6 +31,7 @@ public class AiFeedbackProcessor {
     private final FeedbackRepository feedbackRepository;
     private final AiRequestRepository aiRequestRepository;
     private final TransactionTemplate transactionTemplate;
+    private final FeedbackLearningResourceService feedbackLearningResourceService;
 
     // [수정됨] 분리된 비동기 전담 메서드
     @Async("aiThreadPoolTaskExecutor")
@@ -39,7 +41,10 @@ public class AiFeedbackProcessor {
             // 완료된 건이면 기존 데이터를 반환, 처리 중(PROCESSING)이면 null 반환
             if (context.feedback().getContent() != null) {
                 try {
-                    return CompletableFuture.completedFuture(objectMapper.treeToValue(context.feedback().getContent(), AiFeedbackResponse.class));
+                    AiFeedbackResponse existingResponse =
+                            objectMapper.treeToValue(context.feedback().getContent(), AiFeedbackResponse.class);
+                    recommendLearningResourcesSafely(context.feedback());
+                    return CompletableFuture.completedFuture(existingResponse);
                 } catch (Exception e) {
                     log.error("기존 피드백 Content 파싱 실패", e);
                 }
@@ -68,28 +73,71 @@ public class AiFeedbackProcessor {
             transactionTemplate.executeWithoutResult(status ->
                     completeFeedback(feedbackKey, context.contextJsonStr(), finalAiResponse, requestId, modelName, promptVersion)
             );
+            recommendLearningResourcesSafely(context.feedback());
 
         } catch (Exception e) {
             log.error("피드백 생성/파싱 실패", e);
+            String failureReason = describeFailure(e);
             transactionTemplate.executeWithoutResult(status ->
-                    failFeedback(feedbackKey, context.contextJsonStr(), e.getMessage(), requestId, modelName, promptVersion)
+                    failFeedback(feedbackKey, context.contextJsonStr(), failureReason, requestId, modelName, promptVersion)
             );
-            // 예외를 던져 TradeEventFacade의 exceptionally가 잡도록 함
-            throw new CustomException(LearningErrorCode.AI_RESPONSE_GENERATION_FAILED);
+            // 이미 분류된 도메인 오류는 유지하고, 예상하지 못한 오류만 공통 AI 오류로 변환합니다.
+            if (e instanceof CustomException customException) {
+                throw customException;
+            }
+            throw new CustomException(LearningErrorCode.AI_RESPONSE_GENERATION_FAILED, e);
         }
 
         return CompletableFuture.completedFuture(aiResponse);
     }
 
+    /** 학습 자료 추천 실패가 이미 완료된 AI 피드백의 성공 상태와 응답에 영향을 주지 않게 격리합니다. */
+    private void recommendLearningResourcesSafely(Feedback feedback) {
+        try {
+            int linkedCount = feedbackLearningResourceService.recommendAndLink(
+                    feedback.getFeedbackKey(),
+                    feedback.getUserId(),
+                    feedback.getPositionId(),
+                    feedback.getFeedbackType()
+            );
+            log.info(
+                    "피드백 학습 자료 연결 완료. feedbackKey={}, linkedCount={}",
+                    feedback.getFeedbackKey(),
+                    linkedCount
+            );
+        } catch (RuntimeException exception) {
+            log.warn(
+                    "피드백 학습 자료 추천 실패, AI 피드백은 유지합니다. feedbackKey={}",
+                    feedback.getFeedbackKey(),
+                    exception
+            );
+        }
+    }
+
 
     private void validateAiResponse(AiFeedbackResponse response) {
-        if (response.summary() == null || response.summary().isBlank() ||
+        if (response == null ||
+                response.summary() == null || response.summary().isBlank() ||
                 response.overview() == null || response.overview().isBlank() ||
                 response.strengths() == null || response.strengths().isEmpty() ||
                 response.improvements() == null || response.improvements().isEmpty() ||
                 response.nextActions() == null || response.nextActions().isEmpty()) {
             throw new CustomException(LearningErrorCode.AI_RESPONSE_INCOMPLETE);
         }
+    }
+
+    /** DB 실패 이력에는 공통 메시지가 아닌 가장 안쪽 예외 유형과 메시지를 남깁니다. */
+    private String describeFailure(Throwable exception) {
+        Throwable rootCause = exception;
+        while (rootCause.getCause() != null && rootCause.getCause() != rootCause) {
+            rootCause = rootCause.getCause();
+        }
+
+        String message = rootCause.getMessage();
+        if (message == null || message.isBlank()) {
+            return rootCause.getClass().getSimpleName();
+        }
+        return rootCause.getClass().getSimpleName() + ": " + message;
     }
 
     private void completeFeedback(String feedbackKey, String contextJson, AiFeedbackResponse aiResponse, String reqId, String model, String version) {

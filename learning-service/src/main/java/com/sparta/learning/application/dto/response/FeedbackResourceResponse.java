@@ -27,15 +27,12 @@ public record FeedbackResourceResponse(
         @Schema(description = "이 자료를 추천한 이유", example = "고점 추격 매수 경고가 반복되어 관련 자료를 추천했습니다.")
         String recommendationReason
 ) {
-
-    private static final String VIDEO = "VIDEO";
-
     public static FeedbackResourceResponse from(FeedbackResource feedbackResource) {
         LearningResource resource = feedbackResource.getLearningResource();
 
         return new FeedbackResourceResponse(
                 resource.getId(),
-                VIDEO,
+                resource.getResourceType().name(),
                 resource.getTitle(),
                 resource.getUrl(),
                 resource.getChannelName(),

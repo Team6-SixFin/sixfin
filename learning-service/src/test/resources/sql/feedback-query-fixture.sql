@@ -401,7 +401,7 @@ INSERT INTO ai_requests (
 
 -- 상세 조회에서 확인할 활성 YouTube 학습 자료
 INSERT INTO learning_resources (
-    id, rule_code, search_query, provider, external_id, title,
+    id, rule_code, search_query, provider, resource_type, external_id, title,
     description, channel_id, channel_name, url, thumbnail_url,
     published_at, duration_seconds, view_count, status,
     searched_at, last_verified_at, expires_at
@@ -411,6 +411,7 @@ INSERT INTO learning_resources (
     'HIGH_CHASING_BUY',
     '고점 추격 매수 투자 습관',
     'YOUTUBE',
+    'VIDEO',
     'fixture-video-high-chasing',
     '고점 추격 매수를 피하는 방법',
     '가격 위치를 확인하고 매수 계획을 세우는 방법을 설명합니다.',
@@ -431,6 +432,7 @@ INSERT INTO learning_resources (
     'STOP_LOSS_ADHERENCE',
     '손절 원칙 준수 투자 습관',
     'YOUTUBE',
+    'VIDEO',
     'fixture-video-stop-loss',
     '손절 계획을 지키는 방법',
     '손절 기준을 미리 정하고 실행하는 방법을 설명합니다.',
@@ -448,13 +450,14 @@ INSERT INTO learning_resources (
 );
 
 INSERT INTO feedback_resources (
-    id, feedback_id, learning_resource_id, display_order,
+    id, feedback_id, learning_resource_id, rule_code, display_order,
     recommendation_reason, created_at
 ) VALUES
 (
     970001,
     920001,
     940001,
+    'HIGH_CHASING_BUY',
     1,
     '고점 추격 매수 경고가 발생해 추천합니다.',
     '2026-08-28T10:31:05+09:00'
@@ -463,6 +466,7 @@ INSERT INTO feedback_resources (
     970002,
     920003,
     940002,
+    'STOP_LOSS_ADHERENCE',
     1,
     '손절 원칙 위반 진단이 발생해 추천합니다.',
     '2026-08-30T11:10:07+09:00'

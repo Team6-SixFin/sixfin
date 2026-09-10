@@ -18,4 +18,7 @@ public interface DiagnosisResultRepository extends JpaRepository<DiagnosisResult
 
     // Ai 피드백 생성을 위한 진단 결과 조회용
     List<DiagnosisResult> findAllByPositionId(UUID positionId);
+
+    // 학습 자료 추천 시 사용자 소유권을 함께 확인하고 최신 진단부터 조회한다
+    List<DiagnosisResult> findAllByPositionIdAndUserIdOrderByIdDesc(UUID positionId, UUID userId);
 }
