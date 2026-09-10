@@ -39,7 +39,7 @@ class MarketClockCommandServiceTest {
     private Clock clock;
 
     @InjectMocks
-    private MarketClockCommandService service;
+    private MarketClocksCommandService service;
 
     private MarketClock clockOf(long anchorSeq, Instant anchorAt, int speedFactor, ClockStatus status) {
         return MarketClock.builder()

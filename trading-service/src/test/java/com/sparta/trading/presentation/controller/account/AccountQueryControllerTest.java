@@ -1,6 +1,6 @@
 package com.sparta.trading.presentation.controller.account;
 
-import com.sparta.trading.application.service.AccountQueryService;
+import com.sparta.trading.application.service.AccountsQueryService;
 import com.sparta.trading.global.exception.GlobalExceptionHandler;
 import com.sparta.trading.presentation.dto.response.AccountResponse;
 import org.junit.jupiter.api.BeforeEach;
@@ -25,7 +25,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class AccountQueryControllerTest {
 
     @Mock
-    private AccountQueryService accountQueryService;
+    private AccountsQueryService accountQueryService;
 
     private MockMvc mockMvc;
 

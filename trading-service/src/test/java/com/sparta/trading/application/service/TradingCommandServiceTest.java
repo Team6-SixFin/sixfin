@@ -19,12 +19,13 @@ import com.sparta.trading.domain.entity.OutboxEvents;
 import com.sparta.trading.domain.entity.PositionStatus;
 import com.sparta.trading.domain.entity.Positions;
 import com.sparta.trading.domain.entity.Stocks;
-import com.sparta.trading.domain.repository.account.AccountRepository;
-import com.sparta.trading.domain.repository.cashledger.CashLedgerRepository;
-import com.sparta.trading.domain.repository.execution.ExecutionRepository;
-import com.sparta.trading.domain.repository.order.OrderRepository;
-import com.sparta.trading.domain.repository.outbox.OutboxEventRepository;
-import com.sparta.trading.domain.repository.position.PositionRepository;
+import com.sparta.trading.domain.repository.accounts.AccountsCommandRepository;
+import com.sparta.trading.domain.repository.accounts.AccountsQueryRepository;
+import com.sparta.trading.domain.repository.cashledgers.CashLedgersCommandRepository;
+import com.sparta.trading.domain.repository.executions.ExecutionsRepository;
+import com.sparta.trading.domain.repository.orders.OrdersRepository;
+import com.sparta.trading.domain.repository.outboxEvents.OutboxEventsRepository;
+import com.sparta.trading.domain.repository.positions.PositionsRepository;
 import com.sparta.trading.global.exception.CustomException;
 import com.sparta.trading.global.exception.TradingErrorCode;
 import com.sparta.trading.infrastructure.persistence.repository.stocks.StocksRepository;
@@ -60,12 +61,13 @@ class TradingCommandServiceTest {
 
     @Mock private QuoteReader quoteReader;
     @Mock private StocksRepository stocksRepository;
-    @Mock private AccountRepository accountRepository;
-    @Mock private OrderRepository orderRepository;
-    @Mock private PositionRepository positionRepository;
-    @Mock private ExecutionRepository executionRepository;
-    @Mock private CashLedgerRepository cashLedgerRepository;
-    @Mock private OutboxEventRepository outboxEventRepository;
+    @Mock private AccountsCommandRepository accountsCommandRepository;
+    @Mock private AccountsQueryRepository accountsQueryRepository;
+    @Mock private OrdersRepository orderRepository;
+    @Mock private PositionsRepository positionRepository;
+    @Mock private ExecutionsRepository executionRepository;
+    @Mock private CashLedgersCommandRepository cashLedgerRepository;
+    @Mock private OutboxEventsRepository outboxEventRepository;
 
     private TradingCommandService service;
 
@@ -74,7 +76,8 @@ class TradingCommandServiceTest {
         service = new TradingCommandService(
                 quoteReader,
                 stocksRepository,
-                accountRepository,
+                accountsCommandRepository,
+                accountsQueryRepository,
                 orderRepository,
                 positionRepository,
                 executionRepository,
@@ -96,7 +99,7 @@ class TradingCommandServiceTest {
         PlaceOrderCommand command = command(UUID.randomUUID(), " aapl ", 10);
         when(orderRepository.findByRequestId(command.requestId())).thenReturn(Optional.empty());
         when(quoteReader.read("AAPL")).thenReturn(validQuote("100.0000"));
-        when(accountRepository.findByUserIdForUpdate(userId)).thenReturn(Optional.of(account));
+        when(accountsCommandRepository.findByUserIdForUpdate(userId)).thenReturn(Optional.of(account));
         when(positionRepository.findOpenByAccountIdAndStockIdForUpdate(account.getId(), 1L))
                 .thenReturn(Optional.empty());
 
@@ -111,7 +114,7 @@ class TradingCommandServiceTest {
         assertThat(response.execution().executedAmount()).isEqualByComparingTo("1000.0000");
         assertThat(response.execution().realizedProfit()).isNull();
         assertThat(account.getCashBalance()).isEqualByComparingTo("99000.0000");
-        verify(accountRepository).findByUserIdForUpdate(userId);
+        verify(accountsCommandRepository).findByUserIdForUpdate(userId);
         verify(positionRepository).save(any());
         verify(executionRepository).save(any());
         verify(cashLedgerRepository).save(any(CashLedgers.class));
@@ -136,7 +139,7 @@ class TradingCommandServiceTest {
         PlaceOrderCommand command = command(UUID.randomUUID(), "AAPL", 1001);
         when(orderRepository.findByRequestId(command.requestId())).thenReturn(Optional.empty());
         when(quoteReader.read("AAPL")).thenReturn(validQuote("100.0000"));
-        when(accountRepository.findByUserIdForUpdate(userId)).thenReturn(Optional.of(account));
+        when(accountsCommandRepository.findByUserIdForUpdate(userId)).thenReturn(Optional.of(account));
 
         OrderResponse response = service.placeOrder(userId, command);
 
@@ -161,7 +164,7 @@ class TradingCommandServiceTest {
                 "AAPL", new BigDecimal("100.0000"), 12L, QUOTE_TIME, ClockStatus.RUNNING,
                 null, new BigDecimal("90.0000"), new BigDecimal("3.2500"), EXECUTED_AT, 1L, "Apple Inc."
         ));
-        when(accountRepository.findByUserIdForUpdate(userId)).thenReturn(Optional.of(account));
+        when(accountsCommandRepository.findByUserIdForUpdate(userId)).thenReturn(Optional.of(account));
 
         OrderResponse response = service.placeOrder(userId, command);
 
@@ -182,7 +185,7 @@ class TradingCommandServiceTest {
         PlaceOrderCommand command = sellCommand(UUID.randomUUID(), "AAPL", 4);
         when(orderRepository.findByRequestId(command.requestId())).thenReturn(Optional.empty());
         when(quoteReader.read("AAPL")).thenReturn(validQuote("120.0000"));
-        when(accountRepository.findByUserIdForUpdate(userId)).thenReturn(Optional.of(account));
+        when(accountsCommandRepository.findByUserIdForUpdate(userId)).thenReturn(Optional.of(account));
         when(positionRepository.findOpenByAccountIdAndStockIdForUpdate(account.getId(), 1L))
                 .thenReturn(Optional.of(position));
 
@@ -228,7 +231,7 @@ class TradingCommandServiceTest {
         PlaceOrderCommand command = sellCommand(UUID.randomUUID(), "AAPL", 10);
         when(orderRepository.findByRequestId(command.requestId())).thenReturn(Optional.empty());
         when(quoteReader.read("AAPL")).thenReturn(validQuote("90.0000"));
-        when(accountRepository.findByUserIdForUpdate(userId)).thenReturn(Optional.of(account));
+        when(accountsCommandRepository.findByUserIdForUpdate(userId)).thenReturn(Optional.of(account));
         when(positionRepository.findOpenByAccountIdAndStockIdForUpdate(account.getId(), 1L))
                 .thenReturn(Optional.of(position));
 
@@ -265,7 +268,7 @@ class TradingCommandServiceTest {
         PlaceOrderCommand command = sellCommand(UUID.randomUUID(), "AAPL", 4);
         when(orderRepository.findByRequestId(command.requestId())).thenReturn(Optional.empty());
         when(quoteReader.read("AAPL")).thenReturn(validQuote("120.0000"));
-        when(accountRepository.findByUserIdForUpdate(userId)).thenReturn(Optional.of(account));
+        when(accountsCommandRepository.findByUserIdForUpdate(userId)).thenReturn(Optional.of(account));
         when(positionRepository.findOpenByAccountIdAndStockIdForUpdate(account.getId(), 1L))
                 .thenReturn(Optional.of(position));
 
@@ -295,7 +298,7 @@ class TradingCommandServiceTest {
                 new BigDecimal("110.0000"), new BigDecimal("90.0000"), new BigDecimal("3.2500"),
                 EXECUTED_AT, 1L, "Apple Inc."
         ));
-        when(accountRepository.findByUserIdForUpdate(userId)).thenReturn(Optional.of(account));
+        when(accountsCommandRepository.findByUserIdForUpdate(userId)).thenReturn(Optional.of(account));
 
         assertThatThrownBy(() -> service.placeOrder(userId, command))
                 .isInstanceOf(CustomException.class)
@@ -314,7 +317,7 @@ class TradingCommandServiceTest {
         PlaceOrderCommand command = command(requestId, "AAPL", 1);
         when(orderRepository.findByRequestId(requestId)).thenReturn(Optional.empty());
         when(quoteReader.read("AAPL")).thenReturn(validQuote("100.0000"));
-        when(accountRepository.findByUserIdForUpdate(userId)).thenReturn(Optional.of(account));
+        when(accountsCommandRepository.findByUserIdForUpdate(userId)).thenReturn(Optional.of(account));
         when(positionRepository.findOpenByAccountIdAndStockIdForUpdate(account.getId(), 1L))
                 .thenReturn(Optional.empty());
 
@@ -325,7 +328,7 @@ class TradingCommandServiceTest {
         Orders saved = orderCaptor.getValue();
         when(orderRepository.findByRequestId(requestId)).thenReturn(Optional.of(saved));
         when(stocksRepository.findBySymbol("AAPL")).thenReturn(Optional.of(stock(1L)));
-        when(accountRepository.findByUserId(userId)).thenReturn(Optional.of(account));
+        when(accountsQueryRepository.findByUserId(userId)).thenReturn(Optional.of(account));
         when(executionRepository.findByOrderId(saved.getId())).thenReturn(Optional.of(
                 com.sparta.trading.domain.entity.Executions.buy(
                         saved.getId(), saved.getPositionId(), userId, 1L, 1, new BigDecimal("100.0000"),
@@ -337,7 +340,7 @@ class TradingCommandServiceTest {
 
         assertThat(retry.orderId()).isEqualTo(first.orderId());
         verify(quoteReader, times(1)).read("AAPL");
-        verify(accountRepository, times(1)).findByUserIdForUpdate(eq(userId));
+        verify(accountsCommandRepository, times(1)).findByUserIdForUpdate(eq(userId));
     }
 
     @Test
@@ -351,7 +354,7 @@ class TradingCommandServiceTest {
         );
         when(orderRepository.findByRequestId(requestId)).thenReturn(Optional.of(existing));
         when(stocksRepository.findBySymbol("AAPL")).thenReturn(Optional.of(stock(1L)));
-        when(accountRepository.findByUserId(userId)).thenReturn(Optional.of(account));
+        when(accountsQueryRepository.findByUserId(userId)).thenReturn(Optional.of(account));
 
         assertThatThrownBy(() -> service.placeOrder(userId, command(requestId, "AAPL", 1)))
                 .isInstanceOf(CustomException.class)

@@ -1,6 +1,6 @@
 package com.sparta.trading.presentation.controller.position;
 
-import com.sparta.trading.application.service.PositionQueryService;
+import com.sparta.trading.application.service.PositionsQueryService;
 import com.sparta.trading.domain.entity.PositionStatus;
 import com.sparta.trading.global.exception.GlobalExceptionHandler;
 import com.sparta.trading.global.response.PageResponse;
@@ -37,7 +37,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class PositionQueryControllerTest {
 
     @Mock
-    private PositionQueryService positionQueryService;
+    private PositionsQueryService positionQueryService;
 
     private MockMvc mockMvc;
 

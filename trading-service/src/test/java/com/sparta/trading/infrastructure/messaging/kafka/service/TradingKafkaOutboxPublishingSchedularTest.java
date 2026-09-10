@@ -1,6 +1,6 @@
 package com.sparta.trading.infrastructure.messaging.kafka.service;
 
-import com.sparta.trading.domain.repository.outboxEvent.TradingOutboxEventsQueryRepository;
+import com.sparta.trading.domain.repository.outboxEvents.OutboxEventsQueryRepository;
 import com.sparta.trading.infrastructure.messaging.kafka.OutboxPublisherProperties;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -22,7 +22,7 @@ class TradingKafkaOutboxPublishingSchedularTest {
     private static final int BATCH_SIZE = 2;
 
     @Mock
-    private TradingOutboxEventsQueryRepository outboxEventsQueryRepository;
+    private OutboxEventsQueryRepository outboxEventsQueryRepository;
 
     @Mock
     private TradingKafkaOutboxPublisher kafkaOutboxPublisher;

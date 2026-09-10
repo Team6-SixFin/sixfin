@@ -19,12 +19,13 @@ import com.sparta.trading.domain.entity.OrderStatus;
 import com.sparta.trading.domain.entity.OrderType;
 import com.sparta.trading.domain.entity.OutboxEvents;
 import com.sparta.trading.domain.entity.Positions;
-import com.sparta.trading.domain.repository.account.AccountRepository;
-import com.sparta.trading.domain.repository.cashledger.CashLedgerRepository;
-import com.sparta.trading.domain.repository.execution.ExecutionRepository;
-import com.sparta.trading.domain.repository.order.OrderRepository;
-import com.sparta.trading.domain.repository.outbox.OutboxEventRepository;
-import com.sparta.trading.domain.repository.position.PositionRepository;
+import com.sparta.trading.domain.repository.accounts.AccountsCommandRepository;
+import com.sparta.trading.domain.repository.accounts.AccountsQueryRepository;
+import com.sparta.trading.domain.repository.cashledgers.CashLedgersCommandRepository;
+import com.sparta.trading.domain.repository.executions.ExecutionsRepository;
+import com.sparta.trading.domain.repository.orders.OrdersRepository;
+import com.sparta.trading.domain.repository.outboxEvents.OutboxEventsRepository;
+import com.sparta.trading.domain.repository.positions.PositionsRepository;
 import com.sparta.trading.global.exception.CustomException;
 import com.sparta.trading.global.exception.TradingErrorCode;
 import com.sparta.trading.infrastructure.persistence.repository.stocks.StocksRepository;
@@ -48,12 +49,13 @@ public class TradingCommandService {
 
     private final QuoteReader quoteReader;
     private final StocksRepository stocksRepository;
-    private final AccountRepository accountRepository;
-    private final OrderRepository orderRepository;
-    private final PositionRepository positionRepository;
-    private final ExecutionRepository executionRepository;
-    private final CashLedgerRepository cashLedgerRepository;
-    private final OutboxEventRepository outboxEventRepository;
+    private final AccountsCommandRepository accountsCommandRepository;
+    private final AccountsQueryRepository accountsQueryRepository;
+    private final OrdersRepository orderRepository;
+    private final PositionsRepository positionRepository;
+    private final ExecutionsRepository executionRepository;
+    private final CashLedgersCommandRepository cashLedgerRepository;
+    private final OutboxEventsRepository outboxEventRepository;
     private final ObjectMapper objectMapper;
 
     // 주문 요청을 받아 중복 주문, 주문 유형, 시세, 계좌를 확인한 후 매수 또는 매도를 처리
@@ -78,7 +80,7 @@ public class TradingCommandService {
         // 현재 시세 스냅샷 조회
         Quote quote = quoteReader.read(normalized.symbol());
         // 계좌 행을 비관적 락으로 조회
-        Accounts account = accountRepository.findByUserIdForUpdate(userId)
+        Accounts account = accountsCommandRepository.findByUserIdForUpdate(userId)
                 .orElseThrow(() -> new CustomException(TradingErrorCode.ACCOUNT_NOT_FOUND));
 
         // 첫 조회와 계좌 잠금 사이에 같은 requestId 주문이 커밋됐을 수 있다.
@@ -260,7 +262,7 @@ public class TradingCommandService {
             UUID userId // 이번에 요청한 UserId
     ) {
         // userId로 account(계좌) 조회
-        Accounts account = accountRepository.findByUserId(userId)
+        Accounts account = accountsQueryRepository.findByUserId(userId)
                 .orElseThrow(() -> new CustomException(TradingErrorCode.ORDER_REQUEST_ID_CONFLICT));
         // account를 인수에 담아 아래의 existingResponse 호출
         return existingResponse(order, normalized, stockId, account);

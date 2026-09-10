@@ -6,8 +6,9 @@ import com.sparta.trading.domain.entity.Accounts;
 import com.sparta.trading.domain.entity.ClockStatus;
 import com.sparta.trading.domain.entity.Positions;
 import com.sparta.trading.domain.entity.Stocks;
-import com.sparta.trading.domain.repository.account.AccountRepository;
-import com.sparta.trading.domain.repository.position.PositionRepository;
+import com.sparta.trading.domain.repository.accounts.AccountsCommandRepository;
+import com.sparta.trading.domain.repository.accounts.AccountsQueryRepository;
+import com.sparta.trading.domain.repository.positions.PositionsRepository;
 import com.sparta.trading.global.exception.CustomException;
 import com.sparta.trading.global.exception.TradingErrorCode;
 import com.sparta.trading.infrastructure.persistence.repository.stocks.StocksRepository;
@@ -37,10 +38,11 @@ class PortfolioQueryServiceTest {
     private static final Instant MARKET_TIME = Instant.parse("2026-09-04T01:30:00Z");
 
     @Mock
-    private AccountRepository accountRepository;
+    private AccountsQueryRepository accountRepository;
+
 
     @Mock
-    private PositionRepository positionRepository;
+    private PositionsRepository positionRepository;
 
     @Mock
     private StocksRepository stocksRepository;

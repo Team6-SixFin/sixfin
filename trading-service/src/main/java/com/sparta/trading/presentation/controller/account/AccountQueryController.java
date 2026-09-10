@@ -1,6 +1,6 @@
 package com.sparta.trading.presentation.controller.account;
 
-import com.sparta.trading.application.service.AccountQueryService;
+import com.sparta.trading.application.service.AccountsQueryService;
 import com.sparta.trading.presentation.dto.response.AccountResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -17,7 +17,7 @@ public class AccountQueryController {
 
     private static final String USER_ID_HEADER = "X-User-Id";
 
-    private final AccountQueryService accountQueryService;
+    private final AccountsQueryService accountQueryService;
 
     // 내 계좌 조회: 계좌가 없으면 초기 예수금 원장과 함께 생성한다.
     @GetMapping("/accounts/me")

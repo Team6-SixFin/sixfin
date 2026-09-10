@@ -3,7 +3,7 @@ package com.sparta.trading;
 import com.sparta.trading.application.dto.query.TradingSearchAccountsQuery;
 import com.sparta.trading.application.service.TradingAdminQueryService;
 import com.sparta.trading.domain.entity.Accounts;
-import com.sparta.trading.domain.repository.accounts.TradingAccountsQueryRepository;
+import com.sparta.trading.domain.repository.accounts.AccountsQueryRepository;
 import com.sparta.trading.presentation.dto.response.TradingAccountsResponseDto;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -12,7 +12,6 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.*;
-import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -30,7 +29,7 @@ import static org.mockito.Mockito.verify;
 public class TradinAdminServiceApplicationTests {
 
     @Mock
-    private TradingAccountsQueryRepository adminQueryRepository;
+    private AccountsQueryRepository adminQueryRepository;
 
     @InjectMocks
     private TradingAdminQueryService tradingAdminQueryService;

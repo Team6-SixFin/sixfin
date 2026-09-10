@@ -4,9 +4,9 @@ import com.sparta.trading.domain.entity.Accounts;
 import com.sparta.trading.domain.entity.CashLedgers;
 import com.sparta.trading.domain.entity.PositionStatus;
 import com.sparta.trading.domain.entity.Positions;
-import com.sparta.trading.domain.repository.accounts.TradingAccountsQueryRepository;
-import com.sparta.trading.domain.repository.cashledger.CashLedgerRepository;
-import com.sparta.trading.domain.repository.position.PositionRepository;
+import com.sparta.trading.domain.repository.accounts.AccountsQueryRepository;
+import com.sparta.trading.domain.repository.cashledgers.CashLedgersCommandRepository;
+import com.sparta.trading.domain.repository.positions.PositionsRepository;
 import com.sparta.trading.global.exception.CustomException;
 import com.sparta.trading.global.exception.TradingErrorCode;
 import com.sparta.trading.presentation.dto.request.TradingAdminResetAccountRequest;
@@ -37,13 +37,13 @@ import static org.mockito.Mockito.when;
 class TradingAdminCommandServiceTest {
 
     @Mock
-    private TradingAccountsQueryRepository tradingAccountsQueryRepository;
+    private AccountsQueryRepository tradingAccountsQueryRepository;
 
     @Mock
-    private PositionRepository positionRepository;
+    private PositionsRepository positionRepository;
 
     @Mock
-    private CashLedgerRepository cashLedgerRepository;
+    private CashLedgersCommandRepository cashLedgerRepository;
 
     private TradingAdminCommandService service;
     private UUID targetUserId;

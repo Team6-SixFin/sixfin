@@ -1,6 +1,6 @@
 package com.sparta.trading.presentation.controller.cashledger;
 
-import com.sparta.trading.application.service.CashLedgerQueryService;
+import com.sparta.trading.application.service.CashLedgersQueryService;
 import com.sparta.trading.domain.entity.CashLedgerTxType;
 import com.sparta.trading.global.response.PageResponse;
 import com.sparta.trading.global.util.PageableUtil;
@@ -19,7 +19,7 @@ public class CashLedgerQueryController {
 
     private static final String USER_ID_HEADER = "X-User-Id";
 
-    private final CashLedgerQueryService cashLedgerQueryService;
+    private final CashLedgersQueryService cashLedgerQueryService;
 
     @GetMapping
     public PageResponse<CashLedgerResponse> getCashLedgers(

@@ -1,6 +1,6 @@
 package com.sparta.trading.presentation.controller.cashledger;
 
-import com.sparta.trading.application.service.CashLedgerQueryService;
+import com.sparta.trading.application.service.CashLedgersQueryService;
 import com.sparta.trading.domain.entity.CashLedgerTxType;
 import com.sparta.trading.global.exception.GlobalExceptionHandler;
 import com.sparta.trading.global.response.PageResponse;
@@ -38,7 +38,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class CashLedgerQueryControllerTest {
 
     @Mock
-    private CashLedgerQueryService cashLedgerQueryService;
+    private CashLedgersQueryService cashLedgerQueryService;
 
     private MockMvc mockMvc;
 

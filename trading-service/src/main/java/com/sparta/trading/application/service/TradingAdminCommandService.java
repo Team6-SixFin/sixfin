@@ -3,9 +3,9 @@ package com.sparta.trading.application.service;
 import com.sparta.trading.domain.entity.Accounts;
 import com.sparta.trading.domain.entity.CashLedgers;
 import com.sparta.trading.domain.entity.Positions;
-import com.sparta.trading.domain.repository.accounts.TradingAccountsQueryRepository;
-import com.sparta.trading.domain.repository.cashledger.CashLedgerRepository;
-import com.sparta.trading.domain.repository.position.PositionRepository;
+import com.sparta.trading.domain.repository.accounts.AccountsQueryRepository;
+import com.sparta.trading.domain.repository.cashledgers.CashLedgersCommandRepository;
+import com.sparta.trading.domain.repository.positions.PositionsRepository;
 import com.sparta.trading.global.exception.CustomException;
 import com.sparta.trading.global.exception.TradingErrorCode;
 import com.sparta.trading.presentation.dto.request.TradingAdminResetAccountRequest;
@@ -23,9 +23,9 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class TradingAdminCommandService {
 
-    private final TradingAccountsQueryRepository tradingAccountsQueryRepository;
-    private final PositionRepository positionRepository;
-    private final CashLedgerRepository cashLedgerRepository;
+    private final AccountsQueryRepository tradingAccountsQueryRepository;
+    private final PositionsRepository positionRepository;
+    private final CashLedgersCommandRepository cashLedgerRepository;
 
     /**
      * 대상 사용자의 계좌를 초기화한다.

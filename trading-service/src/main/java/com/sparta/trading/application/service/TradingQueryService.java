@@ -4,10 +4,10 @@ import com.sparta.trading.application.dto.query.TradingAdminSearchOrderQuery;
 import com.sparta.trading.application.port.Quote;
 import com.sparta.trading.application.port.QuoteReader;
 import com.sparta.trading.domain.entity.*;
-import com.sparta.trading.domain.repository.account.AccountRepository;
-import com.sparta.trading.domain.repository.execution.ExecutionRepository;
-import com.sparta.trading.domain.repository.order.OrderRepository;
-import com.sparta.trading.domain.repository.order.TradingOrderQueryRepository;
+import com.sparta.trading.domain.repository.accounts.AccountsQueryRepository;
+import com.sparta.trading.domain.repository.executions.ExecutionsRepository;
+import com.sparta.trading.domain.repository.orders.OrdersRepository;
+import com.sparta.trading.domain.repository.orders.OrdersQueryRepository;
 import com.sparta.trading.global.exception.CustomException;
 import com.sparta.trading.global.exception.GlobalErrorCode;
 import com.sparta.trading.global.exception.TradingErrorCode;
@@ -19,7 +19,6 @@ import com.sparta.trading.presentation.dto.response.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -40,10 +39,10 @@ public class TradingQueryService {
     private final CurrentSeqProvider currentSeqProvider;
     private final StocksRepository stocksRepository;
     private final PriceCandlesRepository priceCandlesRepository;
-    private final OrderRepository orderRepository;
-    private final TradingOrderQueryRepository tradingOrderQueryRepository;
-    private final ExecutionRepository executionRepository;
-    private final AccountRepository accountRepository;
+    private final OrdersRepository orderRepository;
+    private final OrdersQueryRepository tradingOrderQueryRepository;
+    private final ExecutionsRepository executionRepository;
+    private final AccountsQueryRepository accountsQueryRepository;
     private final QuoteReader quoteReader;
 
     // ==============================
@@ -132,7 +131,7 @@ public class TradingQueryService {
         validateEnumIfPresent(side, OrderSide.class);
 
         // search의 경우에는 계좌가 없으면 그냥 빈 응답 반환
-        Optional<Accounts> account = accountRepository.findByUserId(userId);
+        Optional<Accounts> account = accountsQueryRepository.findByUserId(userId);
         if (account.isEmpty()) {
             return PageResponse.of(Page.empty(normalized));
         }
@@ -153,7 +152,7 @@ public class TradingQueryService {
 
     public TradingOrderDetailResponseDto findOrderById(UUID userId, UUID orderId) {
         // 유저는 자기 계좌만 확인 가능함. 계좌가 없으면 애초에 조회 불가능
-        Accounts account = accountRepository.findByUserId(userId)
+        Accounts account = accountsQueryRepository.findByUserId(userId)
                 .orElseThrow(() -> new CustomException(TradingErrorCode.ACCOUNT_NOT_FOUND));
 
         Orders order = orderRepository.findById(orderId)

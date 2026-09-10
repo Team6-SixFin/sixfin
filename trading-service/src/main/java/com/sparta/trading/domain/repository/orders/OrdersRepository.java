@@ -1,0 +1,18 @@
+package com.sparta.trading.domain.repository.orders;
+
+import com.sparta.trading.domain.entity.Orders;
+
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+
+public interface OrdersRepository {
+
+    Optional<Orders> findByRequestId(UUID requestId);
+
+    Optional<Orders> findById(UUID id);
+
+    Orders save(Orders order);
+
+    List<DuplicateRequestGroup> findDuplicateRequestGroups(UUID accountId);
+}

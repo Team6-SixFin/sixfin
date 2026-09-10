@@ -1,6 +1,6 @@
 package com.sparta.trading.presentation.controller.position;
 
-import com.sparta.trading.application.service.PositionQueryService;
+import com.sparta.trading.application.service.PositionsQueryService;
 import com.sparta.trading.domain.entity.PositionStatus;
 import com.sparta.trading.global.response.PageResponse;
 import com.sparta.trading.global.util.PageableUtil;
@@ -20,7 +20,7 @@ public class PositionQueryController {
 
     private static final String USER_ID_HEADER = "X-User-Id";
 
-    private final PositionQueryService positionQueryService;
+    private final PositionsQueryService positionQueryService;
 
     // 포지션 목록 조회
     @GetMapping
