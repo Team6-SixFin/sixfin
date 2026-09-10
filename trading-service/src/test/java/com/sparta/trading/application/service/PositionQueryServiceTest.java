@@ -6,7 +6,7 @@ import com.sparta.trading.domain.entity.ClockStatus;
 import com.sparta.trading.domain.entity.PositionStatus;
 import com.sparta.trading.domain.entity.Positions;
 import com.sparta.trading.domain.entity.Stocks;
-import com.sparta.trading.domain.repository.positions.PositionsRepository;
+import com.sparta.trading.domain.repository.positions.PositionsQueryRepository;
 import com.sparta.trading.global.exception.CustomException;
 import com.sparta.trading.global.exception.TradingErrorCode;
 import com.sparta.trading.global.response.PageResponse;
@@ -41,7 +41,7 @@ class PositionQueryServiceTest {
     private static final Instant MARKET_TIME = Instant.parse("2026-09-04T01:30:00Z");
 
     @Mock
-    private PositionsRepository positionRepository;
+    private PositionsQueryRepository positionRepository;
 
     @Mock
     private StocksRepository stocksRepository;

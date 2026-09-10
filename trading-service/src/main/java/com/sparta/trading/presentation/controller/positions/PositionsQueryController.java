@@ -1,4 +1,4 @@
-package com.sparta.trading.presentation.controller.position;
+package com.sparta.trading.presentation.controller.positions;
 
 import com.sparta.trading.application.service.PositionsQueryService;
 import com.sparta.trading.domain.entity.PositionStatus;
@@ -16,7 +16,7 @@ import java.util.UUID;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/trading/positions")
-public class PositionQueryController {
+public class PositionsQueryController {
 
     private static final String USER_ID_HEADER = "X-User-Id";
 

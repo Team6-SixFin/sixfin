@@ -6,6 +6,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
 import java.util.List;
+import java.util.Optional;
 
 public interface OutboxEventsQueryRepository {
 
@@ -16,4 +17,6 @@ public interface OutboxEventsQueryRepository {
     List<OutboxEvents> findUnpublished(Pageable pageable);
 
     List<Long> findPendingIds(int count);
+
+    Optional<OutboxEvents> findById(long id);
 }

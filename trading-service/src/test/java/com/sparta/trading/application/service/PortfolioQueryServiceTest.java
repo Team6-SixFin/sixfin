@@ -6,9 +6,8 @@ import com.sparta.trading.domain.entity.Accounts;
 import com.sparta.trading.domain.entity.ClockStatus;
 import com.sparta.trading.domain.entity.Positions;
 import com.sparta.trading.domain.entity.Stocks;
-import com.sparta.trading.domain.repository.accounts.AccountsCommandRepository;
 import com.sparta.trading.domain.repository.accounts.AccountsQueryRepository;
-import com.sparta.trading.domain.repository.positions.PositionsRepository;
+import com.sparta.trading.domain.repository.positions.PositionsQueryRepository;
 import com.sparta.trading.global.exception.CustomException;
 import com.sparta.trading.global.exception.TradingErrorCode;
 import com.sparta.trading.infrastructure.persistence.repository.stocks.StocksRepository;
@@ -42,7 +41,7 @@ class PortfolioQueryServiceTest {
 
 
     @Mock
-    private PositionsRepository positionRepository;
+    private PositionsQueryRepository positionRepository;
 
     @Mock
     private StocksRepository stocksRepository;

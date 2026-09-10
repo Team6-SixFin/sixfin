@@ -5,7 +5,7 @@ import com.sparta.trading.domain.entity.CashLedgers;
 import com.sparta.trading.domain.entity.Positions;
 import com.sparta.trading.domain.repository.accounts.AccountsQueryRepository;
 import com.sparta.trading.domain.repository.cashledgers.CashLedgersCommandRepository;
-import com.sparta.trading.domain.repository.positions.PositionsRepository;
+import com.sparta.trading.domain.repository.positions.PositionsQueryRepository;
 import com.sparta.trading.global.exception.CustomException;
 import com.sparta.trading.global.exception.TradingErrorCode;
 import com.sparta.trading.presentation.dto.request.TradingAdminResetAccountRequest;
@@ -24,7 +24,7 @@ import java.util.UUID;
 public class TradingAdminCommandService {
 
     private final AccountsQueryRepository tradingAccountsQueryRepository;
-    private final PositionsRepository positionRepository;
+    private final PositionsQueryRepository positionRepository;
     private final CashLedgersCommandRepository cashLedgerRepository;
 
     /**

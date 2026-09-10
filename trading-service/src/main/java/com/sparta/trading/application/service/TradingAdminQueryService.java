@@ -10,18 +10,16 @@ import com.sparta.trading.application.dto.result.TradingAdminOrderQueryResult;
 import com.sparta.trading.application.dto.result.TradingAdminOutboxEventQueryResult;
 import com.sparta.trading.domain.entity.*;
 import com.sparta.trading.domain.repository.accounts.AccountsQueryRepository;
-import com.sparta.trading.domain.repository.cashledgers.CashLedgersCommandRepository;
 import com.sparta.trading.domain.repository.accounts.CashLedgersAccountsGroup;
 import com.sparta.trading.domain.repository.cashledgers.CashLedgersQueryRepository;
 import com.sparta.trading.domain.repository.cashledgers.LedgerSequenceMismatchGroup;
 import com.sparta.trading.domain.repository.executions.ExecutionsQueryRepository;
 import com.sparta.trading.domain.repository.orders.DuplicateRequestGroup;
-import com.sparta.trading.domain.repository.orders.OrdersRepository;
 import com.sparta.trading.domain.repository.orders.OrdersQueryRepository;
 import com.sparta.trading.domain.repository.outboxEvents.OutboxEventsQueryRepository;
 import com.sparta.trading.domain.repository.positions.DuplicateOpenPositionsGroup;
 import com.sparta.trading.domain.repository.positions.PositionsQuantityMismatchGroup;
-import com.sparta.trading.domain.repository.positions.PositionsRepository;
+import com.sparta.trading.domain.repository.positions.PositionsQueryRepository;
 import com.sparta.trading.global.exception.CustomException;
 import com.sparta.trading.global.exception.GlobalErrorCode;
 import com.sparta.trading.global.exception.TradingErrorCode;
@@ -50,12 +48,11 @@ import java.util.stream.Collectors;
 public class TradingAdminQueryService {
 
     private final AccountsQueryRepository tradingAccountsQueryRepository;
-    private final OrdersQueryRepository tradingOrderQueryRepository;
+    private final OrdersQueryRepository orderRepository;
     private final ExecutionsQueryRepository tradingExecutionQueryRepository;
     private final OutboxEventsQueryRepository tradingOutboxEventsQueryRepository;
-    private final PositionsRepository positionRepository;
+    private final PositionsQueryRepository positionRepository;
     private final StocksRepository stocksRepository;
-    private final OrdersRepository orderRepository;
     private final CashLedgersQueryRepository cashLedgersQueryRepository;
 
     private final StringRedisTemplate redisTemplate;
@@ -108,7 +105,7 @@ public class TradingAdminQueryService {
         }
 
 
-        Page<Orders> orders = tradingOrderQueryRepository.searchOrder(
+        Page<Orders> orders = orderRepository.searchOrder(
                 tradingAdminSearchOrderQuery,
                 targetStockId,
                 targetAccountIds,

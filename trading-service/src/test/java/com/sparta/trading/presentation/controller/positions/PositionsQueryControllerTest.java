@@ -1,4 +1,4 @@
-package com.sparta.trading.presentation.controller.position;
+package com.sparta.trading.presentation.controller.positions;
 
 import com.sparta.trading.application.service.PositionsQueryService;
 import com.sparta.trading.domain.entity.PositionStatus;
@@ -43,7 +43,7 @@ class PositionQueryControllerTest {
 
     @BeforeEach
     void setUp() {
-        mockMvc = MockMvcBuilders.standaloneSetup(new PositionQueryController(positionQueryService))
+        mockMvc = MockMvcBuilders.standaloneSetup(new PositionsQueryController(positionQueryService))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .setCustomArgumentResolvers(new PageableHandlerMethodArgumentResolver())
                 .build();

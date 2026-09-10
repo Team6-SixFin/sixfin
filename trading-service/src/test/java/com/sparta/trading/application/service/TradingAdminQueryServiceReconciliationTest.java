@@ -3,13 +3,11 @@ package com.sparta.trading.application.service;
 import com.sparta.trading.application.dto.query.TradingReconciliationQuery;
 import com.sparta.trading.domain.entity.ReconciliationStatus;
 import com.sparta.trading.domain.repository.accounts.AccountsQueryRepository;
-import com.sparta.trading.domain.repository.cashledgers.CashLedgersCommandRepository;
 import com.sparta.trading.domain.repository.cashledgers.CashLedgersQueryRepository;
 import com.sparta.trading.domain.repository.executions.ExecutionsQueryRepository;
-import com.sparta.trading.domain.repository.orders.OrdersRepository;
 import com.sparta.trading.domain.repository.orders.OrdersQueryRepository;
 import com.sparta.trading.domain.repository.outboxEvents.OutboxEventsQueryRepository;
-import com.sparta.trading.domain.repository.positions.PositionsRepository;
+import com.sparta.trading.domain.repository.positions.PositionsQueryRepository;
 import com.sparta.trading.global.exception.CustomException;
 import com.sparta.trading.global.exception.TradingErrorCode;
 import com.sparta.trading.infrastructure.persistence.repository.stocks.StocksRepository;
@@ -34,16 +32,15 @@ class TradingAdminQueryServiceReconciliationTest {
     @Mock private OrdersQueryRepository tradingOrderQueryRepository;
     @Mock private ExecutionsQueryRepository tradingExecutionQueryRepository;
     @Mock private OutboxEventsQueryRepository tradingOutboxEventsQueryRepository;
-    @Mock private PositionsRepository positionRepository;
+    @Mock private PositionsQueryRepository positionRepository;
     @Mock private StocksRepository stocksRepository;
-    @Mock private OrdersRepository orderRepository;
     @Mock private CashLedgersQueryRepository cashLedgerRepository;
     @Mock private StringRedisTemplate redisTemplate;
 
     private TradingAdminQueryService service() {
         return new TradingAdminQueryService(
                 tradingAccountsQueryRepository, tradingOrderQueryRepository, tradingExecutionQueryRepository,
-                tradingOutboxEventsQueryRepository, positionRepository, stocksRepository, orderRepository,
+                tradingOutboxEventsQueryRepository, positionRepository, stocksRepository,
                 cashLedgerRepository, redisTemplate
         );
     }

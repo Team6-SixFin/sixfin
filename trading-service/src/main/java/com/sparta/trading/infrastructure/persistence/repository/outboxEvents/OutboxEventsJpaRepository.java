@@ -10,7 +10,7 @@ import org.springframework.data.repository.query.Param;
 import java.time.Instant;
 import java.util.List;
 
-public interface OutboxEventJpaRepository extends JpaRepository<OutboxEvents, Long> {
+public interface OutboxEventsJpaRepository extends JpaRepository<OutboxEvents, Long> {
 
     @Query("""
         SELECT o From OutboxEvents o

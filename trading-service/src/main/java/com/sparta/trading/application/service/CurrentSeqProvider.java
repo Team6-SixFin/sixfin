@@ -2,7 +2,7 @@ package com.sparta.trading.application.service;
 
 import com.sparta.trading.domain.entity.MarketClock;
 import com.sparta.trading.domain.entity.PriceCandles;
-import com.sparta.trading.infrastructure.persistence.repository.clocks.MarketClockRepository;
+import com.sparta.trading.domain.repository.clocks.MarketClockQueryRepository;
 import com.sparta.trading.infrastructure.persistence.repository.candles.PriceCandlesRepository;
 import com.sparta.trading.global.exception.CustomException;
 import com.sparta.trading.global.exception.TradingErrorCode;
@@ -19,7 +19,7 @@ public class CurrentSeqProvider {
 
     private static final int SINGLETON_ID = 1;
 
-    private final MarketClockRepository marketClockRepository;
+    private final MarketClockQueryRepository marketClockRepository;
     private final PriceCandlesRepository priceCandlesRepository;
     private final Clock clock;
 

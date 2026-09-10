@@ -8,7 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 
 import java.util.Optional;
 
-public interface MarketClockRepository extends JpaRepository<MarketClock, Integer> {
+interface MarketClockJpaRepository extends JpaRepository<MarketClock, Integer> {
 
     /** 쓰기 트랜잭션에서 단일 행을 비관적 락으로 조회한다. */
     @Lock(LockModeType.PESSIMISTIC_WRITE)

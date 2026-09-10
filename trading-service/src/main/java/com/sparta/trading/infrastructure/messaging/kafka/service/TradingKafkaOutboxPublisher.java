@@ -2,7 +2,8 @@ package com.sparta.trading.infrastructure.messaging.kafka.service;
 
 import com.sparta.trading.domain.entity.OutboxEvents;
 import com.sparta.trading.domain.entity.OutboxStatus;
-import com.sparta.trading.domain.repository.outboxEvents.OutboxEventsRepository;
+import com.sparta.trading.domain.repository.outboxEvents.OutboxEventsCommandRepository;
+import com.sparta.trading.domain.repository.outboxEvents.OutboxEventsQueryRepository;
 import com.sparta.trading.global.exception.CustomException;
 import com.sparta.trading.global.exception.TradingErrorCode;
 import com.sparta.trading.infrastructure.messaging.kafka.OutboxPublisherProperties;
@@ -21,7 +22,7 @@ public class TradingKafkaOutboxPublisher {
 
     private static final long SEND_TIMEOUT_SECONDS = 3L;
 
-    private final OutboxEventsRepository outboxEventsRepository;
+    private final OutboxEventsQueryRepository outboxEventsQueryRepository;
     private final TradingKafkaProducer producer;
     private final OutboxPublisherProperties outboxPublisherProperties;
 
@@ -31,7 +32,7 @@ public class TradingKafkaOutboxPublisher {
      */
     @Transactional
     public void publishOne(Long id){
-        OutboxEvents outboxEvents = outboxEventsRepository.findById(id)
+        OutboxEvents outboxEvents = outboxEventsQueryRepository.findById(id)
                 .orElseThrow(() -> new CustomException(TradingErrorCode.OUTBOX_EVENT_NOT_FOUND));
 
         if(!OutboxStatus.PENDING.equals(outboxEvents.getStatus())) return;

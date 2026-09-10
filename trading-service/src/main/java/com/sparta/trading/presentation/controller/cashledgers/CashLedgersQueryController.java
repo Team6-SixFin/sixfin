@@ -1,4 +1,4 @@
-package com.sparta.trading.presentation.controller.cashledger;
+package com.sparta.trading.presentation.controller.cashledgers;
 
 import com.sparta.trading.application.service.CashLedgersQueryService;
 import com.sparta.trading.domain.entity.CashLedgerTxType;
@@ -15,7 +15,7 @@ import java.util.UUID;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/trading/cash-ledgers")
-public class CashLedgerQueryController {
+public class CashLedgersQueryController {
 
     private static final String USER_ID_HEADER = "X-User-Id";
 

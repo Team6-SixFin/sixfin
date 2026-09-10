@@ -6,7 +6,7 @@ import com.sparta.trading.domain.entity.PositionStatus;
 import com.sparta.trading.domain.entity.Positions;
 import com.sparta.trading.domain.repository.accounts.AccountsQueryRepository;
 import com.sparta.trading.domain.repository.cashledgers.CashLedgersCommandRepository;
-import com.sparta.trading.domain.repository.positions.PositionsRepository;
+import com.sparta.trading.domain.repository.positions.PositionsQueryRepository;
 import com.sparta.trading.global.exception.CustomException;
 import com.sparta.trading.global.exception.TradingErrorCode;
 import com.sparta.trading.presentation.dto.request.TradingAdminResetAccountRequest;
@@ -40,7 +40,7 @@ class TradingAdminCommandServiceTest {
     private AccountsQueryRepository tradingAccountsQueryRepository;
 
     @Mock
-    private PositionsRepository positionRepository;
+    private PositionsQueryRepository positionRepository;
 
     @Mock
     private CashLedgersCommandRepository cashLedgerRepository;

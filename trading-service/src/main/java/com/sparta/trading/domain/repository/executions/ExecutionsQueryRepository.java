@@ -5,9 +5,17 @@ import com.sparta.trading.domain.entity.Executions;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
+import java.util.Optional;
+import java.util.UUID;
+
 public interface ExecutionsQueryRepository {
 
     Page<Executions> searchExecution(TradingAdminSearchExecutionQuery tradingExecutionQuery,
                                      Long targetStockId,
                                      Pageable pageable);
+
+    Optional<Executions> findByOrderId(UUID orderId);
+
+    Page<Executions> search(UUID userId, UUID positionId, Long stockId, String side, Pageable pageable);
+
 }

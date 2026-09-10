@@ -22,10 +22,13 @@ import com.sparta.trading.domain.entity.Positions;
 import com.sparta.trading.domain.repository.accounts.AccountsCommandRepository;
 import com.sparta.trading.domain.repository.accounts.AccountsQueryRepository;
 import com.sparta.trading.domain.repository.cashledgers.CashLedgersCommandRepository;
-import com.sparta.trading.domain.repository.executions.ExecutionsRepository;
-import com.sparta.trading.domain.repository.orders.OrdersRepository;
-import com.sparta.trading.domain.repository.outboxEvents.OutboxEventsRepository;
-import com.sparta.trading.domain.repository.positions.PositionsRepository;
+import com.sparta.trading.domain.repository.executions.ExecutionsCommandRepository;
+import com.sparta.trading.domain.repository.executions.ExecutionsQueryRepository;
+import com.sparta.trading.domain.repository.orders.OrdersCommandRepository;
+import com.sparta.trading.domain.repository.orders.OrdersQueryRepository;
+import com.sparta.trading.domain.repository.outboxEvents.OutboxEventsCommandRepository;
+import com.sparta.trading.domain.repository.positions.PositionsCommandRepository;
+import com.sparta.trading.domain.repository.positions.PositionsQueryRepository;
 import com.sparta.trading.global.exception.CustomException;
 import com.sparta.trading.global.exception.TradingErrorCode;
 import com.sparta.trading.infrastructure.persistence.repository.stocks.StocksRepository;
@@ -51,11 +54,14 @@ public class TradingCommandService {
     private final StocksRepository stocksRepository;
     private final AccountsCommandRepository accountsCommandRepository;
     private final AccountsQueryRepository accountsQueryRepository;
-    private final OrdersRepository orderRepository;
-    private final PositionsRepository positionRepository;
-    private final ExecutionsRepository executionRepository;
+    private final OrdersCommandRepository orderRepository;
+    private final OrdersQueryRepository ordersQueryRepository;
+    private final PositionsQueryRepository positionsQueryRepository;
+    private final PositionsCommandRepository positionsCommandRepository;
+    private final ExecutionsCommandRepository executionRepository;
+    private final ExecutionsQueryRepository executionsQueryRepository;
     private final CashLedgersCommandRepository cashLedgerRepository;
-    private final OutboxEventsRepository outboxEventRepository;
+    private final OutboxEventsCommandRepository outboxEventRepository;
     private final ObjectMapper objectMapper;
 
     // 주문 요청을 받아 중복 주문, 주문 유형, 시세, 계좌를 확인한 후 매수 또는 매도를 처리
@@ -65,7 +71,7 @@ public class TradingCommandService {
         NormalizedOrder normalized = NormalizedOrder.from(command);
 
         // requestId로 기존 주문 조회
-        Optional<Orders> existingOrder = orderRepository.findByRequestId(normalized.requestId());
+        Optional<Orders> existingOrder = ordersQueryRepository.findByRequestId(normalized.requestId());
         // 기존 주문이 있으면 새 주문을 생성하지 않고 기존 주문을 검증하여 처리
         if (existingOrder.isPresent()) {
             return existingResponse(
@@ -85,7 +91,7 @@ public class TradingCommandService {
 
         // 첫 조회와 계좌 잠금 사이에 같은 requestId 주문이 커밋됐을 수 있다.
         // 계좌 잠금 대기 중 같은 requestId의 주문이 생성됐는지 다시 확인
-        existingOrder = orderRepository.findByRequestId(normalized.requestId());
+        existingOrder = ordersQueryRepository.findByRequestId(normalized.requestId());
         if (existingOrder.isPresent()) {
             return existingResponse(existingOrder.get(), normalized, quote.stockId(), account);
         }
@@ -125,13 +131,13 @@ public class TradingCommandService {
         BigDecimal cashBalanceAfter = account.withdraw(executionAmount);
 
         // Open 상태의 포지션만 조회
-        Optional<Positions> existingPosition = positionRepository
+        Optional<Positions> existingPosition = positionsCommandRepository
                 .findOpenByAccountIdAndStockIdForUpdate(account.getId(), quote.stockId());
         boolean isNewPosition = existingPosition.isEmpty(); // 포지션이 없다면 이번 매수는 최초 매수
         Positions position;
         // 최초 매수인 경우 새 포지션 생성
         if (isNewPosition) {
-            position = positionRepository.save(Positions.open(
+            position = positionsCommandRepository.save(Positions.open(
                     account.getId(), quote.stockId(), normalized.quantity(), quote.price(),
                     normalized.plannedStopLossPrice(), normalized.investmentReason(),
                     quote.marketTime(), quote.seq(), userId
@@ -181,7 +187,7 @@ public class TradingCommandService {
      */
     private OrderResponse executeSell(UUID userId, NormalizedOrder normalized, Quote quote, Accounts account) {
         // 해당 계좌가 현재 보유 중인 OPEN 포지션을 조회
-        Positions position = positionRepository
+        Positions position = positionsCommandRepository
                 .findOpenByAccountIdAndStockIdForUpdate(account.getId(), quote.stockId())
                 .orElse(null);
 
@@ -285,7 +291,7 @@ public class TradingCommandService {
 
         // 기존 주문이 체결완료(FILLED) 상태인데 체결 데이터가 없으면 예외 처리 (있으면 execution에 저장)
         Executions execution = OrderStatus.FILLED.name().equals(order.getStatus())
-                ? executionRepository.findByOrderId(order.getId())
+                ? executionsQueryRepository.findByOrderId(order.getId())
                 .orElseThrow(() -> new CustomException(TradingErrorCode.ORDER_INCONSISTENT_STATE))
                 : null; // 체결완료(FILLED) 상태가 아닌 경우 null
         return response(order, execution, account.getCashBalance());

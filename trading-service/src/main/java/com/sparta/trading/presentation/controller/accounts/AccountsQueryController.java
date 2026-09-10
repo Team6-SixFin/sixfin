@@ -1,4 +1,4 @@
-package com.sparta.trading.presentation.controller.account;
+package com.sparta.trading.presentation.controller.accounts;
 
 import com.sparta.trading.application.service.AccountsQueryService;
 import com.sparta.trading.presentation.dto.response.AccountResponse;
@@ -13,7 +13,7 @@ import java.util.UUID;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/trading")
-public class AccountQueryController {
+public class AccountsQueryController {
 
     private static final String USER_ID_HEADER = "X-User-Id";
 

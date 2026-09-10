@@ -8,6 +8,9 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Repository;
 
+import java.util.Optional;
+import java.util.UUID;
+
 @Repository
 @RequiredArgsConstructor
 public class ExecutionsQueryRepositoryImpl implements ExecutionsQueryRepository {
@@ -29,4 +32,15 @@ public class ExecutionsQueryRepositoryImpl implements ExecutionsQueryRepository 
                 pageable
         );
     }
+
+    @Override
+    public Optional<Executions> findByOrderId(UUID orderId) {
+        return tradingExecutionsJpaRepository.findByOrderId(orderId);
+    }
+
+    @Override
+    public Page<Executions> search(UUID userId, UUID positionId, Long stockId, String side, Pageable pageable) {
+        return tradingExecutionsJpaRepository.search(userId, positionId, stockId, side, pageable);
+    }
+
 }

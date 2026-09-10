@@ -9,11 +9,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-public interface PositionsRepository {
-
-    Optional<Positions> findOpenByAccountIdAndStockIdForUpdate(UUID accountId, Long stockId);
-
-    Positions save(Positions position);
+public interface PositionsQueryRepository {
 
     // 현재 보유 중인 모든 포지션 조회
     List<Positions> findAllOpenByAccountId(UUID accountId);

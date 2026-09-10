@@ -6,7 +6,7 @@ import com.sparta.trading.domain.entity.Accounts;
 import com.sparta.trading.domain.entity.Positions;
 import com.sparta.trading.domain.entity.Stocks;
 import com.sparta.trading.domain.repository.accounts.AccountsQueryRepository;
-import com.sparta.trading.domain.repository.positions.PositionsRepository;
+import com.sparta.trading.domain.repository.positions.PositionsQueryRepository;
 import com.sparta.trading.global.exception.CustomException;
 import com.sparta.trading.global.exception.TradingErrorCode;
 import com.sparta.trading.infrastructure.persistence.repository.stocks.StocksRepository;
@@ -31,7 +31,7 @@ import java.util.stream.Collectors;
 public class PortfolioQueryService {
 
     private final AccountsQueryRepository accountsQueryRepository;
-    private final PositionsRepository positionRepository;
+    private final PositionsQueryRepository positionRepository;
     private final StocksRepository stocksRepository;
     private final QuoteReader quoteReader;
 

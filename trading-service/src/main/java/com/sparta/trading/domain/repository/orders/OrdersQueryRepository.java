@@ -6,6 +6,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 public interface OrdersQueryRepository {
@@ -14,4 +15,11 @@ public interface OrdersQueryRepository {
             Long stockId,
             List<UUID> accountIds,
             Pageable pageable);
+
+    Optional<Orders> findByRequestId(UUID requestId);
+
+    Optional<Orders> findById(UUID id);
+
+    List<DuplicateRequestGroup> findDuplicateRequestGroups(UUID accountId);
+
 }

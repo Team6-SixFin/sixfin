@@ -1,4 +1,4 @@
-package com.sparta.trading.presentation.controller.account;
+package com.sparta.trading.presentation.controller.accounts;
 
 import com.sparta.trading.application.service.AccountsQueryService;
 import com.sparta.trading.global.exception.GlobalExceptionHandler;
@@ -32,7 +32,7 @@ class AccountQueryControllerTest {
     @BeforeEach
     void setUp() {
         mockMvc = MockMvcBuilders
-                .standaloneSetup(new AccountQueryController(accountQueryService))
+                .standaloneSetup(new AccountsQueryController(accountQueryService))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
     }

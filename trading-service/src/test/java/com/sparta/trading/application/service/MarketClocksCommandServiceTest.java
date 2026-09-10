@@ -4,7 +4,7 @@ import com.sparta.trading.domain.entity.ClockStatus;
 import com.sparta.trading.domain.entity.MarketClock;
 import com.sparta.trading.domain.entity.PriceCandles;
 import com.sparta.trading.infrastructure.persistence.repository.candles.PriceCandlesRepository;
-import com.sparta.trading.infrastructure.persistence.repository.clocks.MarketClockRepository;
+import com.sparta.trading.domain.repository.clocks.MarketClockCommandRepository;
 import com.sparta.trading.global.exception.CustomException;
 import com.sparta.trading.global.exception.TradingErrorCode;
 import org.junit.jupiter.api.DisplayName;
@@ -24,13 +24,13 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
-class MarketClockCommandServiceTest {
+class MarketClocksCommandServiceTest {
 
     private static final Instant BASE_TIME = Instant.parse("2026-08-03T13:30:00Z");
     private static final UUID ADMIN_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
     @Mock
-    private MarketClockRepository marketClockRepository;
+    private MarketClockCommandRepository marketClockRepository;
 
     @Mock
     private PriceCandlesRepository priceCandlesRepository;

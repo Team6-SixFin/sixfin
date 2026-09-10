@@ -9,16 +9,17 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 @RequiredArgsConstructor
-public class OutboxEventQueryRepository implements OutboxEventsQueryRepository {
+public class OutboxEventsQueryRepositoryImpl implements OutboxEventsQueryRepository {
 
-    private final OutboxEventJpaRepository tradingOutboxEventJpaRepository;
+    private final OutboxEventsJpaRepository outboxEventJpaRepository;
 
     @Override
     public Page<OutboxEvents> searchOutbox(TradingAdminSearchOutboxEventQurey query, Pageable pageable) {
-        return tradingOutboxEventJpaRepository.searchOutBox(
+        return outboxEventJpaRepository.searchOutBox(
                 query.status(),
                 query.eventType(),
                 query.minRetryCount(),
@@ -30,16 +31,21 @@ public class OutboxEventQueryRepository implements OutboxEventsQueryRepository {
 
     @Override
     public long countUnpublished() {
-        return tradingOutboxEventJpaRepository.countUnpublished();
+        return outboxEventJpaRepository.countUnpublished();
     }
 
     @Override
     public List<OutboxEvents> findUnpublished(Pageable pageable) {
-        return tradingOutboxEventJpaRepository.findUnpublished(pageable);
+        return outboxEventJpaRepository.findUnpublished(pageable);
     }
 
     @Override
     public List<Long> findPendingIds(int count) {
-        return tradingOutboxEventJpaRepository.findPendingIds(count);
+        return outboxEventJpaRepository.findPendingIds(count);
+    }
+
+    @Override
+    public Optional<OutboxEvents> findById(long id) {
+        return outboxEventJpaRepository.findById(id);
     }
 }

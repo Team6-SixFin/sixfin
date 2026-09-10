@@ -5,7 +5,7 @@ import com.sparta.trading.application.port.QuoteReader;
 import com.sparta.trading.domain.entity.PositionStatus;
 import com.sparta.trading.domain.entity.Positions;
 import com.sparta.trading.domain.entity.Stocks;
-import com.sparta.trading.domain.repository.positions.PositionsRepository;
+import com.sparta.trading.domain.repository.positions.PositionsQueryRepository;
 import com.sparta.trading.global.exception.CustomException;
 import com.sparta.trading.global.exception.TradingErrorCode;
 import com.sparta.trading.global.response.PageResponse;
@@ -33,7 +33,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class PositionsQueryService {
 
-    private final PositionsRepository positionRepository;
+    private final PositionsQueryRepository positionRepository;
     private final StocksRepository stocksRepository;
     private final QuoteReader quoteReader;
 

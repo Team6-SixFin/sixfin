@@ -13,7 +13,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
- interface OrderJpaRepository extends JpaRepository<Orders, UUID> {
+ interface OrdersJpaRepository extends JpaRepository<Orders, UUID> {
 
      Optional<Orders> findByRequestId(UUID requestId);
 

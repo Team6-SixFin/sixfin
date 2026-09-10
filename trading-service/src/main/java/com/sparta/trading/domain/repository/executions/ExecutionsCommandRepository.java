@@ -7,11 +7,8 @@ import org.springframework.data.domain.Pageable;
 import java.util.Optional;
 import java.util.UUID;
 
-public interface ExecutionsRepository {
-
-    Optional<Executions> findByOrderId(UUID orderId);
+public interface ExecutionsCommandRepository {
 
     Executions save(Executions execution);
 
-    Page<Executions> search(UUID userId, UUID positionId, Long stockId, String side, Pageable pageable);
 }

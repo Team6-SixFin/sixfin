@@ -1,4 +1,4 @@
-package com.sparta.trading.presentation.controller.cashledger;
+package com.sparta.trading.presentation.controller.cashledgers;
 
 import com.sparta.trading.application.service.CashLedgersQueryService;
 import com.sparta.trading.domain.entity.CashLedgerTxType;
@@ -44,7 +44,7 @@ class CashLedgerQueryControllerTest {
 
     @BeforeEach
     void setUp() {
-        mockMvc = MockMvcBuilders.standaloneSetup(new CashLedgerQueryController(cashLedgerQueryService))
+        mockMvc = MockMvcBuilders.standaloneSetup(new CashLedgersQueryController(cashLedgerQueryService))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .setCustomArgumentResolvers(new PageableHandlerMethodArgumentResolver())
                 .build();
