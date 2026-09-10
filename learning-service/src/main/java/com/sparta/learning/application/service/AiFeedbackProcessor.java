@@ -12,6 +12,8 @@ import com.sparta.learning.global.exception.CustomException;
 import com.sparta.learning.global.exception.LearningErrorCode;
 import com.sparta.learning.infrastructure.persistence.repository.AiRequestRepository;
 import com.sparta.learning.infrastructure.persistence.repository.FeedbackRepository;
+import com.sparta.learning.infrastructure.monitoring.LearningMetrics;
+import io.micrometer.core.instrument.Timer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
@@ -26,73 +28,109 @@ import java.util.concurrent.CompletableFuture;
 @RequiredArgsConstructor
 public class AiFeedbackProcessor {
 
+    private static final String SUCCESS = "SUCCESS";
+    private static final String FAILED = "FAILED";
+    private static final String ALREADY_PROCESSED = "ALREADY_PROCESSED";
+
     private final AiClientPort aiClientPort;
     private final ObjectMapper objectMapper;
     private final FeedbackRepository feedbackRepository;
     private final AiRequestRepository aiRequestRepository;
     private final TransactionTemplate transactionTemplate;
     private final FeedbackLearningResourceService feedbackLearningResourceService;
+    private final LearningMetrics learningMetrics;
 
     // [수정됨] 분리된 비동기 전담 메서드
     @Async("aiThreadPoolTaskExecutor")
     public CompletableFuture<AiFeedbackResponse> processAiFeedbackAsync(LearningCommandService.GenerationContext context) {
-        if (context.isAlreadyProcessed()) {
-            log.info("이미 처리 중이거나 완료된 피드백입니다. 중복 AI 호출을 방지합니다. Key: {}", context.feedback().getFeedbackKey());
-            // 완료된 건이면 기존 데이터를 반환, 처리 중(PROCESSING)이면 null 반환
-            if (context.feedback().getContent() != null) {
-                try {
-                    AiFeedbackResponse existingResponse =
-                            objectMapper.treeToValue(context.feedback().getContent(), AiFeedbackResponse.class);
-                    recommendLearningResourcesSafely(context.feedback());
-                    return CompletableFuture.completedFuture(existingResponse);
-                } catch (Exception e) {
-                    log.error("기존 피드백 Content 파싱 실패", e);
-                }
-            }
-            return CompletableFuture.completedFuture(null);
-        }
-
-        // TODO : 현재 사용 버전 하드코딩이라 추후 수정 해야 함
-        // 공통 메타 정보 설정 (모델명 및 프롬프트 버전)
-        String requestId = UUID.randomUUID().toString();
-        String modelName = "gemini-3.5-flash";
-        String promptVersion = "v1.0";
-        AiFeedbackResponse aiResponse = null;
-        String feedbackKey = context.feedback().getFeedbackKey();
+        String generationResult = FAILED;
 
         try {
-            aiResponse = aiClientPort.requestAiFeedback(
+            if (context.isAlreadyProcessed()) {
+                generationResult = ALREADY_PROCESSED;
+                log.info("이미 처리 중이거나 완료된 피드백입니다. 중복 AI 호출을 방지합니다. Key: {}", context.feedback().getFeedbackKey());
+                // 완료된 건이면 기존 데이터를 반환, 처리 중(PROCESSING)이면 null 반환
+                if (context.feedback().getContent() != null) {
+                    try {
+                        AiFeedbackResponse existingResponse =
+                                objectMapper.treeToValue(context.feedback().getContent(), AiFeedbackResponse.class);
+                        recommendLearningResourcesSafely(context.feedback());
+                        return CompletableFuture.completedFuture(existingResponse);
+                    } catch (Exception e) {
+                        log.error("기존 피드백 Content 파싱 실패", e);
+                    }
+                }
+                return CompletableFuture.completedFuture(null);
+            }
+
+            // TODO : 현재 사용 버전 하드코딩이라 추후 수정 해야 함
+            // 공통 메타 정보 설정 (모델명 및 프롬프트 버전)
+            String requestId = UUID.randomUUID().toString();
+            String modelName = "gemini-3.5-flash";
+            String promptVersion = "v1.0";
+            AiFeedbackResponse aiResponse;
+            String feedbackKey = context.feedback().getFeedbackKey();
+
+            try {
+                aiResponse = requestAiFeedback(context);
+
+                final AiFeedbackResponse finalAiResponse = aiResponse;
+                transactionTemplate.executeWithoutResult(status ->
+                        completeFeedback(feedbackKey, context.contextJsonStr(), finalAiResponse, requestId, modelName, promptVersion)
+                );
+                recommendLearningResourcesSafely(context.feedback());
+                generationResult = SUCCESS;
+
+            } catch (Exception e) {
+                log.error("피드백 생성/파싱 실패", e);
+                String failureReason = describeFailure(e);
+                transactionTemplate.executeWithoutResult(status ->
+                        failFeedback(feedbackKey, context.contextJsonStr(), failureReason, requestId, modelName, promptVersion)
+                );
+                // 이미 분류된 도메인 오류는 유지하고, 예상하지 못한 오류만 공통 AI 오류로 변환합니다.
+                if (e instanceof CustomException customException) {
+                    throw customException;
+                }
+                throw new CustomException(LearningErrorCode.AI_RESPONSE_GENERATION_FAILED, e);
+            }
+
+            return CompletableFuture.completedFuture(aiResponse);
+        } finally {
+            learningMetrics.recordFeedbackGeneration(
+                    context.feedback().getFeedbackType(),
+                    generationResult,
+                    context.generationStartedAtNanos()
+            );
+        }
+    }
+
+    /** AI 외부 호출과 구조화 응답 검증 구간만 따로 측정한다. */
+    private AiFeedbackResponse requestAiFeedback(LearningCommandService.GenerationContext context) {
+        Timer.Sample sample = learningMetrics.startTimer();
+        learningMetrics.recordAiContextSize(
+                context.feedback().getFeedbackType(),
+                context.contextJsonStr()
+        );
+
+        try {
+            AiFeedbackResponse response = aiClientPort.requestAiFeedback(
                     context.feedback().getPositionId(),
                     context.feedback().getFeedbackType(),
                     context.contextJsonStr()
             );
-
-            validateAiResponse(aiResponse);
-
-            final AiFeedbackResponse finalAiResponse = aiResponse;
-            transactionTemplate.executeWithoutResult(status ->
-                    completeFeedback(feedbackKey, context.contextJsonStr(), finalAiResponse, requestId, modelName, promptVersion)
-            );
-            recommendLearningResourcesSafely(context.feedback());
-
-        } catch (Exception e) {
-            log.error("피드백 생성/파싱 실패", e);
-            String failureReason = describeFailure(e);
-            transactionTemplate.executeWithoutResult(status ->
-                    failFeedback(feedbackKey, context.contextJsonStr(), failureReason, requestId, modelName, promptVersion)
-            );
-            // 이미 분류된 도메인 오류는 유지하고, 예상하지 못한 오류만 공통 AI 오류로 변환합니다.
-            if (e instanceof CustomException customException) {
-                throw customException;
-            }
-            throw new CustomException(LearningErrorCode.AI_RESPONSE_GENERATION_FAILED, e);
+            validateAiResponse(response);
+            learningMetrics.recordAiRequest(context.feedback().getFeedbackType(), SUCCESS, sample);
+            return response;
+        } catch (RuntimeException exception) {
+            learningMetrics.recordAiRequest(context.feedback().getFeedbackType(), FAILED, sample);
+            throw exception;
         }
-
-        return CompletableFuture.completedFuture(aiResponse);
     }
 
     /** 학습 자료 추천 실패가 이미 완료된 AI 피드백의 성공 상태와 응답에 영향을 주지 않게 격리합니다. */
     private void recommendLearningResourcesSafely(Feedback feedback) {
+        Timer.Sample sample = learningMetrics.startTimer();
+
         try {
             int linkedCount = feedbackLearningResourceService.recommendAndLink(
                     feedback.getFeedbackKey(),
@@ -105,7 +143,9 @@ public class AiFeedbackProcessor {
                     feedback.getFeedbackKey(),
                     linkedCount
             );
+            learningMetrics.recordLearningResourceRecommendation(feedback.getFeedbackType(), SUCCESS, sample);
         } catch (RuntimeException exception) {
+            learningMetrics.recordLearningResourceRecommendation(feedback.getFeedbackType(), FAILED, sample);
             log.warn(
                     "피드백 학습 자료 추천 실패, AI 피드백은 유지합니다. feedbackKey={}",
                     feedback.getFeedbackKey(),

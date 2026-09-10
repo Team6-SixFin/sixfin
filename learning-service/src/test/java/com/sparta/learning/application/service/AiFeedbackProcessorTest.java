@@ -12,6 +12,8 @@ import com.sparta.learning.global.exception.CustomException;
 import com.sparta.learning.global.exception.LearningErrorCode;
 import com.sparta.learning.infrastructure.persistence.repository.AiRequestRepository;
 import com.sparta.learning.infrastructure.persistence.repository.FeedbackRepository;
+import com.sparta.learning.infrastructure.monitoring.LearningMetrics;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -47,17 +49,20 @@ class AiFeedbackProcessorTest {
     @Mock private FeedbackLearningResourceService feedbackLearningResourceService;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
+    private SimpleMeterRegistry meterRegistry;
     private AiFeedbackProcessor aiFeedbackProcessor;
 
     @BeforeEach
     void setUp() {
+        meterRegistry = new SimpleMeterRegistry();
         aiFeedbackProcessor = new AiFeedbackProcessor(
                 aiClientPort,
                 objectMapper,
                 feedbackRepository,
                 aiRequestRepository,
                 transactionTemplate,
-                feedbackLearningResourceService
+                feedbackLearningResourceService,
+                new LearningMetrics(meterRegistry)
         );
 
         doAnswer(invocation -> {
@@ -92,6 +97,16 @@ class AiFeedbackProcessorTest {
 
         assertEquals(aiResponse, result);
         assertEquals(FeedbackStatus.COMPLETED, feedback.getStatus());
+        assertEquals(1.0, meterRegistry.counter(
+                "learning.ai.requests",
+                "feedback_type", "ON_DEMAND_FEEDBACK",
+                "result", "SUCCESS"
+        ).count());
+        assertEquals(1L, meterRegistry.timer(
+                "learning.feedback.generation.duration",
+                "feedback_type", "ON_DEMAND_FEEDBACK",
+                "result", "SUCCESS"
+        ).count());
         verify(feedbackLearningResourceService).recommendAndLink(
                 feedback.getFeedbackKey(),
                 feedback.getUserId(),
@@ -157,6 +172,11 @@ class AiFeedbackProcessorTest {
 
         assertSame(aiFailure, thrown);
         assertEquals(FeedbackStatus.FAILED, feedback.getStatus());
+        assertEquals(1.0, meterRegistry.counter(
+                "learning.ai.requests",
+                "feedback_type", "ON_DEMAND_FEEDBACK",
+                "result", "FAILED"
+        ).count());
         assertEquals(
                 "IllegalArgumentException: invalid response JSON",
                 requestCaptor.getValue().getErrorMessage()
