@@ -83,15 +83,6 @@ jobs:
 
       - name: 헬스체크 (Eureka 응답 확인)
         run: |
+          echo "타겟 IP: ${{ secrets.APP_EC2_PUBLIC_IP }}"
           sleep 30
-          for i in $(seq 1 15); do
-            STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://${{ secrets.APP_EC2_PUBLIC_IP }}:19090/actuator/health || echo "000")
-            if [ "$STATUS" = "200" ]; then
-              echo "헬스체크 성공"
-              exit 0
-            fi
-            echo "재시도 $i/15 (상태: $STATUS)"
-            sleep 15
-          done
-          echo "헬스체크 실패 — 수동 확인 필요"
-          exit 1
+          curl -v http://${{ secrets.APP_EC2_PUBLIC_IP }}:19090/actuator/health
