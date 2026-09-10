@@ -34,6 +34,15 @@ jobs:
         run: ./gradlew build -x test
 
 
+      - name: ID 토큰 확인
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const token = await core.getIDToken('sts.amazonaws.com');
+            const payload = token.split('.')[1];
+            const decoded = Buffer.from(payload, 'base64').toString('utf-8');
+            console.log(decoded);
+
       - name: ID 토큰 요청
         id: get-id-token
         uses: actions/github-script@v7
