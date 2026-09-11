@@ -3,7 +3,8 @@ package com.sparta.trading.infrastructure.clocks;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
- * market_clock 초기 시딩에만 쓰인다. 시딩 이후에는 DB 행(start_seq/end_seq 등)이 원본. 값을 코드가 아닌 yml로 관리
+ * market_clock 시딩과, 매 기동 시 재초기화(MarketClockInitializer)에 공통으로 쓰인다.
+ * 즉 이 yml 값이 기동할 때마다 DB 행에 다시 적용되는 원본이다.
  */
 @ConfigurationProperties(prefix = "market.clock")
 public record MarketClockProperties(
