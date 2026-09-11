@@ -3,7 +3,7 @@ package com.sparta.trading.presentation.controller;
 import com.sparta.trading.application.dto.command.ChangeSpeedRequest;
 import com.sparta.trading.presentation.dto.response.MarketClockInternalResponse;
 import com.sparta.trading.application.dto.command.ResetClockRequest;
-import com.sparta.trading.application.service.MarketClockCommandService;
+import com.sparta.trading.application.service.MarketClocksCommandService;
 import com.sparta.trading.domain.entity.MarketClock;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -24,7 +24,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class TradingInternalController {
 
-    private final MarketClockCommandService marketClockCommandService;
+    private final MarketClocksCommandService marketClockCommandService;
 
     @PostMapping("/start")
     public MarketClockInternalResponse start(@RequestHeader("X-User-Id") UUID userId) {

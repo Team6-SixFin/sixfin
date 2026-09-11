@@ -3,8 +3,10 @@ package com.sparta.trading.application.service;
 import com.sparta.trading.domain.entity.Accounts;
 import com.sparta.trading.domain.entity.CashLedgerTxType;
 import com.sparta.trading.domain.entity.CashLedgers;
-import com.sparta.trading.domain.repository.account.AccountRepository;
-import com.sparta.trading.domain.repository.cashledger.CashLedgerRepository;
+import com.sparta.trading.domain.repository.accounts.AccountsCommandRepository;
+import com.sparta.trading.domain.repository.accounts.AccountsQueryRepository;
+import com.sparta.trading.domain.repository.cashledgers.CashLedgersCommandRepository;
+import com.sparta.trading.domain.repository.cashledgers.CashLedgersQueryRepository;
 import com.sparta.trading.global.exception.CustomException;
 import com.sparta.trading.global.exception.TradingErrorCode;
 import com.sparta.trading.global.response.PageResponse;
@@ -35,13 +37,18 @@ import static org.mockito.Mockito.when;
 class CashLedgerQueryServiceTest {
 
     @Mock
-    private AccountRepository accountRepository;
+    private AccountsCommandRepository accountsCommandRepository;
+    @Mock
+    private AccountsQueryRepository accountsQueryRepository;
 
     @Mock
-    private CashLedgerRepository cashLedgerRepository;
+    private CashLedgersCommandRepository cashLedgerRepository;
+
+    @Mock
+    private CashLedgersQueryRepository cashLedgersQueryRepository;
 
     @InjectMocks
-    private CashLedgerQueryService cashLedgerQueryService;
+    private CashLedgersQueryService cashLedgerQueryService;
 
     @Test
     void getCashLedgers_returnsFilteredLedgerAndNormalizesInvalidPageSize() {
@@ -58,8 +65,8 @@ class CashLedgerQueryServiceTest {
                 21
         );
 
-        when(accountRepository.findByUserId(userId)).thenReturn(Optional.of(account));
-        when(cashLedgerRepository.findAllByAccountIdAndTxType(
+        when(accountsQueryRepository.findByUserId(userId)).thenReturn(Optional.of(account));
+        when(cashLedgersQueryRepository.findAllByAccountIdAndTxType(
                 accountId,
                 CashLedgerTxType.BUY,
                 normalizedPageable
@@ -85,7 +92,7 @@ class CashLedgerQueryServiceTest {
         assertThat(response.getPageInfo().getTotalPages()).isEqualTo(2);
         assertThat(response.getSummary()).isNull();
 
-        verify(cashLedgerRepository).findAllByAccountIdAndTxType(
+        verify(cashLedgersQueryRepository).findAllByAccountIdAndTxType(
                 accountId,
                 CashLedgerTxType.BUY,
                 normalizedPageable
@@ -100,8 +107,8 @@ class CashLedgerQueryServiceTest {
         PageRequest pageable = PageRequest.of(0, 30);
         Page<CashLedgers> cashLedgerPage = new PageImpl<>(List.of(), pageable, 0);
 
-        when(accountRepository.findByUserId(userId)).thenReturn(Optional.of(account));
-        when(cashLedgerRepository.findAllByAccountIdAndTxType(accountId, null, pageable))
+        when(accountsQueryRepository.findByUserId(userId)).thenReturn(Optional.of(account));
+        when(cashLedgersQueryRepository.findAllByAccountIdAndTxType(accountId, null, pageable))
                 .thenReturn(cashLedgerPage);
 
         PageResponse<CashLedgerResponse> response = cashLedgerQueryService.getCashLedgers(
@@ -113,7 +120,7 @@ class CashLedgerQueryServiceTest {
         assertThat(response.getContent()).isEmpty();
         assertThat(response.getPageInfo().getSize()).isEqualTo(30);
         assertThat(response.getSummary()).isNull();
-        verify(cashLedgerRepository).findAllByAccountIdAndTxType(
+        verify(cashLedgersQueryRepository).findAllByAccountIdAndTxType(
                 accountId,
                 null,
                 pageable
@@ -124,7 +131,7 @@ class CashLedgerQueryServiceTest {
     void getCashLedgers_throwsWhenAccountDoesNotExist() {
         UUID userId = UUID.randomUUID();
 
-        when(accountRepository.findByUserId(userId)).thenReturn(Optional.empty());
+        when(accountsQueryRepository.findByUserId(userId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> cashLedgerQueryService.getCashLedgers(
                 userId,

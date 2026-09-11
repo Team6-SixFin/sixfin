@@ -5,8 +5,8 @@ import com.sparta.trading.application.port.QuoteReader;
 import com.sparta.trading.domain.entity.Accounts;
 import com.sparta.trading.domain.entity.Positions;
 import com.sparta.trading.domain.entity.Stocks;
-import com.sparta.trading.domain.repository.account.AccountRepository;
-import com.sparta.trading.domain.repository.position.PositionRepository;
+import com.sparta.trading.domain.repository.accounts.AccountsQueryRepository;
+import com.sparta.trading.domain.repository.positions.PositionsQueryRepository;
 import com.sparta.trading.global.exception.CustomException;
 import com.sparta.trading.global.exception.TradingErrorCode;
 import com.sparta.trading.infrastructure.persistence.repository.stocks.StocksRepository;
@@ -30,8 +30,8 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class PortfolioQueryService {
 
-    private final AccountRepository accountRepository;
-    private final PositionRepository positionRepository;
+    private final AccountsQueryRepository accountsQueryRepository;
+    private final PositionsQueryRepository positionRepository;
     private final StocksRepository stocksRepository;
     private final QuoteReader quoteReader;
 
@@ -45,7 +45,7 @@ public class PortfolioQueryService {
     public PortfolioResponse getPortfolio(UUID userId) {
 
         // 사용자 계좌 조회
-        Accounts account = accountRepository.findByUserId(userId)
+        Accounts account = accountsQueryRepository.findByUserId(userId)
                 .orElseThrow(() -> new CustomException(TradingErrorCode.ACCOUNT_NOT_FOUND));
 
         // 계좌의 OPEN 포지션 목록 조회(보유중)

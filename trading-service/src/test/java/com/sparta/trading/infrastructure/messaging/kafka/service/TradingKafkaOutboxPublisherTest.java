@@ -4,7 +4,7 @@ import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.sparta.trading.domain.entity.OutboxEvents;
 import com.sparta.trading.domain.entity.OutboxStatus;
-import com.sparta.trading.domain.repository.outbox.OutboxEventRepository;
+import com.sparta.trading.domain.repository.outboxEvents.OutboxEventsQueryRepository;
 import com.sparta.trading.global.exception.CustomException;
 import com.sparta.trading.global.exception.TradingErrorCode;
 import com.sparta.trading.infrastructure.messaging.kafka.OutboxPublisherProperties;
@@ -40,7 +40,7 @@ class TradingKafkaOutboxPublisherTest {
     private static final String TOPIC = "trade-events.v1";
 
     @Mock
-    private OutboxEventRepository outboxEventsRepository;
+    private OutboxEventsQueryRepository outboxEventsRepository;
 
     @Mock
     private TradingKafkaProducer producer;

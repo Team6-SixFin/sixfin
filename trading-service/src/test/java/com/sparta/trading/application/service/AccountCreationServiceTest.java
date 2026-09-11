@@ -3,8 +3,8 @@ package com.sparta.trading.application.service;
 import com.sparta.trading.domain.entity.Accounts;
 import com.sparta.trading.domain.entity.CashLedgerTxType;
 import com.sparta.trading.domain.entity.CashLedgers;
-import com.sparta.trading.domain.repository.account.AccountRepository;
-import com.sparta.trading.domain.repository.cashledger.CashLedgerRepository;
+import com.sparta.trading.domain.repository.accounts.AccountsCommandRepository;
+import com.sparta.trading.domain.repository.cashledgers.CashLedgersCommandRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -23,13 +23,13 @@ import static org.mockito.Mockito.when;
 class AccountCreationServiceTest {
 
     @Mock
-    private AccountRepository accountRepository;
+    private AccountsCommandRepository accountRepository;
 
     @Mock
-    private CashLedgerRepository cashLedgerRepository;
+    private CashLedgersCommandRepository cashLedgerRepository;
 
     @InjectMocks
-    private AccountCreationService accountCreationService;
+    private AccountsCreationService accountCreationService;
 
     @Test
     void create_savesAccountAndInitialDepositLedger() {

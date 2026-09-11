@@ -1,6 +1,6 @@
 package com.sparta.trading;
 
-import com.sparta.trading.infrastructure.clock.MarketClockProperties;
+import com.sparta.trading.infrastructure.clocks.MarketClockProperties;
 import com.sparta.trading.infrastructure.loader.MarketDataCsvProperties;
 import com.sparta.trading.infrastructure.messaging.kafka.OutboxPublisherProperties;
 import org.springframework.boot.SpringApplication;

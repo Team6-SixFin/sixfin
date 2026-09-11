@@ -1,6 +1,6 @@
 package com.sparta.trading.infrastructure.messaging.kafka.service;
 
-import com.sparta.trading.domain.repository.outboxEvent.TradingOutboxEventsQueryRepository;
+import com.sparta.trading.domain.repository.outboxEvents.OutboxEventsQueryRepository;
 import com.sparta.trading.infrastructure.messaging.kafka.OutboxPublisherProperties;
 import lombok.AllArgsConstructor;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -12,7 +12,7 @@ import java.util.List;
 @AllArgsConstructor
 public class TradingKafkaOutboxPublishingSchedular {
 
-    private final TradingOutboxEventsQueryRepository outboxEventsQueryRepository;
+    private final OutboxEventsQueryRepository outboxEventsQueryRepository;
     private final TradingKafkaOutboxPublisher kafkaOutboxPublisher;
     private final OutboxPublisherProperties outboxPublisherProperties;
 
