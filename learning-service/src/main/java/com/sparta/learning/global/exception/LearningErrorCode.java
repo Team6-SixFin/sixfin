@@ -18,6 +18,8 @@ public enum LearningErrorCode implements ErrorCode {
     POSITION_NOT_FOUND(HttpStatus.NOT_FOUND, "포지션을 찾을 수 없습니다."),
     FAILED_EVENT_NOT_FOUND(HttpStatus.NOT_FOUND, "실패 이벤트를 찾을 수 없습니다."),
     FAILED_EVENT_ALREADY_RESOLVED(HttpStatus.CONFLICT, "이미 재처리된 이벤트입니다."),
+    FAILED_EVENT_RETRY_IN_PROGRESS(HttpStatus.CONFLICT, "이미 재처리가 진행 중인 이벤트입니다."),
+    FAILED_EVENT_PAYLOAD_BROKEN(HttpStatus.UNPROCESSABLE_ENTITY, "실패 이벤트 원본을 복원할 수 없습니다."),
     FAILED_EVENT_RETRY_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "실패 이벤트 재처리에 실패했습니다."),
     ADMIN_FORBIDDEN(HttpStatus.FORBIDDEN, "관리자 권한이 필요합니다."),
 

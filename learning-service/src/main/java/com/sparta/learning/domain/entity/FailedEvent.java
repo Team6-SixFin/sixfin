@@ -103,15 +103,19 @@ public class FailedEvent extends BaseEntity {
         this.status = FailedEventStatus.PENDING;
     }
 
-    // 재처리 성공. 실패 시에는 예외가 전파되므로 상태를 바꾸지 않는다
+    // 재처리 성공
     public void resolve() {
         this.status = FailedEventStatus.RESOLVED;
         this.retryCount++;
         this.lastRetriedAt = OffsetDateTime.now();
     }
 
-    // 재처리 실패. 원인을 갱신해 다음 시도 때 최신 사유를 보게 한다
+    /*
+     * 재처리 실패. 원인을 갱신해 다음 시도 때 최신 사유를 보게 한다.
+     * 다시 시도할 수 있어야 하므로 선점했던 상태를 PENDING으로 되돌린다.
+     */
     public void recordRetryFailure(String failureReason) {
+        this.status = FailedEventStatus.PENDING;
         this.failureReason = failureReason;
         this.retryCount++;
         this.lastRetriedAt = OffsetDateTime.now();
