@@ -1,6 +1,6 @@
 {
   "annotations": { "list": [] },
-  "description": "Learning 서비스의 Kafka 이벤트 수집과 규칙 기반 진단 파이프라인을 확인합니다.",
+  "description": "Learning 서비스의 API, Kafka·진단, AI 피드백 생성과 JVM·DB 풀 상태를 확인합니다.",
   "editable": false,
   "graphTooltip": 1,
   "panels": [
@@ -218,15 +218,367 @@
       ],
       "title": "최근 1시간 규칙별 진단 결과",
       "type": "bargauge"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "최근 5분 동안 Kafka 재시도를 모두 소진해 DLT로 이동한 이벤트 수입니다.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 1 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 28 },
+      "id": 10,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "reduceOptions": { "calcs": ["lastNotNull"], "values": false },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "expr": "sum(increase(learning_trade_events_dead_letter_total{application=\"learning-service\"}[5m])) or vector(0)",
+          "refId": "A"
+        }
+      ],
+      "title": "최근 5분 DLT 이벤트",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "최근 5분 동안 Learning API가 반환한 5xx 응답 수입니다.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 1 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 28 },
+      "id": 11,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "reduceOptions": { "calcs": ["lastNotNull"], "values": false },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "expr": "sum(increase(http_server_requests_seconds_count{application=\"learning-service\",uri=~\"/api/.*\",status=~\"5..\"}[5m])) or vector(0)",
+          "refId": "A"
+        }
+      ],
+      "title": "최근 5분 API 5xx",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "최근 5분 동안 실패한 논리적인 AI 피드백 요청 수입니다. 프레임워크 내부 재시도 횟수와는 다릅니다.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 1 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 28 },
+      "id": 12,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "reduceOptions": { "calcs": ["lastNotNull"], "values": false },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "expr": "sum(increase(learning_ai_requests_total{application=\"learning-service\",result=\"FAILED\"}[5m])) or vector(0)",
+          "refId": "A"
+        }
+      ],
+      "title": "최근 5분 AI 실패",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "최근 5분 동안 AI 스레드와 대기열이 모두 차서 거부된 작업 수입니다.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 1 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 28 },
+      "id": 13,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "reduceOptions": { "calcs": ["lastNotNull"], "values": false },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "expr": "sum(increase(learning_ai_executor_rejected_total{application=\"learning-service\"}[5m])) or vector(0)",
+          "refId": "A"
+        }
+      ],
+      "title": "최근 5분 AI 작업 거부",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Learning API의 URI·메서드·상태 코드별 초당 요청 수입니다.",
+      "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 32 },
+      "id": 14,
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "none" }
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(http_server_requests_seconds_count{application=\"learning-service\",uri=~\"/api/.*\"}[1m])) by (method, uri, status)",
+          "legendFormat": "{{method}} {{uri}} / {{status}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Learning API 처리량",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Learning API URI별 서버 처리시간의 p95입니다.",
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 32 },
+      "id": 15,
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "none" }
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{application=\"learning-service\",uri=~\"/api/.*\"}[5m])) by (le, uri))",
+          "legendFormat": "{{uri}} p95",
+          "refId": "A"
+        }
+      ],
+      "title": "Learning API 응답시간 p95",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Learning JVM 프로세스 CPU 사용률과 Heap 사용률입니다.",
+      "fieldConfig": { "defaults": { "max": 100, "min": 0, "unit": "percent" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 40 },
+      "id": 16,
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "none" }
+      },
+      "targets": [
+        {
+          "expr": "process_cpu_usage{application=\"learning-service\"} * 100",
+          "legendFormat": "Process CPU",
+          "refId": "A"
+        },
+        {
+          "expr": "100 * sum(jvm_memory_used_bytes{application=\"learning-service\",area=\"heap\"}) / sum(jvm_memory_max_bytes{application=\"learning-service\",area=\"heap\"})",
+          "legendFormat": "Heap",
+          "refId": "B"
+        }
+      ],
+      "title": "Learning JVM CPU·Heap",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Learning DB 커넥션 풀의 사용 중인 커넥션과 대기 요청 수입니다.",
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 40 },
+      "id": 17,
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "none" }
+      },
+      "targets": [
+        {
+          "expr": "sum(hikaricp_connections_active{application=\"learning-service\"}) by (pool)",
+          "legendFormat": "{{pool}} active",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(hikaricp_connections_pending{application=\"learning-service\"}) by (pool)",
+          "legendFormat": "{{pool}} pending",
+          "refId": "B"
+        }
+      ],
+      "title": "HikariCP 활성·대기",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "피드백 유형과 결과별 AI 외부 요청 처리량입니다. 내부 재시도를 합친 논리 요청 기준입니다.",
+      "fieldConfig": { "defaults": { "unit": "ops" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 48 },
+      "id": 18,
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "none" }
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(learning_ai_requests_total{application=\"learning-service\"}[1m])) by (feedback_type, result)",
+          "legendFormat": "{{feedback_type}} / {{result}}",
+          "refId": "A"
+        }
+      ],
+      "title": "AI 외부 요청 처리량",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Gemini 호출과 구조화 응답 검증까지 걸린 시간의 p95입니다.",
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 48 },
+      "id": 19,
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "none" }
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(learning_ai_request_duration_seconds_bucket{application=\"learning-service\"}[5m])) by (le, feedback_type))",
+          "legendFormat": "{{feedback_type}} p95",
+          "refId": "A"
+        }
+      ],
+      "title": "AI 외부 호출시간 p95",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "비동기 큐 대기, AI 호출, DB 저장, 학습자료 연결을 모두 포함한 피드백 완료시간 p95입니다.",
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 56 },
+      "id": 20,
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "none" }
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(learning_feedback_generation_duration_seconds_bucket{application=\"learning-service\"}[5m])) by (le, feedback_type))",
+          "legendFormat": "{{feedback_type}} p95",
+          "refId": "A"
+        }
+      ],
+      "title": "피드백 전체 완료시간 p95",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "피드백 완료 후 학습자료를 추천하고 연결하는 구간의 p95입니다.",
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 56 },
+      "id": 21,
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "none" }
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(learning_resource_recommendation_duration_seconds_bucket{application=\"learning-service\"}[5m])) by (le, feedback_type))",
+          "legendFormat": "{{feedback_type}} p95",
+          "refId": "A"
+        }
+      ],
+      "title": "학습자료 추천시간 p95",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "피드백 유형별로 Gemini 프롬프트에 포함된 컨텍스트 JSON의 평균 크기입니다.",
+      "fieldConfig": { "defaults": { "unit": "bytes" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 64 },
+      "id": 23,
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "none" }
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(learning_ai_context_size_bytes_sum{application=\"learning-service\"}[5m])) by (feedback_type) / sum(rate(learning_ai_context_size_bytes_count{application=\"learning-service\"}[5m])) by (feedback_type)",
+          "legendFormat": "{{feedback_type}} average",
+          "refId": "A"
+        }
+      ],
+      "title": "AI 컨텍스트 평균 크기",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "AI 비동기 Executor의 활성 스레드, 현재 풀 크기와 대기열 적재량입니다.",
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 64 },
+      "id": 22,
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "none" }
+      },
+      "targets": [
+        {
+          "expr": "learning_ai_executor_active_threads{application=\"learning-service\"}",
+          "legendFormat": "active threads",
+          "refId": "A"
+        },
+        {
+          "expr": "learning_ai_executor_pool_size{application=\"learning-service\"}",
+          "legendFormat": "pool size",
+          "refId": "B"
+        },
+        {
+          "expr": "learning_ai_executor_queue_size{application=\"learning-service\"}",
+          "legendFormat": "queued tasks",
+          "refId": "C"
+        }
+      ],
+      "title": "AI Executor 상태",
+      "type": "timeseries"
     }
   ],
   "refresh": "10s",
   "schemaVersion": 39,
-  "tags": ["sixfin", "learning", "kafka", "diagnosis"],
+  "tags": ["sixfin", "learning", "kafka", "diagnosis", "ai", "performance"],
   "templating": { "list": [] },
   "time": { "from": "now-1h", "to": "now" },
   "timezone": "browser",
   "title": "Learning Operations",
   "uid": "sixfin-learning-operations",
-  "version": 1
+  "version": 2
 }

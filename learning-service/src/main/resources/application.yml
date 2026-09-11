@@ -103,6 +103,9 @@ management:
         http.server.requests: true
         learning.trade.event.processing.duration: true
         learning.diagnosis.duration: true
+        learning.ai.request.duration: true
+        learning.feedback.generation.duration: true
+        learning.resource.recommendation.duration: true
   tracing:
     sampling:
       probability: 1.0

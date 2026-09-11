@@ -85,6 +85,9 @@ public class LearningCommandService {
     // =================================================================================
     GenerationContext prepareGenerationContext(UUID positionId, UUID userId, FeedbackType feedbackType) {
 
+        // 비동기 Executor 대기시간까지 포함한 전체 피드백 생성시간의 시작점
+        long generationStartedAtNanos = System.nanoTime();
+
         UUID basedOnExecutionId;
         String contextJsonStr;
         // 피드백에 사용된 진단 결과를 추적하고 매핑하기 위한 리스트
@@ -185,7 +188,7 @@ public class LearningCommandService {
             }
         }
 
-        return new GenerationContext(feedback, contextJsonStr, isAlreadyProcessed);
+        return new GenerationContext(feedback, contextJsonStr, isAlreadyProcessed, generationStartedAtNanos);
     }
 
 
@@ -317,5 +320,15 @@ public class LearningCommandService {
 
 
     // [수정됨] 외부 Bean과 통신하기 위해 record를 public으로 변경
-    public record GenerationContext(Feedback feedback, String contextJsonStr, boolean isAlreadyProcessed) {}
+    public record GenerationContext(
+            Feedback feedback,
+            String contextJsonStr,
+            boolean isAlreadyProcessed,
+            long generationStartedAtNanos
+    ) {
+        // 단위 테스트나 외부 호출부에서 기존 3개 인자 생성 방식을 유지한다.
+        public GenerationContext(Feedback feedback, String contextJsonStr, boolean isAlreadyProcessed) {
+            this(feedback, contextJsonStr, isAlreadyProcessed, System.nanoTime());
+        }
+    }
 }
