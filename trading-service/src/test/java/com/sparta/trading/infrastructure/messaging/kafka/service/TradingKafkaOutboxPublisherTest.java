@@ -9,6 +9,8 @@ import com.sparta.trading.global.exception.CustomException;
 import com.sparta.trading.global.exception.TradingErrorCode;
 import com.sparta.trading.infrastructure.messaging.kafka.OutboxPublisherProperties;
 import com.sparta.trading.infrastructure.messaging.kafka.producer.TradingKafkaProducer;
+import com.sparta.trading.infrastructure.monitoring.TradingMetrics;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -46,17 +48,20 @@ class TradingKafkaOutboxPublisherTest {
     private TradingKafkaProducer producer;
 
     private OutboxEvents pendingEvent;
+    private TradingMetrics tradingMetrics;
 
     @BeforeEach
     void setUp() {
         ObjectNode payload = JsonNodeFactory.instance.objectNode().put("stub", true);
         pendingEvent = OutboxEvents.buyExecuted(
                 UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), payload, Instant.now());
+        tradingMetrics = new TradingMetrics(new SimpleMeterRegistry(), outboxEventsRepository);
     }
 
     private TradingKafkaOutboxPublisher publisherWithMaxRetry(int maxRetry) {
         return new TradingKafkaOutboxPublisher(
-                outboxEventsRepository, producer, new OutboxPublisherProperties(TOPIC, 100, maxRetry));
+                outboxEventsRepository, producer, new OutboxPublisherProperties(TOPIC, 100, maxRetry),
+                tradingMetrics);
     }
 
     @Test

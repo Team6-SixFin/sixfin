@@ -8,6 +8,8 @@ import com.sparta.trading.global.exception.CustomException;
 import com.sparta.trading.global.exception.TradingErrorCode;
 import com.sparta.trading.infrastructure.messaging.kafka.OutboxPublisherProperties;
 import com.sparta.trading.infrastructure.messaging.kafka.producer.TradingKafkaProducer;
+import com.sparta.trading.infrastructure.monitoring.TradingMetrics;
+import io.micrometer.core.instrument.Timer;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -25,6 +27,7 @@ public class TradingKafkaOutboxPublisher {
     private final OutboxEventsQueryRepository outboxEventsQueryRepository;
     private final TradingKafkaProducer producer;
     private final OutboxPublisherProperties outboxPublisherProperties;
+    private final TradingMetrics tradingMetrics;
 
     /**
      * 이벤트 1건 = 독립 트랜잭션. 배치 전체를 하나로 묶으면 한 건 실패가 이미 발행된 다른 건의
@@ -37,6 +40,7 @@ public class TradingKafkaOutboxPublisher {
 
         if(!OutboxStatus.PENDING.equals(outboxEvents.getStatus())) return;
 
+        Timer.Sample sendSample = tradingMetrics.startTimer();
         try {
             producer.sendSync(
                     outboxPublisherProperties.topic(),
@@ -45,9 +49,11 @@ public class TradingKafkaOutboxPublisher {
                     SEND_TIMEOUT_SECONDS
             );
             outboxEvents.markPublished(Instant.now());
+            tradingMetrics.recordPublishSuccess(sendSample, outboxEvents.getOccurredAt());
         } catch (Exception e) {
             log.error("[Outbox Publisher] Failed to publish outboxEventId={}", id, e);
             outboxEvents.markFailedAttempt(e.getMessage(), outboxPublisherProperties.maxRetry());
+            tradingMetrics.recordPublishFailure(sendSample);
         }
     }
 }
