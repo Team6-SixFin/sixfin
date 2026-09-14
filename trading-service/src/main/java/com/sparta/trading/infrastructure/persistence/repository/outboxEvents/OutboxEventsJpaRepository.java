@@ -36,6 +36,6 @@ public interface OutboxEventsJpaRepository extends JpaRepository<OutboxEvents, L
     @Query("SELECT o FROM OutboxEvents o WHERE o.status <> 'PUBLISHED'")
     List<OutboxEvents> findUnpublished(Pageable pageable);
 
-    @Query("SELECT o.id FROM OutboxEvents o WHERE o.status = 'PENDING' ORDER BY o.occurredAt ASC limit :count")
+    @Query("SELECT o.id FROM OutboxEvents o WHERE o.status = 'PENDING' ORDER BY o.occurredAt ASC, o.id ASC limit :count")
     List<Long> findPendingIds(int count);
 }
