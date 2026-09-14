@@ -5,6 +5,7 @@ import com.sparta.learning.application.dto.query.FeedbackListQuery;
 import com.sparta.learning.application.dto.response.FeedbackDetailResponse;
 import com.sparta.learning.application.dto.response.FeedbackListItemResponse;
 import com.sparta.learning.application.dto.response.PositionFeedbackResponse;
+import com.sparta.learning.application.dto.result.PositionStockInfo;
 import com.sparta.learning.domain.entity.DiagnosisResult;
 import com.sparta.learning.domain.entity.ExecutionSnapshot;
 import com.sparta.learning.domain.entity.Feedback;
@@ -75,20 +76,16 @@ class FeedbackQueryServiceTest {
         );
     }
 
-    // 최신순 페이지 조회 결과에 JSONB 요약과 체결 스냅샷 종목 정보가 포함되는지 확인
+    // 최신순 페이지 조회 결과에 요약과 종목 정보가 포함되는지 확인
     @Test
     void returnsPagedFeedbacksWithExecutionStockInfo() {
         Feedback feedback = createFeedback();
-        ExecutionSnapshot executionSnapshot = mock(ExecutionSnapshot.class);
-        when(executionSnapshot.getPositionId()).thenReturn(POSITION_ID);
-        when(executionSnapshot.getStockSymbol()).thenReturn("AAPL");
-        when(executionSnapshot.getStockName()).thenReturn("Apple Inc.");
 
         PageRequest requestedPage = PageRequest.of(0, 20);
         when(feedbackQueryRepository.findAllByQuery(any(FeedbackListQuery.class), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(feedback), requestedPage, 1));
-        when(executionSnapshotRepository.findByPositionIdInOrderByExecutedAtAsc(Set.of(POSITION_ID)))
-                .thenReturn(List.of(executionSnapshot));
+        when(executionSnapshotRepository.findStockInfoByPositionIds(Set.of(POSITION_ID)))
+                .thenReturn(List.of(stockInfo(POSITION_ID, "AAPL", "Apple Inc.")));
 
         FeedbackListQuery query = FeedbackListQuery.of(
                 USER_ID,
@@ -119,7 +116,7 @@ class FeedbackQueryServiceTest {
 
         when(feedbackQueryRepository.findAllByQuery(any(FeedbackListQuery.class), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(feedback), PageRequest.of(0, 20), 1));
-        when(executionSnapshotRepository.findByPositionIdInOrderByExecutedAtAsc(Set.of(POSITION_ID)))
+        when(executionSnapshotRepository.findStockInfoByPositionIds(Set.of(POSITION_ID)))
                 .thenReturn(List.of());
 
         PageResponse<FeedbackListItemResponse> result = feedbackQueryService.getFeedbacks(
@@ -128,6 +125,33 @@ class FeedbackQueryServiceTest {
 
         assertThat(result.content().getFirst().stockSymbol()).isNull();
         assertThat(result.content().getFirst().stockName()).isNull();
+    }
+
+    // 한 포지션에 체결이 여러 건 쌓여도 종목 정보 조회는 포지션당 한 번만 이뤄진다
+    @Test
+    void 같은_포지션의_피드백이_여러_건이어도_종목_정보는_한_번만_조회한다() {
+        Feedback first = createFeedback();
+        Feedback second = createFeedback();
+        Feedback third = createFeedback();
+
+        when(feedbackQueryRepository.findAllByQuery(any(FeedbackListQuery.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(
+                        List.of(first, second, third),
+                        PageRequest.of(0, 20),
+                        3
+                ));
+        when(executionSnapshotRepository.findStockInfoByPositionIds(Set.of(POSITION_ID)))
+                .thenReturn(List.of(stockInfo(POSITION_ID, "AAPL", "Apple Inc.")));
+
+        PageResponse<FeedbackListItemResponse> result = feedbackQueryService.getFeedbacks(
+                FeedbackListQuery.of(USER_ID, null, null, null, 0, 20)
+        );
+
+        assertThat(result.content()).hasSize(3);
+        assertThat(result.content()).allSatisfy(item ->
+                assertThat(item.stockSymbol()).isEqualTo("AAPL"));
+        // 같은 포지션이 여러 번 등장해도 조회 대상 positionId는 하나로 접힌다
+        verify(executionSnapshotRepository).findStockInfoByPositionIds(Set.of(POSITION_ID));
     }
 
     // 빈 페이지에서는 불필요한 스냅샷 조회를 실행하지 않는지 확인
@@ -277,6 +301,26 @@ class FeedbackQueryServiceTest {
                 .isInstanceOf(CustomException.class)
                 .satisfies(exception -> assertThat(((CustomException) exception).getErrorCode())
                         .isEqualTo(LearningErrorCode.POSITION_NOT_FOUND));
+    }
+
+    /** 네이티브 쿼리 결과인 인터페이스 프로젝션을 테스트에서 값으로 만든다. */
+    private PositionStockInfo stockInfo(UUID positionId, String symbol, String name) {
+        return new PositionStockInfo() {
+            @Override
+            public UUID getPositionId() {
+                return positionId;
+            }
+
+            @Override
+            public String getStockSymbol() {
+                return symbol;
+            }
+
+            @Override
+            public String getStockName() {
+                return name;
+            }
+        };
     }
 
     private Feedback createFeedback() {

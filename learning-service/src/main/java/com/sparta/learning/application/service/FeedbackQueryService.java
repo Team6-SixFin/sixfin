@@ -4,6 +4,7 @@ import com.sparta.learning.application.dto.query.FeedbackListQuery;
 import com.sparta.learning.application.dto.response.FeedbackDetailResponse;
 import com.sparta.learning.application.dto.response.FeedbackListItemResponse;
 import com.sparta.learning.application.dto.response.PositionFeedbackResponse;
+import com.sparta.learning.application.dto.result.PositionStockInfo;
 import com.sparta.learning.domain.entity.DiagnosisResult;
 import com.sparta.learning.domain.entity.ExecutionSnapshot;
 import com.sparta.learning.domain.entity.Feedback;
@@ -41,15 +42,15 @@ public class FeedbackQueryService {
         Pageable pageable = PageRequest.of(query.page(), query.size());
 
         Page<Feedback> feedbackPage = feedbackQueryRepository.findAllByQuery(query, pageable);
-        Map<UUID, StockInfo> stockInfoByPosition = findStockInfo(feedbackPage.getContent());
+        Map<UUID, PositionStockInfo> stockInfoByPosition = findStockInfo(feedbackPage.getContent());
 
         List<FeedbackListItemResponse> content = feedbackPage.getContent().stream()
                 .map(feedback -> {
-                    StockInfo stockInfo = stockInfoByPosition.get(feedback.getPositionId());
+                    PositionStockInfo stockInfo = stockInfoByPosition.get(feedback.getPositionId());
                     return FeedbackListItemResponse.from(
                             feedback,
-                            stockInfo == null ? null : stockInfo.stockSymbol(),
-                            stockInfo == null ? null : stockInfo.stockName()
+                            stockInfo == null ? null : stockInfo.getStockSymbol(),
+                            stockInfo == null ? null : stockInfo.getStockName()
                     );
                 })
                 .toList();
@@ -86,7 +87,7 @@ public class FeedbackQueryService {
         return PositionFeedbackResponse.from(firstExecution, feedbacks);
     }
 
-    private Map<UUID, StockInfo> findStockInfo(List<Feedback> feedbacks) {
+    private Map<UUID, PositionStockInfo> findStockInfo(List<Feedback> feedbacks) {
         Set<UUID> positionIds = feedbacks.stream()
                 .map(Feedback::getPositionId)
                 .collect(Collectors.toSet());
@@ -96,21 +97,13 @@ public class FeedbackQueryService {
         }
 
         // 페이지에 포함된 포지션을 한 번에 조회 -> N+1 문제 방지
-        Map<UUID, StockInfo> stockInfoByPosition = new LinkedHashMap<>();
-        // 한 포지션에서 추가 매수,매도가 있어도 같은 종목 -> 가장 최초 체결 스냅샷 정보를 사용
-        executionSnapshotRepository.findByPositionIdInOrderByExecutedAtAsc(positionIds)
-                .forEach(snapshot -> stockInfoByPosition.putIfAbsent(
-                        snapshot.getPositionId(),
-                        StockInfo.from(snapshot)
+        // 체결이 여러 건 쌓여도 DB가 포지션당 최초 체결 한 행만 돌려준다
+        return executionSnapshotRepository.findStockInfoByPositionIds(positionIds).stream()
+                .collect(Collectors.toMap(
+                        PositionStockInfo::getPositionId,
+                        stockInfo -> stockInfo,
+                        (first, duplicate) -> first,
+                        LinkedHashMap::new
                 ));
-
-        return stockInfoByPosition;
-    }
-
-    private record StockInfo(String stockSymbol, String stockName) {
-
-        private static StockInfo from(ExecutionSnapshot snapshot) {
-            return new StockInfo(snapshot.getStockSymbol(), snapshot.getStockName());
-        }
     }
 }
