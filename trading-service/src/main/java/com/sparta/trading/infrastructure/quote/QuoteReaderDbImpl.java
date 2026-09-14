@@ -3,7 +3,7 @@ package com.sparta.trading.infrastructure.quote;
 import com.sparta.trading.application.port.Quote;
 import com.sparta.trading.application.port.QuoteReader;
 import com.sparta.trading.application.service.CurrentSeqProvider;
-import com.sparta.trading.domain.entity.MarketClock;
+import com.sparta.trading.domain.entity.MarketClockSnapshot;
 import com.sparta.trading.domain.entity.PriceCandles;
 import com.sparta.trading.infrastructure.persistence.repository.candles.PriceCandlesRepository;
 import com.sparta.trading.infrastructure.persistence.repository.stocks.StocksRepository;
@@ -44,7 +44,7 @@ public class QuoteReaderDbImpl implements QuoteReader {
             throw new CustomException(TradingErrorCode.STOCK_NOT_FOUND);
         }
 
-        MarketClock marketClock = currentSeqProvider.getClock();
+        MarketClockSnapshot marketClock = currentSeqProvider.getClockSnapshot();
         long seq = currentSeqProvider.currentSeq(marketClock);
 
         List<PriceCandles> candles = priceCandlesRepository.findAllBySeqAndStockIdIn(
@@ -59,7 +59,7 @@ public class QuoteReaderDbImpl implements QuoteReader {
                 .toList();
     }
 
-    private Quote toQuote(PriceCandles candle, String symbol, MarketClock marketClock, Instant now) {
+    private Quote toQuote(PriceCandles candle, String symbol, MarketClockSnapshot marketClock, Instant now) {
         return new Quote(
                 symbol,
                 candle.getClosePrice(),
