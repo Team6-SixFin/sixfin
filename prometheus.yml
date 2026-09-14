@@ -6,14 +6,14 @@ scrape_configs:
     static_configs:
       - targets: ['localhost:9090']
 
-  # IntelliJ에서 실행 중인 Learning 서비스의 Actuator 메트릭을 수집한다.
+  # AWS에서는 docker-compose.data.yml의 extra_hosts가 sixfin-app을 App EC2 사설 IP로 연결한다.
+  # 로컬에서는 host-gateway를 사용하므로 같은 설정을 재사용할 수 있다.
   - job_name: 'learning-service'
     metrics_path: '/actuator/prometheus'
     static_configs:
-      - targets: ['host.docker.internal:19094']
+      - targets: ['sixfin-app:19094']
 
-  # IntelliJ에서 실행 중인 Trading 서비스의 Actuator 메트릭을 수집한다.
   - job_name: 'trading-service'
     metrics_path: '/actuator/prometheus'
     static_configs:
-      - targets: ['host.docker.internal:19093']
+      - targets: ['sixfin-app:19093']
