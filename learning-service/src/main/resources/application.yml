@@ -16,6 +16,9 @@ spring:
       hibernate:
         jdbc:
           time_zone: UTC
+        query:
+          hql:
+            json_functions_enabled: true
   data:
     redis:
       host: ${REDIS_HOST:localhost}

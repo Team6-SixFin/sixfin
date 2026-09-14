@@ -5,6 +5,7 @@ import com.sparta.learning.application.dto.query.FeedbackListQuery;
 import com.sparta.learning.application.dto.response.FeedbackDetailResponse;
 import com.sparta.learning.application.dto.response.FeedbackListItemResponse;
 import com.sparta.learning.application.dto.response.PositionFeedbackResponse;
+import com.sparta.learning.application.dto.result.FeedbackListRow;
 import com.sparta.learning.application.dto.result.PositionStockInfo;
 import com.sparta.learning.domain.entity.DiagnosisResult;
 import com.sparta.learning.domain.entity.ExecutionSnapshot;
@@ -79,11 +80,9 @@ class FeedbackQueryServiceTest {
     // 최신순 페이지 조회 결과에 요약과 종목 정보가 포함되는지 확인
     @Test
     void returnsPagedFeedbacksWithExecutionStockInfo() {
-        Feedback feedback = createFeedback();
-
         PageRequest requestedPage = PageRequest.of(0, 20);
-        when(feedbackQueryRepository.findAllByQuery(any(FeedbackListQuery.class), any(Pageable.class)))
-                .thenReturn(new PageImpl<>(List.of(feedback), requestedPage, 1));
+        when(feedbackQueryRepository.findListRows(any(FeedbackListQuery.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(createListRow()), requestedPage, 1));
         when(executionSnapshotRepository.findStockInfoByPositionIds(Set.of(POSITION_ID)))
                 .thenReturn(List.of(stockInfo(POSITION_ID, "AAPL", "Apple Inc.")));
 
@@ -104,7 +103,7 @@ class FeedbackQueryServiceTest {
         assertThat(result.totalElements()).isEqualTo(1);
 
         ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
-        verify(feedbackQueryRepository).findAllByQuery(eq(query), pageableCaptor.capture());
+        verify(feedbackQueryRepository).findListRows(eq(query), pageableCaptor.capture());
         assertThat(pageableCaptor.getValue().getPageNumber()).isZero();
         assertThat(pageableCaptor.getValue().getPageSize()).isEqualTo(20);
     }
@@ -112,10 +111,8 @@ class FeedbackQueryServiceTest {
     // 피드백보다 먼저 저장되어야 할 체결 스냅샷이 누락되면 종목 정보를 임의로 보완하지 않는다
     @Test
     void returnsNullStockInfoWhenExecutionSnapshotIsMissing() {
-        Feedback feedback = createFeedback();
-
-        when(feedbackQueryRepository.findAllByQuery(any(FeedbackListQuery.class), any(Pageable.class)))
-                .thenReturn(new PageImpl<>(List.of(feedback), PageRequest.of(0, 20), 1));
+        when(feedbackQueryRepository.findListRows(any(FeedbackListQuery.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(createListRow()), PageRequest.of(0, 20), 1));
         when(executionSnapshotRepository.findStockInfoByPositionIds(Set.of(POSITION_ID)))
                 .thenReturn(List.of());
 
@@ -130,13 +127,9 @@ class FeedbackQueryServiceTest {
     // 한 포지션에 체결이 여러 건 쌓여도 종목 정보 조회는 포지션당 한 번만 이뤄진다
     @Test
     void 같은_포지션의_피드백이_여러_건이어도_종목_정보는_한_번만_조회한다() {
-        Feedback first = createFeedback();
-        Feedback second = createFeedback();
-        Feedback third = createFeedback();
-
-        when(feedbackQueryRepository.findAllByQuery(any(FeedbackListQuery.class), any(Pageable.class)))
+        when(feedbackQueryRepository.findListRows(any(FeedbackListQuery.class), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(
-                        List.of(first, second, third),
+                        List.of(createListRow(), createListRow(102L), createListRow(103L)),
                         PageRequest.of(0, 20),
                         3
                 ));
@@ -157,7 +150,7 @@ class FeedbackQueryServiceTest {
     // 빈 페이지에서는 불필요한 스냅샷 조회를 실행하지 않는지 확인
     @Test
     void skipsSnapshotQueriesForEmptyPage() {
-        when(feedbackQueryRepository.findAllByQuery(any(FeedbackListQuery.class), any(Pageable.class)))
+        when(feedbackQueryRepository.findListRows(any(FeedbackListQuery.class), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
 
         PageResponse<FeedbackListItemResponse> result = feedbackQueryService.getFeedbacks(
@@ -323,19 +316,23 @@ class FeedbackQueryServiceTest {
         };
     }
 
-    private Feedback createFeedback() {
-        Feedback feedback = mock(Feedback.class);
-        when(feedback.getId()).thenReturn(101L);
-        when(feedback.getPositionId()).thenReturn(POSITION_ID);
-        when(feedback.getFeedbackType()).thenReturn(FeedbackType.ENTRY_FEEDBACK);
-        when(feedback.getStatus()).thenReturn(FeedbackStatus.COMPLETED);
-        when(feedback.getContent()).thenReturn(
-                JsonNodeFactory.instance.objectNode().put("summary", "손절 계획을 설정했습니다.")
+    private FeedbackListRow createListRow() {
+        return createListRow(101L);
+    }
+
+    /** 목록 조회는 엔티티가 아니라 프로젝션을 받으므로 mock 없이 값으로 만든다. */
+    private FeedbackListRow createListRow(Long feedbackId) {
+        return new FeedbackListRow(
+                feedbackId,
+                POSITION_ID,
+                FeedbackType.ENTRY_FEEDBACK,
+                FeedbackStatus.COMPLETED,
+                "손절 계획을 설정했습니다.",
+                true,
+                null,
+                OffsetDateTime.parse("2026-08-31T10:00:00+09:00"),
+                OffsetDateTime.parse("2026-08-31T10:00:05+09:00")
         );
-        when(feedback.isAiUsed()).thenReturn(true);
-        when(feedback.getCreatedAt()).thenReturn(OffsetDateTime.parse("2026-08-31T10:00:00+09:00"));
-        when(feedback.getCompletedAt()).thenReturn(OffsetDateTime.parse("2026-08-31T10:00:05+09:00"));
-        return feedback;
     }
 
     private Feedback createDetailFeedback() {

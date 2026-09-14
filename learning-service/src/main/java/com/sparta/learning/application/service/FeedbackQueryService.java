@@ -4,6 +4,7 @@ import com.sparta.learning.application.dto.query.FeedbackListQuery;
 import com.sparta.learning.application.dto.response.FeedbackDetailResponse;
 import com.sparta.learning.application.dto.response.FeedbackListItemResponse;
 import com.sparta.learning.application.dto.response.PositionFeedbackResponse;
+import com.sparta.learning.application.dto.result.FeedbackListRow;
 import com.sparta.learning.application.dto.result.PositionStockInfo;
 import com.sparta.learning.domain.entity.DiagnosisResult;
 import com.sparta.learning.domain.entity.ExecutionSnapshot;
@@ -41,14 +42,14 @@ public class FeedbackQueryService {
     public PageResponse<FeedbackListItemResponse> getFeedbacks(FeedbackListQuery query) {
         Pageable pageable = PageRequest.of(query.page(), query.size());
 
-        Page<Feedback> feedbackPage = feedbackQueryRepository.findAllByQuery(query, pageable);
+        Page<FeedbackListRow> feedbackPage = feedbackQueryRepository.findListRows(query, pageable);
         Map<UUID, PositionStockInfo> stockInfoByPosition = findStockInfo(feedbackPage.getContent());
 
         List<FeedbackListItemResponse> content = feedbackPage.getContent().stream()
-                .map(feedback -> {
-                    PositionStockInfo stockInfo = stockInfoByPosition.get(feedback.getPositionId());
+                .map(row -> {
+                    PositionStockInfo stockInfo = stockInfoByPosition.get(row.positionId());
                     return FeedbackListItemResponse.from(
-                            feedback,
+                            row,
                             stockInfo == null ? null : stockInfo.getStockSymbol(),
                             stockInfo == null ? null : stockInfo.getStockName()
                     );
@@ -87,9 +88,9 @@ public class FeedbackQueryService {
         return PositionFeedbackResponse.from(firstExecution, feedbacks);
     }
 
-    private Map<UUID, PositionStockInfo> findStockInfo(List<Feedback> feedbacks) {
-        Set<UUID> positionIds = feedbacks.stream()
-                .map(Feedback::getPositionId)
+    private Map<UUID, PositionStockInfo> findStockInfo(List<FeedbackListRow> rows) {
+        Set<UUID> positionIds = rows.stream()
+                .map(FeedbackListRow::positionId)
                 .collect(Collectors.toSet());
 
         if (positionIds.isEmpty()) {
