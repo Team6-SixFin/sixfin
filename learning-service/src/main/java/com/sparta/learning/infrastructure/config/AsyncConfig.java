@@ -1,5 +1,6 @@
 package com.sparta.learning.infrastructure.config;
 
+import com.sparta.learning.infrastructure.ai.AiProviderContextHolder;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -29,6 +30,32 @@ public class AsyncConfig {
         executor.setRejectedExecutionHandler((task, threadPool) -> {
             rejectedCounter.increment();
             throw new RejectedExecutionException("AI executor queue is full");
+        });
+
+        // ===== 성능 측정용 AI provider 오버라이드 전달 =====
+        //
+        // 제출 스레드(Tomcat)의 provider 오버라이드를 @Async 워커 스레드로 넘긴다.
+        // TaskDecorator.decorate() 는 executor.execute() 호출 시점,
+        // 즉 '제출한 스레드'에서 실행되므로 여기서 캡처한 값이 곧 그 요청의 provider 다.
+        //
+        // 이 장치가 없으면 워커에서 ThreadLocal 이 비어 있어
+        // 헤더를 보내도 항상 기본 provider(Gemini)로 처리된다.
+        //
+        // ThreadPoolTaskExecutor 는 initialize() 시점에 내부 ThreadPoolExecutor 를
+        // 만들면서 데코레이터를 반영하므로, initialize() 뒤에 두면 조용히 무시된다.
+        executor.setTaskDecorator(runnable -> {
+            String provider = AiProviderContextHolder.get();
+            return () -> {
+                if (provider != null) {
+                    AiProviderContextHolder.set(provider);
+                }
+                try {
+                    runnable.run();
+                } finally {
+                    // 워커 스레드도 재사용되므로 반드시 정리한다.
+                    AiProviderContextHolder.clear();
+                }
+            };
         });
 
         executor.initialize();

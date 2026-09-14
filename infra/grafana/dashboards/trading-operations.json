@@ -1,0 +1,313 @@
+{
+  "annotations": { "list": [] },
+  "description": "Trading 서비스의 Outbox 발행 상태, API 처리량, JVM·DB 풀 상태를 확인합니다.",
+  "editable": false,
+  "graphTooltip": 1,
+  "panels": [
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "최근 5분 동안 Kafka로 발행에 성공한 Outbox 이벤트 수입니다.",
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" } }, "overrides": [] },
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "id": 1,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "reduceOptions": { "calcs": ["lastNotNull"], "values": false },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "expr": "sum(increase(trading_outbox_publish_total{application=\"trading-service\", result=\"PUBLISHED\"}[5m])) or vector(0)",
+          "refId": "A"
+        }
+      ],
+      "title": "최근 5분 발행 성공",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "최근 5분 동안 Kafka 발행에 실패해 재시도로 넘어간 Outbox 이벤트 수입니다.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 1 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+      "id": 2,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "reduceOptions": { "calcs": ["lastNotNull"], "values": false },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "expr": "sum(increase(trading_outbox_publish_total{application=\"trading-service\", result=\"FAILED\"}[5m])) or vector(0)",
+          "refId": "A"
+        }
+      ],
+      "title": "최근 5분 발행 실패",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "현재 PENDING 또는 FAILED 상태로 남아있는 Outbox 이벤트 수(적체량)입니다.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 50 },
+              { "color": "red", "value": 200 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+      "id": 3,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "reduceOptions": { "calcs": ["lastNotNull"], "values": false },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "expr": "trading_outbox_pending{application=\"trading-service\"}",
+          "refId": "A"
+        }
+      ],
+      "title": "현재 미발행 적체",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "최근 5분 동안 Trading API가 반환한 5xx 응답 수입니다.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 1 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+      "id": 4,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "reduceOptions": { "calcs": ["lastNotNull"], "values": false },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "expr": "sum(increase(http_server_requests_seconds_count{application=\"trading-service\",uri=~\"/api/.*\",status=~\"5..\"}[5m])) or vector(0)",
+          "refId": "A"
+        }
+      ],
+      "title": "최근 5분 API 5xx",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Outbox Publisher가 결과별로 초당 발행 처리한 이벤트 수입니다.",
+      "fieldConfig": { "defaults": { "unit": "ops" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "id": 5,
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "none" }
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(trading_outbox_publish_total{application=\"trading-service\"}[1m])) by (result)",
+          "legendFormat": "{{result}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Outbox 발행 처리량",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Outbox 이벤트 발생(occurredAt)부터 PUBLISHED 전이까지 걸린 시간의 p95·p99입니다. 배치 100건 + 3초 주기 구조의 실제 지연을 보여줍니다.",
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "id": 6,
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "none" }
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(trading_outbox_publish_age_seconds_bucket{application=\"trading-service\"}[5m])) by (le))",
+          "legendFormat": "p95",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum(rate(trading_outbox_publish_age_seconds_bucket{application=\"trading-service\"}[5m])) by (le))",
+          "legendFormat": "p99",
+          "refId": "B"
+        }
+      ],
+      "title": "Outbox 발행 지연(생성→PUBLISHED) p95·p99",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Outbox Publisher의 Kafka 동기 발행(sendSync) 호출 자체에 걸린 시간의 p95입니다. 위 패널(생성→PUBLISHED)과 비교해 배치 대기시간과 실제 전송시간을 구분하는 데 씁니다.",
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+      "id": 7,
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "none" }
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(trading_outbox_publish_send_duration_seconds_bucket{application=\"trading-service\"}[5m])) by (le, result))",
+          "legendFormat": "{{result}} p95",
+          "refId": "A"
+        }
+      ],
+      "title": "Kafka 발행(sendSync) 소요시간 p95",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "PENDING/FAILED 적체량 추이입니다. 부하 종료 후 이 값이 0으로 수렴하는 시간을 확인합니다.",
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
+      "id": 8,
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "none" }
+      },
+      "targets": [
+        {
+          "expr": "trading_outbox_pending{application=\"trading-service\"}",
+          "legendFormat": "pending",
+          "refId": "A"
+        }
+      ],
+      "title": "Outbox 적체 추이",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Trading API의 URI·메서드·상태 코드별 초당 요청 수입니다.",
+      "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 20 },
+      "id": 9,
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "none" }
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(http_server_requests_seconds_count{application=\"trading-service\",uri=~\"/api/.*\"}[1m])) by (method, uri, status)",
+          "legendFormat": "{{method}} {{uri}} / {{status}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Trading API 처리량",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Trading API URI별 서버 처리시간의 p95입니다.",
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 20 },
+      "id": 10,
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "none" }
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{application=\"trading-service\",uri=~\"/api/.*\"}[5m])) by (le, uri))",
+          "legendFormat": "{{uri}} p95",
+          "refId": "A"
+        }
+      ],
+      "title": "Trading API 응답시간 p95",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Trading JVM 프로세스 CPU 사용률과 Heap 사용률입니다.",
+      "fieldConfig": { "defaults": { "max": 100, "min": 0, "unit": "percent" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 28 },
+      "id": 11,
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "none" }
+      },
+      "targets": [
+        {
+          "expr": "process_cpu_usage{application=\"trading-service\"} * 100",
+          "legendFormat": "Process CPU",
+          "refId": "A"
+        },
+        {
+          "expr": "100 * sum(jvm_memory_used_bytes{application=\"trading-service\",area=\"heap\"}) / sum(jvm_memory_max_bytes{application=\"trading-service\",area=\"heap\"})",
+          "legendFormat": "Heap",
+          "refId": "B"
+        }
+      ],
+      "title": "Trading JVM CPU·Heap",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Trading DB 커넥션 풀의 사용 중인 커넥션과 대기 요청 수입니다.",
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 28 },
+      "id": 12,
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "none" }
+      },
+      "targets": [
+        {
+          "expr": "sum(hikaricp_connections_active{application=\"trading-service\"}) by (pool)",
+          "legendFormat": "{{pool}} active",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(hikaricp_connections_pending{application=\"trading-service\"}) by (pool)",
+          "legendFormat": "{{pool}} pending",
+          "refId": "B"
+        }
+      ],
+      "title": "HikariCP 활성·대기",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 39,
+  "tags": ["sixfin", "trading", "outbox", "kafka", "performance"],
+  "templating": { "list": [] },
+  "time": { "from": "now-1h", "to": "now" },
+  "timezone": "browser",
+  "title": "Trading Operations",
+  "uid": "sixfin-trading-operations",
+  "version": 1
+}
