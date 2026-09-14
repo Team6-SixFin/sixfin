@@ -108,6 +108,9 @@ services:
       JAVA_TOOL_OPTIONS: "-Xmx256m -XX:MaxMetaspaceSize=128m"
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: "http://eureka-server:19090/eureka/"
       JWT_SECRET: ${JWT_SECRET}
+      # Gateway의 JWT 블랙리스트 조회가 Data EC2 Redis를 사용하도록 명시한다.
+      REDIS_HOST: ${REDIS_HOST}
+      SPRING_DATA_REDIS_HOST: ${REDIS_HOST}
     healthcheck:
       test: [ "CMD-SHELL", "nc -z 127.0.0.1 19091" ]
       <<: *healthcheck-defaults
@@ -133,6 +136,8 @@ services:
 
   trading-service:
     <<: *app-base
+    # 시세 처리와 스케줄러 구동 중 Metaspace OOM이 발생하지 않도록 여유를 둔다.
+    mem_limit: 768m
     build:
       context: .
       dockerfile: trading-service/Dockerfile
@@ -144,6 +149,7 @@ services:
       - "19093:19093"
     environment:
       <<: *app-env
+      JAVA_TOOL_OPTIONS: "-Xmx256m -XX:MaxMetaspaceSize=256m"
     volumes:
       - ./tools/market-data-collector/out:/tools/market-data-collector/out
     healthcheck:
