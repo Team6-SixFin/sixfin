@@ -138,6 +138,10 @@ services:
       dockerfile: trading-service/Dockerfile
     image: ${IMAGE_REGISTRY:-sixfin}/trading-service:${IMAGE_TAG:-latest}
     container_name: sixfin-trading-service
+    # 성능 측정기와 Data EC2의 Prometheus가 직접 접근합니다.
+    # AWS 보안 그룹에서는 측정자 IP와 Data EC2 보안 그룹에만 허용합니다.
+    ports:
+      - "19093:19093"
     environment:
       <<: *app-env
     volumes:
@@ -154,10 +158,22 @@ services:
       dockerfile: learning-service/Dockerfile
     image: ${IMAGE_REGISTRY:-sixfin}/learning-service:${IMAGE_TAG:-latest}
     container_name: sixfin-learning-service
+    # 성능 측정기와 Data EC2의 Prometheus가 직접 접근합니다.
+    # AWS 보안 그룹에서는 측정자 IP와 Data EC2 보안 그룹에만 허용합니다.
+    ports:
+      - "19094:19094"
     environment:
       <<: *app-env
       JAVA_TOOL_OPTIONS: "-Xmx768m -XX:MaxMetaspaceSize=256m"
       AI_API_KEY: ${AI_API_KEY}
+      # Kafka 자동 피드백은 HTTP 헤더가 없으므로 기본 provider 설정을 사용합니다.
+      LEARNING_AI_PROVIDER: ${LEARNING_AI_PROVIDER:-gemini}
+      AI_STUB_ENABLED: ${AI_STUB_ENABLED:-false}
+      AI_STUB_OVERRIDE_TOKEN: ${AI_STUB_OVERRIDE_TOKEN:-}
+      AI_STUB_LATENCY: ${AI_STUB_LATENCY:-2s}
+      AI_STUB_JITTER: ${AI_STUB_JITTER:-0s}
+      AI_STUB_FAILURE_RATE: ${AI_STUB_FAILURE_RATE:-0.0}
+      AI_STUB_FAIL_AFTER_LATENCY: ${AI_STUB_FAIL_AFTER_LATENCY:-true}
       YOUTUBE_API_KEY: ${YOUTUBE_API_KEY:-}
       YOUTUBE_SEARCH_ENABLED: ${YOUTUBE_SEARCH_ENABLED:-false}
     healthcheck:

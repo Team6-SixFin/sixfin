@@ -67,9 +67,10 @@ services:
       - "9090:9090"
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
-    # Windows/macOS뿐 아니라 Linux Docker에서도 호스트의 Learning 서비스에 접근할 수 있게 한다.
+    # 로컬은 host-gateway, AWS Data EC2는 .env의 APP_PRIVATE_IP를 통해 App EC2에 접근합니다.
     extra_hosts:
       - "host.docker.internal:host-gateway"
+      - "sixfin-app:${APP_PRIVATE_IP:-host-gateway}"
 
   # ---------- Grafana ----------
   grafana:
