@@ -106,7 +106,6 @@ class TradingCommandServiceTest {
         UUID userId = UUID.randomUUID();
         Accounts account = accountOf(userId);
         PlaceOrderCommand command = command(UUID.randomUUID(), " aapl ", 10);
-        when(ordersQueryRepository.findByRequestId(command.requestId())).thenReturn(Optional.empty());
         when(quoteReader.read("AAPL")).thenReturn(validQuote("100.0000"));
         when(accountsCommandRepository.findByUserIdForUpdate(userId)).thenReturn(Optional.of(account));
         when(positionCommandRepository.findOpenByAccountIdAndStockIdForUpdate(account.getId(), 1L))
@@ -146,7 +145,6 @@ class TradingCommandServiceTest {
         UUID userId = UUID.randomUUID();
         Accounts account = accountOf(userId);
         PlaceOrderCommand command = command(UUID.randomUUID(), "AAPL", 1001);
-        when(ordersQueryRepository.findByRequestId(command.requestId())).thenReturn(Optional.empty());
         when(quoteReader.read("AAPL")).thenReturn(validQuote("100.0000"));
         when(accountsCommandRepository.findByUserIdForUpdate(userId)).thenReturn(Optional.of(account));
 
@@ -168,7 +166,6 @@ class TradingCommandServiceTest {
         UUID userId = UUID.randomUUID();
         Accounts account = accountOf(userId);
         PlaceOrderCommand command = command(UUID.randomUUID(), "AAPL", 1);
-        when(ordersQueryRepository.findByRequestId(command.requestId())).thenReturn(Optional.empty());
         when(quoteReader.read("AAPL")).thenReturn(new Quote(
                 "AAPL", new BigDecimal("100.0000"), 12L, QUOTE_TIME, ClockStatus.RUNNING,
                 null, new BigDecimal("90.0000"), new BigDecimal("3.2500"), EXECUTED_AT, 1L, "Apple Inc."
@@ -192,7 +189,6 @@ class TradingCommandServiceTest {
         Accounts account = accountOf(userId);
         Positions position = positionOf(account, userId, 10, "100.0000");
         PlaceOrderCommand command = sellCommand(UUID.randomUUID(), "AAPL", 4);
-        when(ordersQueryRepository.findByRequestId(command.requestId())).thenReturn(Optional.empty());
         when(quoteReader.read("AAPL")).thenReturn(validQuote("120.0000"));
         when(accountsCommandRepository.findByUserIdForUpdate(userId)).thenReturn(Optional.of(account));
         when(positionCommandRepository.findOpenByAccountIdAndStockIdForUpdate(account.getId(), 1L))
@@ -238,7 +234,6 @@ class TradingCommandServiceTest {
         Accounts account = accountOf(userId);
         Positions position = positionOf(account, userId, 10, "100.0000");
         PlaceOrderCommand command = sellCommand(UUID.randomUUID(), "AAPL", 10);
-        when(ordersQueryRepository.findByRequestId(command.requestId())).thenReturn(Optional.empty());
         when(quoteReader.read("AAPL")).thenReturn(validQuote("90.0000"));
         when(accountsCommandRepository.findByUserIdForUpdate(userId)).thenReturn(Optional.of(account));
         when(positionCommandRepository.findOpenByAccountIdAndStockIdForUpdate(account.getId(), 1L))
@@ -275,7 +270,6 @@ class TradingCommandServiceTest {
         Accounts account = accountOf(userId);
         Positions position = positionOf(account, userId, 3, "100.0000");
         PlaceOrderCommand command = sellCommand(UUID.randomUUID(), "AAPL", 4);
-        when(ordersQueryRepository.findByRequestId(command.requestId())).thenReturn(Optional.empty());
         when(quoteReader.read("AAPL")).thenReturn(validQuote("120.0000"));
         when(accountsCommandRepository.findByUserIdForUpdate(userId)).thenReturn(Optional.of(account));
         when(positionCommandRepository.findOpenByAccountIdAndStockIdForUpdate(account.getId(), 1L))
@@ -301,7 +295,6 @@ class TradingCommandServiceTest {
         UUID userId = UUID.randomUUID();
         Accounts account = accountOf(userId);
         PlaceOrderCommand command = command(UUID.randomUUID(), "AAPL", 1);
-        when(ordersQueryRepository.findByRequestId(command.requestId())).thenReturn(Optional.empty());
         when(quoteReader.read("AAPL")).thenReturn(new Quote(
                 "AAPL", new BigDecimal("100.0000"), 12L, QUOTE_TIME, ClockStatus.STOPPED,
                 new BigDecimal("110.0000"), new BigDecimal("90.0000"), new BigDecimal("3.2500"),
@@ -324,7 +317,6 @@ class TradingCommandServiceTest {
         Accounts account = accountOf(userId);
         UUID requestId = UUID.randomUUID();
         PlaceOrderCommand command = command(requestId, "AAPL", 1);
-        when(ordersQueryRepository.findByRequestId(requestId)).thenReturn(Optional.empty());
         when(quoteReader.read("AAPL")).thenReturn(validQuote("100.0000"));
         when(accountsCommandRepository.findByUserIdForUpdate(userId)).thenReturn(Optional.of(account));
         when(positionCommandRepository.findOpenByAccountIdAndStockIdForUpdate(account.getId(), 1L))
@@ -335,9 +327,11 @@ class TradingCommandServiceTest {
         ArgumentCaptor<Orders> orderCaptor = ArgumentCaptor.forClass(Orders.class);
         verify(ordersCommandRepository).save(orderCaptor.capture());
         Orders saved = orderCaptor.getValue();
-        when(ordersQueryRepository.findByRequestId(requestId)).thenReturn(Optional.of(saved));
         when(stocksRepository.findBySymbol("AAPL")).thenReturn(Optional.of(stock(1L)));
+        when(accountsQueryRepository.findIdByUserId(userId)).thenReturn(Optional.of(account.getId()));
         when(accountsQueryRepository.findByUserId(userId)).thenReturn(Optional.of(account));
+        when(ordersQueryRepository.findByAccountIdAndRequestId(account.getId(), requestId))
+                .thenReturn(Optional.of(saved));
         when(executionsQueryRepository.findByOrderId(saved.getId())).thenReturn(Optional.of(
                 com.sparta.trading.domain.entity.Executions.buy(
                         saved.getId(), saved.getPositionId(), userId, 1L, 1, new BigDecimal("100.0000"),
@@ -361,15 +355,64 @@ class TradingCommandServiceTest {
                 requestId, account.getId(), 1L, 1, null, null,
                 QUOTE_TIME, 12L, OrderRejectReason.INSUFFICIENT_CASH, userId
         );
-        when(ordersQueryRepository.findByRequestId(requestId)).thenReturn(Optional.of(existing));
         when(stocksRepository.findBySymbol("AAPL")).thenReturn(Optional.of(stock(1L)));
+        when(accountsQueryRepository.findIdByUserId(userId)).thenReturn(Optional.of(account.getId()));
         when(accountsQueryRepository.findByUserId(userId)).thenReturn(Optional.of(account));
+        when(ordersQueryRepository.findByAccountIdAndRequestId(account.getId(), requestId))
+                .thenReturn(Optional.of(existing));
 
         assertThatThrownBy(() -> service.placeOrder(userId, command(requestId, "AAPL", 1)))
                 .isInstanceOf(CustomException.class)
                 .satisfies(exception -> assertThat(((CustomException) exception).getErrorCode())
                         .isEqualTo(TradingErrorCode.ORDER_REQUEST_ID_CONFLICT));
         verify(quoteReader, never()).read(any());
+    }
+
+    @Test
+    void placeOrder_allowsDifferentAccountsToUseSameRequestId() {
+        UUID existingUserId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        UUID requestId = UUID.randomUUID();
+        Accounts existingAccount = accountOf(existingUserId);
+        Accounts account = accountOf(userId);
+
+        when(accountsQueryRepository.findIdByUserId(userId)).thenReturn(Optional.of(account.getId()));
+        when(ordersQueryRepository.findByAccountIdAndRequestId(account.getId(), requestId))
+                .thenReturn(Optional.empty());
+        when(quoteReader.read("AAPL")).thenReturn(validQuote("100.0000"));
+        when(accountsCommandRepository.findByUserIdForUpdate(userId)).thenReturn(Optional.of(account));
+        when(positionCommandRepository.findOpenByAccountIdAndStockIdForUpdate(account.getId(), 1L))
+                .thenReturn(Optional.empty());
+
+        OrderResponse response = service.placeOrder(userId, command(requestId, "AAPL", 1));
+
+        assertThat(response.status()).isEqualTo(OrderStatus.FILLED);
+        verify(ordersQueryRepository, never())
+                .findByAccountIdAndRequestId(existingAccount.getId(), requestId);
+        verify(ordersCommandRepository).save(any(Orders.class));
+    }
+
+    @Test
+    void placeOrder_returnsExistingOrderCreatedWhileWaitingForAccountLock() {
+        UUID userId = UUID.randomUUID();
+        UUID requestId = UUID.randomUUID();
+        Accounts account = accountOf(userId);
+        Orders existing = Orders.rejected(
+                requestId, account.getId(), 1L, 1, new BigDecimal("90.0000"), "장기 성장 기대",
+                QUOTE_TIME, 12L, OrderRejectReason.INSUFFICIENT_CASH, userId
+        );
+
+        when(accountsQueryRepository.findIdByUserId(userId)).thenReturn(Optional.of(account.getId()));
+        when(ordersQueryRepository.findByAccountIdAndRequestId(account.getId(), requestId))
+                .thenReturn(Optional.empty(), Optional.of(existing));
+        when(quoteReader.read("AAPL")).thenReturn(validQuote("100.0000"));
+        when(accountsCommandRepository.findByUserIdForUpdate(userId)).thenReturn(Optional.of(account));
+
+        OrderResponse response = service.placeOrder(userId, command(requestId, "AAPL", 1));
+
+        assertThat(response.orderId()).isEqualTo(existing.getId());
+        assertThat(response.status()).isEqualTo(OrderStatus.REJECTED);
+        verify(ordersCommandRepository, never()).save(any(Orders.class));
     }
 
     private PlaceOrderCommand command(UUID requestId, String symbol, int quantity) {

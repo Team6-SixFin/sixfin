@@ -35,8 +35,8 @@ public class OrdersQueryRepositoryImpl implements OrdersQueryRepository {
     }
 
     @Override
-    public Optional<Orders> findByRequestId(UUID requestId) {
-        return orderJpaRepository.findByRequestId(requestId);
+    public Optional<Orders> findByAccountIdAndRequestId(UUID accountId, UUID requestId) {
+        return orderJpaRepository.findByAccountIdAndRequestId(accountId, requestId);
     }
 
     @Override

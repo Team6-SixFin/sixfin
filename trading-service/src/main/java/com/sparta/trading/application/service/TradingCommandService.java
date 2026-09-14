@@ -70,15 +70,23 @@ public class TradingCommandService {
         // 사용자가 입력한 주문 정보를 실제 주문 처리에 사용하기 좋게 정리
         NormalizedOrder normalized = NormalizedOrder.from(command);
 
-        // requestId로 기존 주문 조회
-        Optional<Orders> existingOrder = ordersQueryRepository.findByRequestId(normalized.requestId());
-        // 기존 주문이 있으면 새 주문을 생성하지 않고 기존 주문을 검증하여 처리
+        // 계좌 ID와 requestId를 함께 사용해 기존 주문을 조회한다.
+        // 다른 계좌의 같은 requestId는 충돌하지 않는다.
+        Optional<UUID> existingRequestAccountId = accountsQueryRepository.findIdByUserId(userId);
+        Optional<Orders> existingOrder = existingRequestAccountId.flatMap(accountId ->
+                ordersQueryRepository.findByAccountIdAndRequestId(accountId, normalized.requestId())
+        );
+        // 같은 계좌의 기존 주문이면 새 주문을 만들지 않고 기존 결과를 반환한다.
         if (existingOrder.isPresent()) {
+            // 기존 주문 응답용 계좌 조회
+            // accountId 조회 직후 계좌가 사라지는 비정상 상태면 requestId 충돌로 처리
+            Accounts account = accountsQueryRepository.findByUserId(userId)
+                    .orElseThrow(() -> new CustomException(TradingErrorCode.ORDER_REQUEST_ID_CONFLICT));
             return existingResponse(
-                    existingOrder.get(), // 기존 주문
-                    normalized, // 이번 요청 주문 내용
-                    resolveStockId(normalized.symbol()), // 이번 요청의 StockId
-                    userId // 요청한 userId
+                    existingOrder.get(),
+                    normalized,
+                    resolveStockId(normalized.symbol()),
+                    account
             );
         }
         // 현재 MVP에서는 MARKET 주문만 허용한다
@@ -91,7 +99,9 @@ public class TradingCommandService {
 
         // 첫 조회와 계좌 잠금 사이에 같은 requestId 주문이 커밋됐을 수 있다.
         // 계좌 잠금 대기 중 같은 requestId의 주문이 생성됐는지 다시 확인
-        existingOrder = ordersQueryRepository.findByRequestId(normalized.requestId());
+        existingOrder = ordersQueryRepository.findByAccountIdAndRequestId(
+                account.getId(), normalized.requestId()
+        );
         if (existingOrder.isPresent()) {
             return existingResponse(existingOrder.get(), normalized, quote.stockId(), account);
         }
@@ -258,20 +268,6 @@ public class TradingCommandService {
                 quote.marketTime(), quote.seq(), rejectReason, account.getUserId()
         ));
         return response(order, null, account.getCashBalance());
-    }
-
-    /** 기존 주문 처리 (계좌 조회) */
-    private OrderResponse existingResponse(
-            Orders order, // 기존 주문
-            NormalizedOrder normalized, // 이번에 들어온 주문 요청 정보
-            Long stockId, // 이번에 요청한 StockId
-            UUID userId // 이번에 요청한 UserId
-    ) {
-        // userId로 account(계좌) 조회
-        Accounts account = accountsQueryRepository.findByUserId(userId)
-                .orElseThrow(() -> new CustomException(TradingErrorCode.ORDER_REQUEST_ID_CONFLICT));
-        // account를 인수에 담아 아래의 existingResponse 호출
-        return existingResponse(order, normalized, stockId, account);
     }
 
     /** 기존 주문 처리 (검증 및 응답) */
