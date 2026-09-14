@@ -16,4 +16,9 @@ public class OrdersCommandRepositoryImpl implements OrdersCommandRepository {
         return orderJpaRepository.save(order);
     }
 
+    @Override
+    public Orders saveAndFlush(Orders order) {
+        return orderJpaRepository.saveAndFlush(order);
+    }
+
 }

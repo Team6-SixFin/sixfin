@@ -35,6 +35,7 @@ import com.sparta.trading.infrastructure.persistence.repository.stocks.StocksRep
 import com.sparta.trading.presentation.dto.response.OrderResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
@@ -63,6 +64,7 @@ public class TradingCommandService {
     private final CashLedgersCommandRepository cashLedgerRepository;
     private final OutboxEventsCommandRepository outboxEventRepository;
     private final ObjectMapper objectMapper;
+    private final OrderRejectionService orderRejectionService;
 
     // 주문 요청을 받아 중복 주문, 주문 유형, 시세, 계좌를 확인한 후 매수 또는 매도를 처리
     @Transactional
@@ -93,6 +95,22 @@ public class TradingCommandService {
         validateSupportedOrder(normalized);
         // 현재 시세 스냅샷 조회
         Quote quote = quoteReader.read(normalized.symbol());
+        // 실패할 주문이 계좌 비관적 락을 잡고 다른 정상 주문을 기다리게 할 필요가 없으므로, 락 획득 전에 검증한다.
+        // 조회한 종목·시세 정보가 정상이고 현재 주문 가능한 상태인지 검증
+        validateQuote(quote, normalized.symbol());
+
+        // Learning에 필요한 시세 정보가 부족한 경우 Reject로 반환
+        if (normalized.side() == OrderSide.BUY
+                && !hasLearningMarketContext(quote)
+                && existingRequestAccountId.isPresent()) {
+            return rejectMarketContextWithoutAccountLock(
+                    userId,
+                    existingRequestAccountId.get(),
+                    normalized,
+                    quote
+            );
+        }
+
         // 계좌 행을 비관적 락으로 조회
         Accounts account = accountsCommandRepository.findByUserIdForUpdate(userId)
                 .orElseThrow(() -> new CustomException(TradingErrorCode.ACCOUNT_NOT_FOUND));
@@ -105,9 +123,6 @@ public class TradingCommandService {
         if (existingOrder.isPresent()) {
             return existingResponse(existingOrder.get(), normalized, quote.stockId(), account);
         }
-
-        // 조회한 종목·시세 정보가 정상이고 현재 주문 가능한 상태인지 검증
-        validateQuote(quote, normalized.symbol());
 
         // 주문이 매수(BUY)인지 매도(SELL)인지에 따라 처리 구분
         if (normalized.side() == OrderSide.BUY) {
@@ -125,11 +140,6 @@ public class TradingCommandService {
     private OrderResponse executeBuy(
             UUID userId, NormalizedOrder normalized, Quote quote, Accounts account
     ) {
-        // Learning에 필요한 시세 정보가 부족한 경우 Reject로 반환
-        if (!hasLearningMarketContext(quote)) {
-            return reject(account, normalized, quote, OrderRejectReason.MARKET_CONTEXT_UNAVAILABLE);
-        }
-
         // 실제 매수에 필요한 금액 계산 (현재 시세 X 수량)
         BigDecimal executionAmount = executionAmount(quote, normalized.quantity());
         // 사용가능 예수금이 매수에 필요한 금액보다 작은 경우 Reject (금액 부족)
@@ -268,6 +278,34 @@ public class TradingCommandService {
                 quote.marketTime(), quote.seq(), rejectReason, account.getUserId()
         ));
         return response(order, null, account.getCashBalance());
+    }
+
+    private OrderResponse rejectMarketContextWithoutAccountLock(
+            UUID userId,
+            UUID accountId,
+            NormalizedOrder normalized,
+            Quote quote
+    ) {
+        try {
+            // REJECTED 주문은 잔액·포지션을 바꾸지 않는다. 따라서 계좌 PESSIMISTIC_WRITE 락 없이 짧은 트랜잭션으로 기록한다.
+            Orders rejectedOrder = orderRejectionService.record(Orders.rejected(
+                    normalized.side(), normalized.requestId(), accountId, quote.stockId(),
+                    normalized.quantity(), normalized.plannedStopLossPrice(), normalized.investmentReason(),
+                    quote.marketTime(), quote.seq(), OrderRejectReason.MARKET_CONTEXT_UNAVAILABLE, userId
+            ));
+            // 응답에 현재 예수금을 포함해야 하므로 읽기 조회만 한다. 쓰기 락은 걸지 않는다.
+            Accounts account = accountsQueryRepository.findByUserId(userId)
+                    .orElseThrow(() -> new CustomException(TradingErrorCode.ACCOUNT_NOT_FOUND));
+            return response(rejectedOrder, null, account.getCashBalance());
+        } catch (DataIntegrityViolationException exception) {
+            // 같은 계좌에서 같은 requestId 요청이 동시에 들어오면 DB의 UNIQUE(account_id, request_id) 제약이 하나만 저장하도록 보장
+            // 먼저 처리된 주문을 다시 반환해 멱등성을 유지
+            Orders existingOrder = ordersQueryRepository.findByAccountIdAndRequestId(accountId, normalized.requestId())
+                    .orElseThrow(() -> exception);
+            Accounts account = accountsQueryRepository.findByUserId(userId)
+                    .orElseThrow(() -> new CustomException(TradingErrorCode.ACCOUNT_NOT_FOUND));
+            return existingResponse(existingOrder, normalized, quote.stockId(), account);
+        }
     }
 
     /** 기존 주문 처리 (검증 및 응답) */

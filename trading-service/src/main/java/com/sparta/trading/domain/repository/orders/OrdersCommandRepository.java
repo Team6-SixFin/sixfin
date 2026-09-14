@@ -6,4 +6,6 @@ public interface OrdersCommandRepository {
 
     Orders save(Orders order);
 
+    Orders saveAndFlush(Orders order);
+
 }
