@@ -3,9 +3,9 @@ package com.sparta.trading.application.service;
 import com.sparta.trading.domain.entity.Accounts;
 import com.sparta.trading.domain.entity.CashLedgers;
 import com.sparta.trading.domain.entity.Positions;
-import com.sparta.trading.domain.repository.accounts.AccountsQueryRepository;
+import com.sparta.trading.domain.repository.accounts.AccountsCommandRepository;
 import com.sparta.trading.domain.repository.cashledgers.CashLedgersCommandRepository;
-import com.sparta.trading.domain.repository.positions.PositionsQueryRepository;
+import com.sparta.trading.domain.repository.positions.PositionsCommandRepository;
 import com.sparta.trading.global.exception.CustomException;
 import com.sparta.trading.global.exception.TradingErrorCode;
 import com.sparta.trading.presentation.dto.request.TradingAdminResetAccountRequest;
@@ -23,8 +23,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class TradingAdminCommandService {
 
-    private final AccountsQueryRepository tradingAccountsQueryRepository;
-    private final PositionsQueryRepository positionRepository;
+    private final AccountsCommandRepository accountsCommandRepository;
+    private final PositionsCommandRepository positionsCommandRepository;
     private final CashLedgersCommandRepository cashLedgerRepository;
 
     /**
@@ -37,14 +37,15 @@ public class TradingAdminCommandService {
             UUID adminUserId,
             TradingAdminResetAccountRequest request
     ) {
-        Accounts account = tradingAccountsQueryRepository.findByUserId(targetUserId)
+        Accounts account = accountsCommandRepository.findByUserIdForUpdate(targetUserId)
                 .orElseThrow(() -> new CustomException(TradingErrorCode.ACCOUNT_NOT_FOUND));
 
         BigDecimal targetDeposit = request.initialDeposit() != null
                 ? request.initialDeposit()
                 : account.getInitialDeposit();
 
-        List<Positions> openPositions = positionRepository.findAllOpenByAccountId(account.getId());
+        List<Positions> openPositions = positionsCommandRepository
+                .findAllOpenByAccountIdForUpdate(account.getId());
 
         boolean cashAlreadyAtTarget = account.getCashBalance().compareTo(targetDeposit) == 0;
         if (cashAlreadyAtTarget && openPositions.isEmpty()) {

@@ -4,9 +4,9 @@ import com.sparta.trading.domain.entity.Accounts;
 import com.sparta.trading.domain.entity.CashLedgers;
 import com.sparta.trading.domain.entity.PositionStatus;
 import com.sparta.trading.domain.entity.Positions;
-import com.sparta.trading.domain.repository.accounts.AccountsQueryRepository;
+import com.sparta.trading.domain.repository.accounts.AccountsCommandRepository;
 import com.sparta.trading.domain.repository.cashledgers.CashLedgersCommandRepository;
-import com.sparta.trading.domain.repository.positions.PositionsQueryRepository;
+import com.sparta.trading.domain.repository.positions.PositionsCommandRepository;
 import com.sparta.trading.global.exception.CustomException;
 import com.sparta.trading.global.exception.TradingErrorCode;
 import com.sparta.trading.presentation.dto.request.TradingAdminResetAccountRequest;
@@ -15,6 +15,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -28,6 +29,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -37,10 +39,10 @@ import static org.mockito.Mockito.when;
 class TradingAdminCommandServiceTest {
 
     @Mock
-    private AccountsQueryRepository tradingAccountsQueryRepository;
+    private AccountsCommandRepository accountsCommandRepository;
 
     @Mock
-    private PositionsQueryRepository positionRepository;
+    private PositionsCommandRepository positionsCommandRepository;
 
     @Mock
     private CashLedgersCommandRepository cashLedgerRepository;
@@ -52,7 +54,7 @@ class TradingAdminCommandServiceTest {
     @BeforeEach
     void setUp() {
         service = new TradingAdminCommandService(
-                tradingAccountsQueryRepository, positionRepository, cashLedgerRepository
+                accountsCommandRepository, positionsCommandRepository, cashLedgerRepository
         );
         targetUserId = UUID.randomUUID();
         adminUserId = UUID.randomUUID();
@@ -68,12 +70,12 @@ class TradingAdminCommandServiceTest {
     void resetAccounts_closesOpenPositionsAndRecordsAdjustmentLedger() {
         Accounts account = accountOf(targetUserId);
         account.withdraw(new BigDecimal("6111.7000"));
-        when(tradingAccountsQueryRepository.findByUserId(targetUserId)).thenReturn(Optional.of(account));
+        when(accountsCommandRepository.findByUserIdForUpdate(targetUserId)).thenReturn(Optional.of(account));
         List<Positions> openPositions = List.of(
                 openPosition(account.getId(), targetUserId),
                 openPosition(account.getId(), targetUserId)
         );
-        when(positionRepository.findAllOpenByAccountId(account.getId())).thenReturn(openPositions);
+        when(positionsCommandRepository.findAllOpenByAccountIdForUpdate(account.getId())).thenReturn(openPositions);
 
         TradingAdminResetAccountResponse response = service.resetAccounts(
                 targetUserId, adminUserId,
@@ -96,6 +98,9 @@ class TradingAdminCommandServiceTest {
             assertThat(position.getClosedAt()).isEqualTo(response.resetAt());
             assertThat(position.getUpdatedBy()).isEqualTo(adminUserId);
         }
+        InOrder lockOrder = inOrder(accountsCommandRepository, positionsCommandRepository);
+        lockOrder.verify(accountsCommandRepository).findByUserIdForUpdate(targetUserId);
+        lockOrder.verify(positionsCommandRepository).findAllOpenByAccountIdForUpdate(account.getId());
         verify(cashLedgerRepository).save(any(CashLedgers.class));
     }
 
@@ -103,8 +108,8 @@ class TradingAdminCommandServiceTest {
     @DisplayName("initialDeposit을 지정하면 그 값을 기준으로 재설정한다")
     void resetAccounts_usesRequestedInitialDepositWhenProvided() {
         Accounts account = accountOf(targetUserId);
-        when(tradingAccountsQueryRepository.findByUserId(targetUserId)).thenReturn(Optional.of(account));
-        when(positionRepository.findAllOpenByAccountId(account.getId())).thenReturn(List.of());
+        when(accountsCommandRepository.findByUserIdForUpdate(targetUserId)).thenReturn(Optional.of(account));
+        when(positionsCommandRepository.findAllOpenByAccountIdForUpdate(account.getId())).thenReturn(List.of());
 
         TradingAdminResetAccountResponse response = service.resetAccounts(
                 targetUserId, adminUserId,
@@ -122,8 +127,8 @@ class TradingAdminCommandServiceTest {
     @DisplayName("예수금이 이미 초기값이고 OPEN 포지션도 없으면 409로 거부한다")
     void resetAccounts_rejectsWhenNothingToReset() {
         Accounts account = accountOf(targetUserId);
-        when(tradingAccountsQueryRepository.findByUserId(targetUserId)).thenReturn(Optional.of(account));
-        when(positionRepository.findAllOpenByAccountId(account.getId())).thenReturn(List.of());
+        when(accountsCommandRepository.findByUserIdForUpdate(targetUserId)).thenReturn(Optional.of(account));
+        when(positionsCommandRepository.findAllOpenByAccountIdForUpdate(account.getId())).thenReturn(List.of());
 
         assertThatThrownBy(() -> service.resetAccounts(
                 targetUserId, adminUserId, new TradingAdminResetAccountRequest("사유", null)))
@@ -137,7 +142,7 @@ class TradingAdminCommandServiceTest {
     @Test
     @DisplayName("대상 사용자의 계좌가 없으면 404로 거부한다")
     void resetAccounts_throwsWhenAccountNotFound() {
-        when(tradingAccountsQueryRepository.findByUserId(targetUserId)).thenReturn(Optional.empty());
+        when(accountsCommandRepository.findByUserIdForUpdate(targetUserId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.resetAccounts(
                 targetUserId, adminUserId, new TradingAdminResetAccountRequest("사유", null)))
@@ -145,7 +150,7 @@ class TradingAdminCommandServiceTest {
                 .satisfies(e -> assertThat(((CustomException) e).getErrorCode())
                         .isEqualTo(TradingErrorCode.ACCOUNT_NOT_FOUND));
 
-        verify(positionRepository, never()).findAllOpenByAccountId(any());
+        verify(positionsCommandRepository, never()).findAllOpenByAccountIdForUpdate(any());
     }
 
     private Accounts accountOf(UUID userId) {
