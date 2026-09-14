@@ -27,8 +27,10 @@ public enum LearningErrorCode implements ErrorCode {
     EXECUTION_NOT_FOUND (HttpStatus.NOT_FOUND, "체결 내역을 찾을 수 없습니다."),
     CLOSED_POSITION_NOT_FOUND (HttpStatus.NOT_FOUND, "종료 포지션 최종 집계를 찾을 수 없습니다."),
     AI_RESPONSE_INCOMPLETE(HttpStatus.BAD_GATEWAY, "AI 응답 필수 필드가 누락되었습니다."),
-
-
+    INVALID_AI_PROVIDER(HttpStatus.BAD_REQUEST, "지원하지 않는 AI 제공자입니다."),
+    AI_PROVIDER_OVERRIDE_FORBIDDEN(HttpStatus.FORBIDDEN, "AI 제공자 변경 권한이 없습니다."),
+    AI_PROVIDER_OVERRIDE_NOT_CONFIGURED(HttpStatus.SERVICE_UNAVAILABLE, "AI 제공자 변경 기능이 설정되지 않았습니다."),
+    AI_STUB_NOT_AVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "Stub AI가 활성화되지 않았습니다."),
     AI_RESPONSE_GENERATION_FAILED(HttpStatus.BAD_GATEWAY, "AI 피드백 생성을 실패했습니다.");
 
 

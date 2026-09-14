@@ -1,5 +1,8 @@
 package com.sparta.learning.infrastructure.web;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sparta.learning.global.exception.LearningErrorCode;
+import com.sparta.learning.global.response.ErrorResponse;
 import com.sparta.learning.infrastructure.ai.AiProviderContextHolder;
 import com.sparta.learning.infrastructure.config.StubAiProperties;
 import jakarta.servlet.FilterChain;
@@ -8,11 +11,13 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 
 /**
  * 요청 헤더로 AI 제공자를 전환합니다.
@@ -24,19 +29,21 @@ import java.io.IOException;
  * Kafka 로 시작되는 피드백 경로에는 적용할 수도 없습니다.
  * 필터는 HTTP 진입점에서만 동작하고, Kafka 경로는 기본 provider 를 그대로 씁니다.
  *
- * [Why 조건부 등록] stub 이 비활성화된 배포에서는 필터 자체가 존재하지 않아
- * 헤더를 아무리 보내도 무시됩니다. 운영 배포에 실수로 섞여도 무해합니다.
+ * 필터는 항상 등록합니다. Stub 설정이 빠졌는데도 오버라이드 헤더를 보낸 경우
+ * 요청을 명시적으로 거부해 실제 Gemini로 조용히 전환되는 것을 방지합니다.
  */
 @Slf4j
 @Component
 @RequiredArgsConstructor
-@ConditionalOnProperty(name = "learning.ai.stub.enabled", havingValue = "true")
 public class AiProviderOverrideFilter extends OncePerRequestFilter {
 
     private static final String PROVIDER_HEADER = "X-Ai-Provider";
     private static final String TOKEN_HEADER = "X-Ai-Provider-Token";
+    private static final String STUB = "stub";
+    private static final String GEMINI = "gemini";
 
     private final StubAiProperties properties;
+    private final ObjectMapper objectMapper;
 
     @Override
     protected void doFilterInternal(
@@ -44,7 +51,9 @@ public class AiProviderOverrideFilter extends OncePerRequestFilter {
             throws ServletException, IOException {
 
         try {
-            applyOverride(request);
+            if (!applyOverride(request, response)) {
+                return;
+            }
             filterChain.doFilter(request, response);
         } finally {
             // Tomcat 스레드는 재사용되므로 반드시 정리한다.
@@ -53,25 +62,55 @@ public class AiProviderOverrideFilter extends OncePerRequestFilter {
         }
     }
 
-    private void applyOverride(HttpServletRequest request) {
+    private boolean applyOverride(HttpServletRequest request, HttpServletResponse response) throws IOException {
         String requestedProvider = request.getHeader(PROVIDER_HEADER);
         if (requestedProvider == null || requestedProvider.isBlank()) {
-            return;   // 일반 트래픽. 기본 provider 사용
+            if (request.getHeader(TOKEN_HEADER) != null) {
+                writeError(response, LearningErrorCode.INVALID_AI_PROVIDER);
+                return false;
+            }
+            return true;   // 일반 트래픽. 기본 provider 사용
+        }
+
+        String provider = requestedProvider.trim().toLowerCase();
+        if (!STUB.equals(provider) && !GEMINI.equals(provider)) {
+            writeError(response, LearningErrorCode.INVALID_AI_PROVIDER);
+            return false;
         }
 
         String expectedToken = properties.getOverrideToken();
         if (expectedToken == null || expectedToken.isBlank()) {
-            log.warn("AI provider 오버라이드 요청을 무시합니다. 서버에 override-token 이 설정되지 않았습니다.");
-            return;
+            log.warn("AI provider 오버라이드 요청을 거부합니다. 서버에 override-token이 설정되지 않았습니다.");
+            writeError(response, LearningErrorCode.AI_PROVIDER_OVERRIDE_NOT_CONFIGURED);
+            return false;
         }
 
-        if (!expectedToken.equals(request.getHeader(TOKEN_HEADER))) {
-            log.warn("AI provider 오버라이드 토큰이 일치하지 않아 무시합니다. uri={}", request.getRequestURI());
-            return;
+        String actualToken = request.getHeader(TOKEN_HEADER);
+        if (!tokensEqual(expectedToken, actualToken)) {
+            log.warn("AI provider 오버라이드 토큰이 일치하지 않아 요청을 거부합니다. uri={}", request.getRequestURI());
+            writeError(response, LearningErrorCode.AI_PROVIDER_OVERRIDE_FORBIDDEN);
+            return false;
         }
 
-        String provider = requestedProvider.trim().toLowerCase();
         AiProviderContextHolder.set(provider);
         log.debug("AI provider 오버라이드 적용. provider={}, uri={}", provider, request.getRequestURI());
+        return true;
+    }
+
+    private boolean tokensEqual(String expectedToken, String actualToken) {
+        if (actualToken == null) {
+            return false;
+        }
+        return MessageDigest.isEqual(
+                expectedToken.getBytes(StandardCharsets.UTF_8),
+                actualToken.getBytes(StandardCharsets.UTF_8)
+        );
+    }
+
+    private void writeError(HttpServletResponse response, LearningErrorCode errorCode) throws IOException {
+        response.setStatus(errorCode.getHttpStatus().value());
+        response.setCharacterEncoding(StandardCharsets.UTF_8.name());
+        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+        objectMapper.writeValue(response.getOutputStream(), ErrorResponse.of(errorCode, errorCode.getMessage()));
     }
 }

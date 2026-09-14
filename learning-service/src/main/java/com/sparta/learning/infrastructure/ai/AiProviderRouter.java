@@ -3,6 +3,8 @@ package com.sparta.learning.infrastructure.ai;
 import com.sparta.learning.application.dto.response.AiFeedbackResponse;
 import com.sparta.learning.application.port.AiClientPort;
 import com.sparta.learning.domain.model.FeedbackType;
+import com.sparta.learning.global.exception.CustomException;
+import com.sparta.learning.global.exception.LearningErrorCode;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
@@ -20,9 +22,9 @@ import java.util.UUID;
  *
  * [Why 런타임 선택] @ConditionalOnProperty 는 기동 시점에 평가되어
  * Gemini ↔ Stub 전환마다 재배포가 필요했습니다.
- * 라우터는 호출 시점에 결정하므로 무중단 전환이 가능하고,
- * 오버라이드 헤더가 없는 일반 트래픽(팀원 시연, Kafka 로 시작되는 피드백)은
- * 부하 테스트 중에도 계속 Gemini 를 사용합니다.
+ * 라우터는 호출 시점에 요청 헤더의 오버라이드를 반영할 수 있습니다.
+ * 오버라이드가 없는 일반 요청과 Kafka 로 시작되는 피드백은
+ * learning.ai.provider 에 설정한 기본 제공자를 사용합니다.
  */
 @Slf4j
 @Primary
@@ -30,6 +32,7 @@ import java.util.UUID;
 public class AiProviderRouter implements AiClientPort {
 
     private static final String STUB = "stub";
+    private static final String GEMINI = "gemini";
 
     private final GeminiAiAdapter geminiAiAdapter;
     private final ObjectProvider<StubAiAdapter> stubAiAdapterProvider;
@@ -53,10 +56,10 @@ public class AiProviderRouter implements AiClientPort {
     }
 
     /**
-     * 우선순위: 요청 헤더 오버라이드 → 기동 시 기본값 → Gemini
+     * 우선순위: 요청 헤더 오버라이드 → 기동 시 기본값.
      *
-     * 헤더가 stub 을 요청했는데 Stub 빈이 없으면 Gemini 로 떨어집니다.
-     * (stub 이 포함되지 않은 배포에 실수로 헤더를 보내도 안전하게 동작)
+     * Stub을 명시적으로 선택했는데 사용할 수 없는 경우에는 실패시킵니다.
+     * 성능 테스트 설정 오류가 실제 Gemini 대량 호출로 이어지는 것을 막기 위함입니다.
      */
     private AiClientPort resolveAdapter() {
         String requested = AiProviderContextHolder.get();
@@ -69,9 +72,14 @@ public class AiProviderRouter implements AiClientPort {
             if (stub != null) {
                 return stub;
             }
-            log.warn("stub 요청이 들어왔지만 StubAiAdapter 가 비활성화되어 Gemini 로 처리합니다. "
-                    + "learning.ai.stub.enabled 설정을 확인하세요.");
+            log.error("Stub AI가 선택됐지만 StubAiAdapter가 비활성화되어 있습니다.");
+            throw new CustomException(LearningErrorCode.AI_STUB_NOT_AVAILABLE);
         }
-        return geminiAiAdapter;
+        if (GEMINI.equalsIgnoreCase(requested)) {
+            return geminiAiAdapter;
+        }
+
+        log.error("지원하지 않는 AI provider가 설정됐습니다. provider={}", requested);
+        throw new CustomException(LearningErrorCode.INVALID_AI_PROVIDER);
     }
 }

@@ -17,9 +17,9 @@ public class StubAiProperties {
     /**
      * Stub 어댑터를 '빈으로 등록할지' 여부. 기본 false.
      *
-     * [중요] true 로 배포해도 기본 동작은 여전히 Gemini 입니다.
-     * "런타임에 stub 으로 전환할 수 있는 상태로 배포한다"는 뜻일 뿐이고,
-     * 실제 전환은 요청 헤더로 이루어지므로 재배포가 필요 없습니다.
+     * true 는 Stub 구현체를 등록한다는 뜻입니다.
+     * 헤더가 없는 요청과 Kafka 처리의 기본 제공자는 learning.ai.provider 로 결정하고,
+     * HTTP 요청은 인증된 헤더를 통해 Stub 으로 전환할 수 있습니다.
      */
     private boolean enabled = false;
 

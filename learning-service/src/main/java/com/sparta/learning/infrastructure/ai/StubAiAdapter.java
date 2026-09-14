@@ -44,8 +44,8 @@ public class StubAiAdapter implements AiClientPort {
     @PostConstruct
     void warnStubAvailable() {
         log.warn("================================================================");
-        log.warn(" [STUB AI 사용 가능 상태] 기본 동작은 여전히 Gemini 입니다.");
-        log.warn(" X-Ai-Provider: stub 헤더 + 올바른 토큰이 있는 요청만 Stub 으로 처리됩니다.");
+        log.warn(" [STUB AI 사용 가능 상태] 기본 제공자는 learning.ai.provider 설정을 따릅니다.");
+        log.warn(" HTTP 요청별 전환에는 X-Ai-Provider 헤더와 올바른 토큰이 필요합니다.");
         log.warn(" latency={}, jitter={}, failureRate={}, tokenConfigured={}",
                 properties.getLatency(), properties.getJitter(), properties.getFailureRate(),
                 properties.getOverrideToken() != null && !properties.getOverrideToken().isBlank());
@@ -77,7 +77,7 @@ public class StubAiAdapter implements AiClientPort {
     }
 
     private long resolveLatencyMs() {
-        long base = properties.getLatency().toMillis();
+        long base = Math.max(0, properties.getLatency().toMillis());
         long jitter = properties.getJitter().toMillis();
         if (jitter <= 0) {
             return base;
