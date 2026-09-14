@@ -51,6 +51,16 @@ eureka:
     instance-id: ${spring.application.name}:${server.port}
 
 management:
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus
+  metrics:
+    tags:
+      application: ${spring.application.name}
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
   tracing:
     sampling:
       probability: 1.0

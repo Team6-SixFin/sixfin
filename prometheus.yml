@@ -11,3 +11,9 @@ scrape_configs:
     metrics_path: '/actuator/prometheus'
     static_configs:
       - targets: ['host.docker.internal:19094']
+
+  # IntelliJ에서 실행 중인 Trading 서비스의 Actuator 메트릭을 수집한다.
+  - job_name: 'trading-service'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['host.docker.internal:19093']
