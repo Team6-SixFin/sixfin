@@ -69,7 +69,7 @@ jobs:
             --instance-ids "${{ secrets.APP_EC2_INSTANCE_ID }}" \
             --document-name "AWS-RunShellScript" \
             --comment "sixfin 배포 (커밋 ${{ github.sha }})" \
-            --parameters '{"commands":["cd /home/ec2-user/sixfin","docker compose -f docker-compose.app.yml --env-file .env pull","docker compose -f docker-compose.app.yml --env-file .env up -d","sleep 30","for i in $(seq 1 10); do STATUS=$(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:19090/actuator/health || echo 000); if [ \"$STATUS\" = \"200\" ]; then echo HEALTHCHECK_OK; exit 0; fi; sleep 10; done; echo HEALTHCHECK_FAIL; exit 1"]}' \
+            --parameters 'commands=["cd /home/ec2-user/sixfin && git pull origin main && bash deploy.sh"]'
             --query "Command.CommandId" \
             --output text)
           echo "COMMAND_ID=$COMMAND_ID" >> $GITHUB_ENV
