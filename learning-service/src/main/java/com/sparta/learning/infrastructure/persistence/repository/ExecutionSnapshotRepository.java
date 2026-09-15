@@ -25,6 +25,25 @@ public interface ExecutionSnapshotRepository extends JpaRepository<ExecutionSnap
             """, nativeQuery = true)
     List<PositionStockInfo> findStockInfoByPositionIds(@Param("positionIds") Collection<UUID> positionIds);
 
+    /**
+     * 포지션 하나의 종목 정보를 최초 체결에서 조회하고 소유권 검증도 한다
+     * 종목 정보 세 값만 필요한 호출에서 전체 엔티티를 받지 않기 위해 분리했다.
+     */
+    @Query(value = """
+            select s.position_id  as positionId,
+                   s.stock_symbol as stockSymbol,
+                   s.stock_name   as stockName
+              from execution_snapshots s
+             where s.position_id = :positionId
+               and s.user_id = :userId
+             order by s.executed_at, s.id
+             limit 1
+            """, nativeQuery = true)
+    Optional<PositionStockInfo> findStockInfoByPositionIdAndUserId(
+            @Param("positionId") UUID positionId,
+            @Param("userId") UUID userId
+    );
+
     Optional<ExecutionSnapshot> findFirstByPositionIdAndUserIdOrderByExecutedAtAscIdAsc(UUID positionId, UUID userId);
 
     Optional<ExecutionSnapshot> findByConsumedEventEventId(UUID eventId);

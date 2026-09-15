@@ -80,12 +80,12 @@ public class FeedbackQueryService {
 
     public PositionFeedbackResponse getPositionFeedbacks(UUID userId, UUID positionId) {
         // 최초 매수 결과가 있어야 포지션이 존재, 포지션 존재 여부와 소유권 검증
-        ExecutionSnapshot firstExecution = executionSnapshotRepository
-                .findFirstByPositionIdAndUserIdOrderByExecutedAtAscIdAsc(positionId, userId)
+        PositionStockInfo stockInfo = executionSnapshotRepository
+                .findStockInfoByPositionIdAndUserId(positionId, userId)
                 .orElseThrow(() -> new CustomException(LearningErrorCode.POSITION_NOT_FOUND));
 
-        List<Feedback> feedbacks = feedbackQueryRepository.findAllByPosition(userId, positionId);
-        return PositionFeedbackResponse.from(firstExecution, feedbacks);
+        List<FeedbackListRow> feedbacks = feedbackQueryRepository.findListRowsByPosition(userId, positionId);
+        return PositionFeedbackResponse.from(stockInfo, feedbacks);
     }
 
     private Map<UUID, PositionStockInfo> findStockInfo(List<FeedbackListRow> rows) {

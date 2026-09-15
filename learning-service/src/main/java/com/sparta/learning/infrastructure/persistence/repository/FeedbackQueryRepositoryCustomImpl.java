@@ -3,11 +3,11 @@ package com.sparta.learning.infrastructure.persistence.repository;
 import com.querydsl.core.BooleanBuilder;
 import com.querydsl.core.types.dsl.Expressions;
 import com.querydsl.core.types.dsl.StringExpression;
+import com.querydsl.core.types.ConstructorExpression;
 import com.querydsl.core.types.Projections;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import com.sparta.learning.application.dto.query.FeedbackListQuery;
 import com.sparta.learning.application.dto.result.FeedbackListRow;
-import com.sparta.learning.domain.entity.Feedback;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -32,18 +32,7 @@ public class FeedbackQueryRepositoryCustomImpl implements FeedbackQueryRepositor
         BooleanBuilder conditions = createConditions(query);
 
         List<FeedbackListRow> content = queryFactory
-                .select(Projections.constructor(
-                        FeedbackListRow.class,
-                        feedback.id,
-                        feedback.positionId,
-                        feedback.feedbackType,
-                        feedback.status,
-                        summary(),
-                        feedback.aiUsed,
-                        feedback.basedOnExecutionId,
-                        feedback.createdAt,
-                        feedback.completedAt
-                ))
+                .select(listRow())
                 .from(feedback)
                 .where(conditions)
                 // 생성 시각이 같은 경우에도 결과 순서가 바뀌지 않도록 ID를 보조 정렬 기준으로 사용
@@ -62,9 +51,10 @@ public class FeedbackQueryRepositoryCustomImpl implements FeedbackQueryRepositor
     }
 
     @Override
-    public List<Feedback> findAllByPosition(UUID userId, UUID positionId) {
+    public List<FeedbackListRow> findListRowsByPosition(UUID userId, UUID positionId) {
         return queryFactory
-                .selectFrom(feedback)
+                .select(listRow())
+                .from(feedback)
                 .where(
                         feedback.userId.eq(userId),
                         feedback.positionId.eq(positionId)
@@ -72,6 +62,22 @@ public class FeedbackQueryRepositoryCustomImpl implements FeedbackQueryRepositor
                 // 최초 매수부터 종료 회고까지 시간 흐름대로
                 .orderBy(feedback.createdAt.asc(), feedback.id.asc())
                 .fetch();
+    }
+
+    /** 전체 목록과 포지션별 목록이 같은 컬럼을 조회하므로 프로젝션을 공유한다. */
+    private static ConstructorExpression<FeedbackListRow> listRow() {
+        return Projections.constructor(
+                FeedbackListRow.class,
+                feedback.id,
+                feedback.positionId,
+                feedback.feedbackType,
+                feedback.status,
+                summary(),
+                feedback.aiUsed,
+                feedback.basedOnExecutionId,
+                feedback.createdAt,
+                feedback.completedAt
+        );
     }
 
     /** content JSONB에서 summary 한 필드만 DB에서 추출한다. */
