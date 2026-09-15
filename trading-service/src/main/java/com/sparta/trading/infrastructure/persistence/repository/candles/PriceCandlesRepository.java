@@ -1,5 +1,6 @@
 package com.sparta.trading.infrastructure.persistence.repository.candles;
 
+import com.sparta.trading.domain.entity.MarketClockSnapshot;
 import com.sparta.trading.domain.entity.PriceCandles;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -16,4 +17,7 @@ public interface PriceCandlesRepository extends JpaRepository<PriceCandles, Long
     // symbol에 unique index가 있어 join으로 합쳐도 성능상 문제없음. 종목 존재 여부를 구분된 예외로 주기 위해 2단계 조회 유지.
     @Query("SELECT c FROM PriceCandles c JOIN FETCH c.stock s WHERE c.seq = :seq AND s.id IN :stockIds")
     List<PriceCandles> findAllBySeqAndStockIdIn(Long seq, List<Long> stockIds);
+
+    @Query("SELECT c FROM PriceCandles c JOIN FETCH c.stock s WHERE c.seq BETWEEN :currentSeq AND :windowEndSeq")
+    List<PriceCandles> findAllBySeqBetween(long currentSeq, long windowEndSeq);
 }

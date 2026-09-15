@@ -1,6 +1,8 @@
-package com.sparta.trading.global.config;
+package com.sparta.trading.infrastructure.config;
 
+import com.sparta.trading.application.port.Quote;
 import com.sparta.trading.domain.entity.MarketClockSnapshot;
+import com.sparta.trading.infrastructure.quote.QuoteWindowSnapshot;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.Cache;
@@ -13,6 +15,7 @@ import org.springframework.data.redis.cache.CacheKeyPrefix;
 import org.springframework.data.redis.cache.RedisCacheConfiguration;
 import org.springframework.data.redis.cache.RedisCacheManager;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.serializer.JacksonJsonRedisSerializer;
 import org.springframework.data.redis.serializer.RedisSerializer;
 import tools.jackson.databind.ObjectMapper;
@@ -75,5 +78,19 @@ public class RedisConfig implements CachingConfigurer {
                 log.warn("[Redis Cache] {} 전체 삭제 실패.", cache.getName(), exception);
             }
         };
+    }
+
+    @Bean
+    public RedisTemplate<String, QuoteWindowSnapshot> quoteRedisTemplate(
+            RedisConnectionFactory connectionFactory
+    ) {
+        JacksonJsonRedisSerializer<QuoteWindowSnapshot> quoteSerializer =
+                new JacksonJsonRedisSerializer<>(objectMapper, QuoteWindowSnapshot.class);
+
+        RedisTemplate<String, QuoteWindowSnapshot> template = new RedisTemplate<>();
+        template.setConnectionFactory(connectionFactory);
+        template.setKeySerializer(RedisSerializer.string());
+        template.setValueSerializer(quoteSerializer);
+        return template;
     }
 }

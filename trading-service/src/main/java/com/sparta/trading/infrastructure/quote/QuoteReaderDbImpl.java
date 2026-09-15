@@ -15,7 +15,13 @@ import org.springframework.stereotype.Component;
 import java.time.Instant;
 import java.util.List;
 
-/** DB만 사용하는 QuoteReader 구현. Redis 캐싱 구현체와 나란히 두고 설정으로 스위치할 예정. */
+import static com.sparta.trading.application.port.Quote.from;
+
+/**
+ * DB만 사용하는 QuoteReader 구현. 항상 빈으로 존재한다 — {@code quote.reader.type=redis}일 때는
+ * {@link QuoteReaderRedisImpl}이 {@code @Primary}로 우선권을 가져가지만, 이 빈은 그 안에서
+ * 캐시 미스/장애 시 폴백 대상으로 구체 타입으로 직접 주입돼 계속 쓰인다.
+ */
 @Component
 @RequiredArgsConstructor
 public class QuoteReaderDbImpl implements QuoteReader {
@@ -55,23 +61,9 @@ public class QuoteReaderDbImpl implements QuoteReader {
 
         Instant now = currentSeqProvider.now();
         return candles.stream()
-                .map(candle -> toQuote(candle, candle.getStock().getSymbol(), marketClock, now))
+                .map(candle -> from(candle, candle.getStock().getSymbol(), marketClock, now))
                 .toList();
     }
 
-    private Quote toQuote(PriceCandles candle, String symbol, MarketClockSnapshot marketClock, Instant now) {
-        return new Quote(
-                symbol,
-                candle.getClosePrice(),
-                candle.getSeq(),
-                candle.getMarketTime(),
-                marketClock.effectiveStatus(now),
-                candle.getRecent20dHigh(),
-                candle.getRecent20dLow(),
-                candle.getRecent5dReturn(),
-                now,
-                candle.getStock().getId(),
-                candle.getStock().getName()
-        );
-    }
+
 }
