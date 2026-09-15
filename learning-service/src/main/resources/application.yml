@@ -78,6 +78,13 @@ learning:
       failure-rate: ${AI_STUB_FAILURE_RATE:0.0}
       fail-after-latency: ${AI_STUB_FAIL_AFTER_LATENCY:true}
 
+    # 컨텍스트 축소 정책 추가
+    # 측정 시 recent-executions를 10 / 20 / 50으로 바꿔가며 토큰 감소율과 품질을 비교한다. (20 고정하고 테스트해도 상관 없음.)
+    context:
+      recent-executions: ${AI_CONTEXT_RECENT_EXECUTIONS:20}
+      investment-reason-max-chars: ${AI_CONTEXT_REASON_MAX_CHARS:200}
+      max-linked-diagnoses: ${AI_CONTEXT_MAX_LINKED_DIAGNOSES:32}
+
   resources:
     cache:
       ttl: ${LEARNING_RESOURCE_CACHE_TTL:24h}
