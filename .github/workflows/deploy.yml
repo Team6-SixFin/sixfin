@@ -65,11 +65,12 @@ jobs:
 
       - name: App EC2에 배포 명령 전송 (SSM Send-Command)
         run: |
+          PARAMS='{"commands":["cd /home/ec2-user/sixfin && git pull origin main && bash deploy.sh"]}'
           COMMAND_ID=$(aws ssm send-command \
             --instance-ids "${{ secrets.APP_EC2_INSTANCE_ID }}" \
             --document-name "AWS-RunShellScript" \
             --comment "sixfin 배포 (커밋 ${{ github.sha }})" \
-            --parameters 'commands=["cd /home/ec2-user/sixfin && git pull origin main && bash deploy.sh"]'
+            --parameters "$PARAMS" \
             --query "Command.CommandId" \
             --output text)
           echo "COMMAND_ID=$COMMAND_ID" >> $GITHUB_ENV
