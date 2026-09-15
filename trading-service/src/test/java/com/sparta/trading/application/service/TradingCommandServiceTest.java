@@ -28,7 +28,6 @@ import com.sparta.trading.domain.repository.orders.OrdersCommandRepository;
 import com.sparta.trading.domain.repository.orders.OrdersQueryRepository;
 import com.sparta.trading.domain.repository.outboxEvents.OutboxEventsCommandRepository;
 import com.sparta.trading.domain.repository.positions.PositionsCommandRepository;
-import com.sparta.trading.domain.repository.positions.PositionsQueryRepository;
 import com.sparta.trading.global.exception.CustomException;
 import com.sparta.trading.global.exception.TradingErrorCode;
 import com.sparta.trading.infrastructure.persistence.repository.stocks.StocksRepository;
@@ -69,35 +68,38 @@ class TradingCommandServiceTest {
     @Mock private AccountsQueryRepository accountsQueryRepository;
     @Mock private OrdersCommandRepository ordersCommandRepository;
     @Mock private OrdersQueryRepository ordersQueryRepository;
-    @Mock private PositionsQueryRepository positionRepository;
     @Mock private PositionsCommandRepository positionCommandRepository;
     @Mock private ExecutionsQueryRepository executionsQueryRepository;
     @Mock private ExecutionsCommandRepository executionsCommandRepository;
     @Mock private CashLedgersCommandRepository cashLedgerRepository;
     @Mock private OutboxEventsCommandRepository outboxEventRepository;
-    @Mock private OrderRejectionService orderRejectionService;
 
     private TradingCommandService service;
 
     @BeforeEach
     void setUp() {
-        service = new TradingCommandService(
-                quoteReader,
-                stocksRepository,
+        OrderExecutionService orderExecutionService = new OrderExecutionService(
                 accountsCommandRepository,
-                accountsQueryRepository,
                 ordersCommandRepository,
                 ordersQueryRepository,
-                positionRepository,
                 positionCommandRepository,
                 executionsCommandRepository,
                 executionsQueryRepository,
                 cashLedgerRepository,
                 outboxEventRepository,
-                JsonMapper.builder().addModule(new JavaTimeModule()).build(),
-                orderRejectionService
+                JsonMapper.builder().addModule(new JavaTimeModule()).build()
+        );
+        service = new TradingCommandService(
+                quoteReader,
+                stocksRepository,
+                accountsQueryRepository,
+                ordersCommandRepository,
+                ordersQueryRepository,
+                executionsQueryRepository,
+                orderExecutionService
         );
         lenient().when(ordersCommandRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        lenient().when(ordersCommandRepository.saveAndFlush(any())).thenAnswer(invocation -> invocation.getArgument(0));
         lenient().when(executionsCommandRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         lenient().when(positionCommandRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         lenient().when(cashLedgerRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
@@ -176,7 +178,6 @@ class TradingCommandServiceTest {
         when(quoteReader.read("AAPL")).thenReturn(quote);
         when(accountsQueryRepository.findIdByUserId(userId)).thenReturn(Optional.of(account.getId()));
         when(accountsQueryRepository.findByUserId(userId)).thenReturn(Optional.of(account));
-        when(orderRejectionService.record(any(Orders.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         OrderResponse response = service.placeOrder(userId, command);
 
@@ -184,7 +185,7 @@ class TradingCommandServiceTest {
         assertThat(response.rejectReason()).isEqualTo(OrderRejectReason.MARKET_CONTEXT_UNAVAILABLE.name());
         assertThat(account.getCashBalance()).isEqualByComparingTo("100000.0000");
         verify(accountsCommandRepository, never()).findByUserIdForUpdate(userId);
-        verify(orderRejectionService).record(any(Orders.class));
+        verify(ordersCommandRepository).saveAndFlush(any(Orders.class));
         verify(ordersCommandRepository, never()).save(any());
         verify(positionCommandRepository, never()).save(any());
         verify(executionsCommandRepository, never()).save(any());
@@ -210,7 +211,7 @@ class TradingCommandServiceTest {
         when(ordersQueryRepository.findByAccountIdAndRequestId(account.getId(), requestId))
                 .thenReturn(Optional.empty(), Optional.of(existing));
         when(quoteReader.read("AAPL")).thenReturn(quote);
-        when(orderRejectionService.record(any(Orders.class)))
+        when(ordersCommandRepository.saveAndFlush(any(Orders.class)))
                 .thenThrow(new DataIntegrityViolationException("duplicate request id"));
         when(accountsQueryRepository.findByUserId(userId)).thenReturn(Optional.of(account));
 
