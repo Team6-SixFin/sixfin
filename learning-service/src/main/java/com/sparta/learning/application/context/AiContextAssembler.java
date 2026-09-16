@@ -77,7 +77,8 @@ public class AiContextAssembler {
     private static final String TRUNCATED_NOTE =
             "executions는 전체가 아니라 대표 체결만 포함된 요약본입니다. "
                     + "총 매매 횟수는 contextScope.totalExecutionCount를 사용하세요.";
-    private static final String FULL_NOTE = "전체 데이터가 포함되어 있습니다.";
+    private static final String FULL_NOTE =
+            "executions에 이 포지션의 모든 체결이 포함되어 있습니다.";
 
     private static final List<String> ENTRY_PHASES =
             List.of(DiagnosisPhase.ENTRY.name());
@@ -175,8 +176,20 @@ public class AiContextAssembler {
         // ---------- 4. 조립 ----------
         long serializeStartedAtNanos = System.nanoTime();
 
-        boolean truncated = totalExecutionCount > selectedExecutions.size()
-                || totalDiagnosisCount > diagnosisRows.size();
+        /*
+         * [주의] truncated는 executions에 대한 신호다. 진단은 이 조건에 넣지 않는다.
+         *
+         * summarizeByPositionIdAndPhases에는 LIMIT이 없고 rule_code × result의 모든 조합이
+         * 각각 1행씩 나오므로 진단 그룹은 하나도 버려지지 않는다.
+         * 접힌 횟수와 수치 범위는 occurrenceCount / maxMetricValue / minMetricValue로 보존된다.
+         * 즉 진단은 절단이 아니라 무손실 집계다.
+         *
+         * totalDiagnosisCount > diagnosisRows.size()는 '같은 규칙이 반복됐다'는 뜻일 뿐이라
+         * 체결을 전부 담았는데도 "요약본입니다"라는 거짓 안내가 프롬프트에 들어간다.
+         * (예: 체결 5건 전량 포함 + 진단 12건이 6그룹 -> 5 > 5는 false인데 12 > 6이 true)
+         * 규칙이 8종이라 체결이 2건만 돼도 이 조건은 사실상 항상 참이 된다.
+         */
+        boolean truncated = totalExecutionCount > selectedExecutions.size();
 
         AiFeedbackRequestDto dto = new AiFeedbackRequestDto(
                 feedbackType.name(),
@@ -192,9 +205,10 @@ public class AiContextAssembler {
                         totalExecutionCount,
                         selectedExecutions.size(),
                         totalDiagnosisCount,
-                        // diagnosisSummary에는 NOT_APPLICABLE 그룹도 포함되므로
-                        // AI가 볼 수 있는 진단 그룹 수는 필터링 전 행 수다.
-                        // 여기에 diagnoses(필터링 후) 크기를 넣으면 truncated 계산과 앞뒤가 안 맞는다.
+                        // 집계로 접힌 '그룹 수'다. 버려진 진단이 있다는 뜻이 아니므로
+                        // truncated 계산에는 쓰지 않는다.
+                        // diagnoses(NOT_APPLICABLE 필터링 후)가 아니라 집계 행 수를 그대로 쓴다.
+                        // diagnosisSummary에는 NOT_APPLICABLE 그룹도 남기 때문이다.
                         diagnosisRows.size(),
                         truncated ? TRUNCATED_NOTE : FULL_NOTE
                 ),
