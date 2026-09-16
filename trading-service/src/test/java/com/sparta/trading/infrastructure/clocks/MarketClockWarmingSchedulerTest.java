@@ -3,7 +3,7 @@ package com.sparta.trading.infrastructure.clocks;
 import com.sparta.trading.application.service.CurrentSeqProvider;
 import com.sparta.trading.application.service.MarketClocksCommandService;
 import com.sparta.trading.domain.entity.ClockStatus;
-import com.sparta.trading.domain.entity.MarketClock;
+import com.sparta.trading.domain.entity.MarketClockSnapshot;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -32,25 +32,25 @@ class MarketClockWarmingSchedulerTest {
     @InjectMocks
     private MarketClockWarmingScheduler scheduler;
 
-    private MarketClock clockOf(long anchorSeq, Instant anchorAt, int speedFactor, ClockStatus status) {
-        return MarketClock.builder()
-                .id(1)
-                .anchorSeq(anchorSeq)
-                .anchorAt(anchorAt)
-                .anchorMarketTime(BASE_TIME.plusSeconds(anchorSeq * 60))
-                .startSeq(0L)
-                .endSeq(7393L)
-                .speedFactor(speedFactor)
-                .cacheRefreshIntervalMs(1000)
-                .status(status)
-                .build();
+    private MarketClockSnapshot clockOf(long anchorSeq, Instant anchorAt, int speedFactor, ClockStatus status) {
+        return new MarketClockSnapshot(
+                anchorSeq,
+                anchorAt,
+                BASE_TIME.plusSeconds(anchorSeq * 60),
+                0L,
+                7393L,
+                speedFactor,
+                1000,
+                status,
+                Instant.now()
+        );
     }
 
     @Test
     @DisplayName("RUNNING이고 end_seq에 도달했으면 autoStopIfReached를 호출한다")
     void checkAutoStop_triggersWhenReached() {
-        MarketClock marketClock = clockOf(7390L, BASE_TIME, 100, ClockStatus.RUNNING);
-        when(currentSeqProvider.getClock()).thenReturn(marketClock);
+        MarketClockSnapshot marketClock = clockOf(7390L, BASE_TIME, 100, ClockStatus.RUNNING);
+        when(currentSeqProvider.getClockSnapshot()).thenReturn(marketClock);
         when(currentSeqProvider.now()).thenReturn(BASE_TIME.plusSeconds(100));
 
         scheduler.checkAutoStop();
@@ -61,8 +61,8 @@ class MarketClockWarmingSchedulerTest {
     @Test
     @DisplayName("RUNNING이지만 아직 도달 전이면 호출하지 않는다")
     void checkAutoStop_doesNotTriggerWhenNotReached() {
-        MarketClock marketClock = clockOf(0L, BASE_TIME, 1, ClockStatus.RUNNING);
-        when(currentSeqProvider.getClock()).thenReturn(marketClock);
+        MarketClockSnapshot marketClock = clockOf(0L, BASE_TIME, 1, ClockStatus.RUNNING);
+        when(currentSeqProvider.getClockSnapshot()).thenReturn(marketClock);
         when(currentSeqProvider.now()).thenReturn(BASE_TIME.plusSeconds(5));
 
         scheduler.checkAutoStop();
@@ -73,8 +73,8 @@ class MarketClockWarmingSchedulerTest {
     @Test
     @DisplayName("이미 STOPPED면 now()도 조회하지 않고 바로 반환한다")
     void checkAutoStop_skipsWhenAlreadyStopped() {
-        MarketClock marketClock = clockOf(7393L, BASE_TIME, 100, ClockStatus.STOPPED);
-        when(currentSeqProvider.getClock()).thenReturn(marketClock);
+        MarketClockSnapshot marketClock = clockOf(7393L, BASE_TIME, 100, ClockStatus.STOPPED);
+        when(currentSeqProvider.getClockSnapshot()).thenReturn(marketClock);
 
         scheduler.checkAutoStop();
 
