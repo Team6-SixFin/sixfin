@@ -5,6 +5,8 @@ import com.sparta.learning.application.dto.query.FeedbackListQuery;
 import com.sparta.learning.application.dto.response.FeedbackDetailResponse;
 import com.sparta.learning.application.dto.response.FeedbackListItemResponse;
 import com.sparta.learning.application.dto.response.PositionFeedbackResponse;
+import com.sparta.learning.application.dto.result.FeedbackListRow;
+import com.sparta.learning.application.dto.result.PositionStockInfo;
 import com.sparta.learning.domain.entity.DiagnosisResult;
 import com.sparta.learning.domain.entity.ExecutionSnapshot;
 import com.sparta.learning.domain.entity.Feedback;
@@ -75,20 +77,14 @@ class FeedbackQueryServiceTest {
         );
     }
 
-    // 최신순 페이지 조회 결과에 JSONB 요약과 체결 스냅샷 종목 정보가 포함되는지 확인
+    // 최신순 페이지 조회 결과에 요약과 종목 정보가 포함되는지 확인
     @Test
     void returnsPagedFeedbacksWithExecutionStockInfo() {
-        Feedback feedback = createFeedback();
-        ExecutionSnapshot executionSnapshot = mock(ExecutionSnapshot.class);
-        when(executionSnapshot.getPositionId()).thenReturn(POSITION_ID);
-        when(executionSnapshot.getStockSymbol()).thenReturn("AAPL");
-        when(executionSnapshot.getStockName()).thenReturn("Apple Inc.");
-
         PageRequest requestedPage = PageRequest.of(0, 20);
-        when(feedbackQueryRepository.findAllByQuery(any(FeedbackListQuery.class), any(Pageable.class)))
-                .thenReturn(new PageImpl<>(List.of(feedback), requestedPage, 1));
-        when(executionSnapshotRepository.findByPositionIdInOrderByExecutedAtAsc(Set.of(POSITION_ID)))
-                .thenReturn(List.of(executionSnapshot));
+        when(feedbackQueryRepository.findListRows(any(FeedbackListQuery.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(createListRow()), requestedPage, 1));
+        when(executionSnapshotRepository.findStockInfoByPositionIds(Set.of(POSITION_ID)))
+                .thenReturn(List.of(stockInfo(POSITION_ID, "AAPL", "Apple Inc.")));
 
         FeedbackListQuery query = FeedbackListQuery.of(
                 USER_ID,
@@ -107,7 +103,7 @@ class FeedbackQueryServiceTest {
         assertThat(result.totalElements()).isEqualTo(1);
 
         ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
-        verify(feedbackQueryRepository).findAllByQuery(eq(query), pageableCaptor.capture());
+        verify(feedbackQueryRepository).findListRows(eq(query), pageableCaptor.capture());
         assertThat(pageableCaptor.getValue().getPageNumber()).isZero();
         assertThat(pageableCaptor.getValue().getPageSize()).isEqualTo(20);
     }
@@ -115,11 +111,9 @@ class FeedbackQueryServiceTest {
     // 피드백보다 먼저 저장되어야 할 체결 스냅샷이 누락되면 종목 정보를 임의로 보완하지 않는다
     @Test
     void returnsNullStockInfoWhenExecutionSnapshotIsMissing() {
-        Feedback feedback = createFeedback();
-
-        when(feedbackQueryRepository.findAllByQuery(any(FeedbackListQuery.class), any(Pageable.class)))
-                .thenReturn(new PageImpl<>(List.of(feedback), PageRequest.of(0, 20), 1));
-        when(executionSnapshotRepository.findByPositionIdInOrderByExecutedAtAsc(Set.of(POSITION_ID)))
+        when(feedbackQueryRepository.findListRows(any(FeedbackListQuery.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(createListRow()), PageRequest.of(0, 20), 1));
+        when(executionSnapshotRepository.findStockInfoByPositionIds(Set.of(POSITION_ID)))
                 .thenReturn(List.of());
 
         PageResponse<FeedbackListItemResponse> result = feedbackQueryService.getFeedbacks(
@@ -130,10 +124,33 @@ class FeedbackQueryServiceTest {
         assertThat(result.content().getFirst().stockName()).isNull();
     }
 
+    // 한 포지션에 체결이 여러 건 쌓여도 종목 정보 조회는 포지션당 한 번만 이뤄진다
+    @Test
+    void 같은_포지션의_피드백이_여러_건이어도_종목_정보는_한_번만_조회한다() {
+        when(feedbackQueryRepository.findListRows(any(FeedbackListQuery.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(
+                        List.of(createListRow(), createListRow(102L), createListRow(103L)),
+                        PageRequest.of(0, 20),
+                        3
+                ));
+        when(executionSnapshotRepository.findStockInfoByPositionIds(Set.of(POSITION_ID)))
+                .thenReturn(List.of(stockInfo(POSITION_ID, "AAPL", "Apple Inc.")));
+
+        PageResponse<FeedbackListItemResponse> result = feedbackQueryService.getFeedbacks(
+                FeedbackListQuery.of(USER_ID, null, null, null, 0, 20)
+        );
+
+        assertThat(result.content()).hasSize(3);
+        assertThat(result.content()).allSatisfy(item ->
+                assertThat(item.stockSymbol()).isEqualTo("AAPL"));
+        // 같은 포지션이 여러 번 등장해도 조회 대상 positionId는 하나로 접힌다
+        verify(executionSnapshotRepository).findStockInfoByPositionIds(Set.of(POSITION_ID));
+    }
+
     // 빈 페이지에서는 불필요한 스냅샷 조회를 실행하지 않는지 확인
     @Test
     void skipsSnapshotQueriesForEmptyPage() {
-        when(feedbackQueryRepository.findAllByQuery(any(FeedbackListQuery.class), any(Pageable.class)))
+        when(feedbackQueryRepository.findListRows(any(FeedbackListQuery.class), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
 
         PageResponse<FeedbackListItemResponse> result = feedbackQueryService.getFeedbacks(
@@ -208,12 +225,7 @@ class FeedbackQueryServiceTest {
     // 포지션 피드백을 시간 흐름대로 응답하고 최초 체결의 종목 정보를 사용하는지 확인
     @Test
     void returnsPositionFeedbackTimeline() {
-        ExecutionSnapshot firstExecution = mock(ExecutionSnapshot.class);
-        when(firstExecution.getPositionId()).thenReturn(POSITION_ID);
-        when(firstExecution.getStockSymbol()).thenReturn("AAPL");
-        when(firstExecution.getStockName()).thenReturn("Apple Inc.");
-
-        Feedback entryFeedback = createPositionFeedback(
+        FeedbackListRow entryFeedback = createPositionFeedback(
                 101L,
                 FeedbackType.ENTRY_FEEDBACK,
                 "최초 매수 피드백",
@@ -221,7 +233,7 @@ class FeedbackQueryServiceTest {
                 "2026-08-31T10:00:00+09:00"
         );
         UUID basedOnExecutionId = UUID.fromString("95214e93-2942-4c96-997f-ab34348ee019");
-        Feedback onDemandFeedback = createPositionFeedback(
+        FeedbackListRow onDemandFeedback = createPositionFeedback(
                 102L,
                 FeedbackType.ON_DEMAND_FEEDBACK,
                 "요청형 피드백",
@@ -229,11 +241,9 @@ class FeedbackQueryServiceTest {
                 "2026-08-31T11:00:00+09:00"
         );
 
-        when(executionSnapshotRepository.findFirstByPositionIdAndUserIdOrderByExecutedAtAscIdAsc(
-                POSITION_ID,
-                USER_ID
-        )).thenReturn(Optional.of(firstExecution));
-        when(feedbackQueryRepository.findAllByPosition(USER_ID, POSITION_ID))
+        when(executionSnapshotRepository.findStockInfoByPositionIdAndUserId(POSITION_ID, USER_ID))
+                .thenReturn(Optional.of(stockInfo(POSITION_ID, "AAPL", "Apple Inc.")));
+        when(feedbackQueryRepository.findListRowsByPosition(USER_ID, POSITION_ID))
                 .thenReturn(List.of(entryFeedback, onDemandFeedback));
 
         PositionFeedbackResponse result = feedbackQueryService.getPositionFeedbacks(USER_ID, POSITION_ID);
@@ -249,15 +259,9 @@ class FeedbackQueryServiceTest {
     // 포지션은 존재하지만 피드백 생성 전이라면 정상 응답과 빈 배열을 반환
     @Test
     void returnsEmptyFeedbacksForKnownPosition() {
-        ExecutionSnapshot firstExecution = mock(ExecutionSnapshot.class);
-        when(firstExecution.getPositionId()).thenReturn(POSITION_ID);
-        when(firstExecution.getStockSymbol()).thenReturn("AAPL");
-        when(firstExecution.getStockName()).thenReturn("Apple Inc.");
-        when(executionSnapshotRepository.findFirstByPositionIdAndUserIdOrderByExecutedAtAscIdAsc(
-                POSITION_ID,
-                USER_ID
-        )).thenReturn(Optional.of(firstExecution));
-        when(feedbackQueryRepository.findAllByPosition(USER_ID, POSITION_ID)).thenReturn(List.of());
+        when(executionSnapshotRepository.findStockInfoByPositionIdAndUserId(POSITION_ID, USER_ID))
+                .thenReturn(Optional.of(stockInfo(POSITION_ID, "AAPL", "Apple Inc.")));
+        when(feedbackQueryRepository.findListRowsByPosition(USER_ID, POSITION_ID)).thenReturn(List.of());
 
         PositionFeedbackResponse result = feedbackQueryService.getPositionFeedbacks(USER_ID, POSITION_ID);
 
@@ -268,10 +272,8 @@ class FeedbackQueryServiceTest {
     // 존재하지 않거나 다른 사용자의 포지션은 피드백 목록을 조회하지 않고 404로 처리
     @Test
     void rejectsMissingOrUnownedPosition() {
-        when(executionSnapshotRepository.findFirstByPositionIdAndUserIdOrderByExecutedAtAscIdAsc(
-                POSITION_ID,
-                USER_ID
-        )).thenReturn(Optional.empty());
+        when(executionSnapshotRepository.findStockInfoByPositionIdAndUserId(POSITION_ID, USER_ID))
+                .thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> feedbackQueryService.getPositionFeedbacks(USER_ID, POSITION_ID))
                 .isInstanceOf(CustomException.class)
@@ -279,19 +281,43 @@ class FeedbackQueryServiceTest {
                         .isEqualTo(LearningErrorCode.POSITION_NOT_FOUND));
     }
 
-    private Feedback createFeedback() {
-        Feedback feedback = mock(Feedback.class);
-        when(feedback.getId()).thenReturn(101L);
-        when(feedback.getPositionId()).thenReturn(POSITION_ID);
-        when(feedback.getFeedbackType()).thenReturn(FeedbackType.ENTRY_FEEDBACK);
-        when(feedback.getStatus()).thenReturn(FeedbackStatus.COMPLETED);
-        when(feedback.getContent()).thenReturn(
-                JsonNodeFactory.instance.objectNode().put("summary", "손절 계획을 설정했습니다.")
+    /** 네이티브 쿼리 결과인 인터페이스 프로젝션을 테스트에서 값으로 만든다. */
+    private PositionStockInfo stockInfo(UUID positionId, String symbol, String name) {
+        return new PositionStockInfo() {
+            @Override
+            public UUID getPositionId() {
+                return positionId;
+            }
+
+            @Override
+            public String getStockSymbol() {
+                return symbol;
+            }
+
+            @Override
+            public String getStockName() {
+                return name;
+            }
+        };
+    }
+
+    private FeedbackListRow createListRow() {
+        return createListRow(101L);
+    }
+
+    /** 목록 조회는 엔티티가 아니라 프로젝션을 받으므로 mock 없이 값으로 만든다. */
+    private FeedbackListRow createListRow(Long feedbackId) {
+        return new FeedbackListRow(
+                feedbackId,
+                POSITION_ID,
+                FeedbackType.ENTRY_FEEDBACK,
+                FeedbackStatus.COMPLETED,
+                "손절 계획을 설정했습니다.",
+                true,
+                null,
+                OffsetDateTime.parse("2026-08-31T10:00:00+09:00"),
+                OffsetDateTime.parse("2026-08-31T10:00:05+09:00")
         );
-        when(feedback.isAiUsed()).thenReturn(true);
-        when(feedback.getCreatedAt()).thenReturn(OffsetDateTime.parse("2026-08-31T10:00:00+09:00"));
-        when(feedback.getCompletedAt()).thenReturn(OffsetDateTime.parse("2026-08-31T10:00:05+09:00"));
-        return feedback;
     }
 
     private Feedback createDetailFeedback() {
@@ -323,24 +349,23 @@ class FeedbackQueryServiceTest {
         return execution;
     }
 
-    private Feedback createPositionFeedback(
+    private FeedbackListRow createPositionFeedback(
             Long feedbackId,
             FeedbackType feedbackType,
             String summary,
             UUID basedOnExecutionId,
             String createdAt
     ) {
-        Feedback feedback = mock(Feedback.class);
-        when(feedback.getId()).thenReturn(feedbackId);
-        when(feedback.getFeedbackType()).thenReturn(feedbackType);
-        when(feedback.getStatus()).thenReturn(FeedbackStatus.COMPLETED);
-        when(feedback.getContent()).thenReturn(
-                JsonNodeFactory.instance.objectNode().put("summary", summary)
+        return new FeedbackListRow(
+                feedbackId,
+                POSITION_ID,
+                feedbackType,
+                FeedbackStatus.COMPLETED,
+                summary,
+                true,
+                basedOnExecutionId,
+                OffsetDateTime.parse(createdAt),
+                OffsetDateTime.parse(createdAt).plusSeconds(5)
         );
-        when(feedback.isAiUsed()).thenReturn(true);
-        when(feedback.getBasedOnExecutionId()).thenReturn(basedOnExecutionId);
-        when(feedback.getCreatedAt()).thenReturn(OffsetDateTime.parse(createdAt));
-        when(feedback.getCompletedAt()).thenReturn(OffsetDateTime.parse(createdAt).plusSeconds(5));
-        return feedback;
     }
 }
