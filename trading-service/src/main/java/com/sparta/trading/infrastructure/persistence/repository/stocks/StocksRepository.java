@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.Query;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 public interface StocksRepository extends JpaRepository<Stocks, Long> {
 
@@ -13,4 +14,7 @@ public interface StocksRepository extends JpaRepository<Stocks, Long> {
 
     @Query("SELECT s.id FROM Stocks s WHERE s.symbol IN :symbolList AND s.active = true")
     List<Long> findIdBySymbolIn(List<String> symbolList);
+
+    @Query("SELECT s.symbol DISTINCT FROM Stocks s WHERE s.active = true")
+    Set<String> findAllSymbol();
 }

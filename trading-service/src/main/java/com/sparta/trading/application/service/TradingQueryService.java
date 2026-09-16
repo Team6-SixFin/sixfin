@@ -48,7 +48,7 @@ public class TradingQueryService {
     // = 시세
     // ==============================
     public MarketClockResponse getClock() {
-        MarketClock marketClock = currentSeqProvider.getClock();
+        MarketClockSnapshot marketClock = currentSeqProvider.getClockSnapshot();
         long currentSeq = currentSeqProvider.currentSeq(marketClock);
         Instant currentMarketTime = currentSeqProvider.marketTimeAt(currentSeq);
         Instant now = currentSeqProvider.now();
@@ -81,7 +81,7 @@ public class TradingQueryService {
 
     public TradingStockDetailsFindResponse findStocksDetailsBySymbol(String symbol) {
         Stocks stock = getStockBySymbol(symbol);
-        MarketClock marketClock = currentSeqProvider.getClock();
+        MarketClockSnapshot marketClock = currentSeqProvider.getClockSnapshot();
         long seq = currentSeqProvider.currentSeq(marketClock);
 
         PriceCandles candle = priceCandlesRepository.findBySeqAndStockId(seq, stock.getId())

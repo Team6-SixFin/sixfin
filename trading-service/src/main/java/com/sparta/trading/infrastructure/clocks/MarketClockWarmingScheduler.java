@@ -3,7 +3,7 @@ package com.sparta.trading.infrastructure.clocks;
 import com.sparta.trading.application.service.CurrentSeqProvider;
 import com.sparta.trading.application.service.MarketClocksCommandService;
 import com.sparta.trading.domain.entity.ClockStatus;
-import com.sparta.trading.domain.entity.MarketClock;
+import com.sparta.trading.domain.entity.MarketClockSnapshot;
 import lombok.RequiredArgsConstructor;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -23,8 +23,8 @@ public class MarketClockWarmingScheduler {
 
     @Scheduled(fixedDelayString = "${market.clock.cache-refresh-interval-ms}")
     public void checkAutoStop() {
-        MarketClock marketClock = currentSeqProvider.getClock();
-        if (marketClock.getStatus() != ClockStatus.RUNNING) {
+        MarketClockSnapshot marketClock = currentSeqProvider.getClockSnapshot();
+        if (marketClock.status() != ClockStatus.RUNNING) {
             return;
         }
 
