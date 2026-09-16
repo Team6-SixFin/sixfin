@@ -1,7 +1,7 @@
 package com.sparta.learning.application.dto.response;
 
-import com.sparta.learning.domain.entity.ExecutionSnapshot;
-import com.sparta.learning.domain.entity.Feedback;
+import com.sparta.learning.application.dto.result.FeedbackListRow;
+import com.sparta.learning.application.dto.result.PositionStockInfo;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.util.List;
@@ -23,13 +23,13 @@ public record PositionFeedbackResponse(
 ) {
 
     public static PositionFeedbackResponse from(
-            ExecutionSnapshot firstExecution,
-            List<Feedback> feedbacks
+            PositionStockInfo stockInfo,
+            List<FeedbackListRow> feedbacks
     ) {
         return new PositionFeedbackResponse(
-                firstExecution.getPositionId(),
-                firstExecution.getStockSymbol(),
-                firstExecution.getStockName(),
+                stockInfo.getPositionId(),
+                stockInfo.getStockSymbol(),
+                stockInfo.getStockName(),
                 feedbacks.stream()
                         .map(PositionFeedbackItemResponse::from)
                         .toList()

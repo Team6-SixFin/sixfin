@@ -1,6 +1,6 @@
 package com.sparta.learning.application.dto.response;
 
-import com.sparta.learning.domain.entity.Feedback;
+import com.sparta.learning.application.dto.result.FeedbackListRow;
 import com.sparta.learning.domain.model.FeedbackStatus;
 import com.sparta.learning.domain.model.FeedbackType;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -35,16 +35,16 @@ public record PositionFeedbackItemResponse(
         OffsetDateTime completedAt
 ) {
 
-    public static PositionFeedbackItemResponse from(Feedback feedback) {
+    public static PositionFeedbackItemResponse from(FeedbackListRow row) {
         return new PositionFeedbackItemResponse(
-                feedback.getId(),
-                feedback.getFeedbackType(),
-                feedback.getStatus(),
-                JsonResponseMapper.textValue(feedback.getContent(), "summary"),
-                feedback.isAiUsed(),
-                feedback.getBasedOnExecutionId(),
-                feedback.getCreatedAt(),
-                feedback.getCompletedAt()
+                row.feedbackId(),
+                row.feedbackType(),
+                row.status(),
+                row.summary(),
+                row.aiUsed(),
+                row.basedOnExecutionId(),
+                row.createdAt(),
+                row.completedAt()
         );
     }
 }
