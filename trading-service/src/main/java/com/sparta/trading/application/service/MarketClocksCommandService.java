@@ -9,6 +9,7 @@ import com.sparta.trading.global.exception.CustomException;
 import com.sparta.trading.global.exception.TradingErrorCode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,6 +31,7 @@ public class MarketClocksCommandService {
     private final PriceCandlesRepository priceCandlesRepository;
     private final Clock clock;
 
+    @CacheEvict(cacheNames = CurrentSeqProvider.MARKET_CLOCK_CACHE_NAME, key = "'current'")
     @Transactional
     public MarketClock start(UUID userId) {
         MarketClock marketClock = getClockForUpdate();
@@ -40,6 +42,7 @@ public class MarketClocksCommandService {
         return marketClock;
     }
 
+    @CacheEvict(cacheNames = CurrentSeqProvider.MARKET_CLOCK_CACHE_NAME, key = "'current'")
     @Transactional
     public MarketClock stop(UUID userId) {
         MarketClock marketClock = getClockForUpdate();
@@ -50,6 +53,7 @@ public class MarketClocksCommandService {
         return marketClock;
     }
 
+    @CacheEvict(cacheNames = CurrentSeqProvider.MARKET_CLOCK_CACHE_NAME, key = "'current'")
     @Transactional
     public MarketClock changeSpeed(int newSpeedFactor, UUID userId) {
         if (newSpeedFactor < 1) {
@@ -64,6 +68,7 @@ public class MarketClocksCommandService {
         return marketClock;
     }
 
+    @CacheEvict(cacheNames = CurrentSeqProvider.MARKET_CLOCK_CACHE_NAME, key = "'current'")
     @Transactional
     public MarketClock reset(long targetSeq, UUID userId) {
         MarketClock marketClock = getClockForUpdate();
@@ -90,6 +95,7 @@ public class MarketClocksCommandService {
      * 이미 STOPPED거나 아직 도달 전이면 아무 것도 하지 않는다 (멱등, 중복 호출돼도 무해).
      * 호출자의 트랜잭션(특히 readOnly)과 무관하게 항상 별도 트랜잭션으로 실행된다.
      */
+    @CacheEvict(cacheNames = CurrentSeqProvider.MARKET_CLOCK_CACHE_NAME, key = "'current'")
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void autoStopIfReached() {
         MarketClock marketClock = getClockForUpdate();
