@@ -35,12 +35,12 @@ import java.util.UUID;
                               Pageable pageable);
 
      @Query("""
-        SELECT o.requestId AS requestId, COUNT(o) AS duplicateCount
+        SELECT o.accountId AS accountId, o.requestId AS requestId, COUNT(o) AS duplicateCount
         FROM Orders o
         WHERE o.deletedAt IS NULL
             AND (:accountId IS NULL OR o.accountId = :accountId)
-        GROUP BY o.requestId
+        GROUP BY o.accountId, o.requestId
             HAVING COUNT(o) >= 2
     """)
      List<DuplicateRequestGroup> findDuplicateRequestGroups(UUID accountId);
- }
+}

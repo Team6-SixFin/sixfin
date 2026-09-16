@@ -536,13 +536,14 @@ public class TradingAdminQueryService {
         );
     }
 
-    /** 동일 orders.request_id 가 2건 이상 */
+    /** 동일 계좌에서 같은 orders.request_id가 2건 이상 */
     private TradingReconciliationResponse.CheckResult checkDuplicateRequest(UUID accountId, boolean includeDetails) {
         List<DuplicateRequestGroup> duplicateGroups = orderRepository.findDuplicateRequestGroups(accountId);
 
         List<Map<String, Object>> details = buildDetails(includeDetails,
                 () -> duplicateGroups,
                 group -> Map.of(
+                "accountId", group.getAccountId(),
                 "requestId", group.getRequestId(),
                 "duplicateCount", group.getDuplicateCount()
         ));
