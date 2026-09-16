@@ -32,6 +32,7 @@ import java.util.UUID;
 @Table(
         name = "diagnosis_results",
         indexes = {
+                @Index(name = "idx_diagnosis_result_position_id", columnList = "position_id"),
                 @Index(name = "idx_diagnosis_result_user_id", columnList = "user_id"),
                 @Index(name = "idx_diagnosis_result_rule_code", columnList = "rule_code"),
                 @Index(name = "idx_diagnosis_result_result", columnList = "result")
