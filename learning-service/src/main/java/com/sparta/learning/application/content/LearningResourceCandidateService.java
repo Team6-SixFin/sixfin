@@ -7,7 +7,6 @@ import com.sparta.learning.infrastructure.cache.LearningResourceCandidateCache;
 import com.sparta.learning.infrastructure.persistence.repository.LearningResourceCandidateQueryRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -25,7 +24,6 @@ public class LearningResourceCandidateService {
     private final LearningResourceCacheProperties cacheProperties;
     private final LearningResourceCandidateQueryRepository candidateQueryRepository;
 
-    @Transactional(readOnly = true)
     public List<LearningResource> findCandidates(
             UUID userId,
             UUID positionId,
