@@ -206,7 +206,13 @@ class AiContextAssemblerTest {
         void 짧은_포지션은_손실이_없다() {
             givenSelectedExecutions(8);
             givenAggregate(8L);
-            givenDiagnoses(diagnosis(1L, "STOP_LOSS_SET", "PASS", 1L));
+            // 체결 8건이면 규칙도 8번 실행되므로 occurrenceCount가 1일 수 없다.
+            // 기존 픽스처(1건 / 1그룹)는 1 > 1이 false라 우연히 통과하면서
+            // truncated 조건에 진단 집계가 섞여 있던 버그를 비껴갔다.
+            givenDiagnoses(
+                    diagnosis(1L, "STOP_LOSS_SET", "PASS", 8L),
+                    diagnosis(2L, "HIGH_CHASING_BUY", "WARNING", 3L)
+            );
             givenNoPreviousFeedback();
 
             AiContextAssembler.AssembledContext result = assembler.assemble(
@@ -215,7 +221,7 @@ class AiContextAssemblerTest {
 
             JsonNode scope = read(result.contextJson()).path("contextScope");
             assertThat(scope.path("truncated").asBoolean()).isFalse();
-            assertThat(scope.path("note").asText()).contains("전체 데이터");
+            assertThat(scope.path("note").asText()).contains("모든 체결");
         }
 
         @Test
@@ -416,6 +422,37 @@ class AiContextAssemblerTest {
             assertThat(read(result.contextJson()).path("executions").get(0).has("seq")).isFalse();
             assertThat(result.contextJson()).doesNotContain("\"executionId\"");
         }
+    }
+
+    @Test
+    @DisplayName("체결을 전부 담았으면 진단이 집계로 접혀도 truncated=false다")
+    void 진단_집계를_체결_절단으로_보고하지_않는다() {
+        // 체결 5건은 recent-executions(20) 이하라 전량 포함된다.
+        // 진단은 원본 12건이 규칙 × 판정결과 6그룹으로 접히지만, 버려진 진단은 없다.
+        givenSelectedExecutions(5);
+        givenAggregate(5L);
+        givenDiagnoses(
+                diagnosis(1L, "STOP_LOSS_SET", "PASS", 3L),
+                diagnosis(2L, "STOP_LOSS_SET", "VIOLATION", 1L),
+                diagnosis(3L, "HIGH_CHASING_BUY", "WARNING", 2L),
+                diagnosis(4L, "HIGH_CHASING_BUY", "PASS", 2L),
+                diagnosis(5L, "SELL_BELOW_STOP_LOSS", "PASS", 3L),
+                diagnosis(6L, "STOP_LOSS_WIDTH", "WARNING", 1L)
+        );
+        givenNoPreviousFeedback();
+
+        AiContextAssembler.AssembledContext result = assembler.assemble(
+                FeedbackType.ON_DEMAND_FEEDBACK, POSITION_ID, USER_ID,
+                execution(TradeType.BUY, 10, "185.0000", 5));
+
+        JsonNode scope = read(result.contextJson()).path("contextScope");
+
+        // 12 -> 6으로 접혔다는 사실 자체는 그대로 노출한다
+        assertThat(scope.path("totalDiagnosisCount").asLong()).isEqualTo(12L);
+        assertThat(scope.path("includedDiagnosisCount").asInt()).isEqualTo(6);
+        // 다만 버려진 '체결'이 없으므로 절단이 아니다
+        assertThat(scope.path("truncated").asBoolean()).isFalse();
+        assertThat(scope.path("note").asText()).doesNotContain("요약본");
     }
 
     // =================================================================
