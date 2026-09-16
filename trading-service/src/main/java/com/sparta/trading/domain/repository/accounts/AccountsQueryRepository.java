@@ -18,6 +18,8 @@ public interface AccountsQueryRepository {
 
     Optional<Accounts> findByUserId (UUID userId);
 
+    Optional<UUID> findIdByUserId(UUID userId);
+
     Optional<Accounts> findById(UUID accountId);
 
     long countNegativeCashBalance(UUID accountId);

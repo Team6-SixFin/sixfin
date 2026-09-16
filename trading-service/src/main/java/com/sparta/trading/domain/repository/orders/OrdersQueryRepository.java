@@ -16,7 +16,7 @@ public interface OrdersQueryRepository {
             List<UUID> accountIds,
             Pageable pageable);
 
-    Optional<Orders> findByRequestId(UUID requestId);
+    Optional<Orders> findByAccountIdAndRequestId(UUID accountId, UUID requestId);
 
     Optional<Orders> findById(UUID id);
 
