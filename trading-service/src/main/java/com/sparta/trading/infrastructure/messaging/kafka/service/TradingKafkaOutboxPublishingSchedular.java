@@ -36,7 +36,7 @@ public class TradingKafkaOutboxPublishingSchedular {
     }
 
     // 쓰레드 풀에 작업 전달
-    @Scheduled(fixedDelayString = "3000")
+    @Scheduled(fixedDelayString = "500")
     public void publishPending(){
         List<PendingOutboxEventsRef> refs = outboxEventsQueryRepository.findPendingRefs(outboxPublisherProperties.batchSize());
         Map<String, List<PendingOutboxEventsRef>> groupMap =
@@ -55,7 +55,6 @@ public class TradingKafkaOutboxPublishingSchedular {
         allOf.join();
     }
 
-    // 적절한 예외나 반환 값 생각하기
     private void task(List<PendingOutboxEventsRef> outboxEventsRefs){
         for(PendingOutboxEventsRef ref : outboxEventsRefs) {
             boolean publishResult = kafkaOutboxPublisher.publishOne(ref.id());

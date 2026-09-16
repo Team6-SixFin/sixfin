@@ -13,7 +13,6 @@ import io.micrometer.core.instrument.Timer;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 
@@ -26,14 +25,14 @@ public class TradingKafkaOutboxPublisher {
 
     private final OutboxEventsQueryRepository outboxEventsQueryRepository;
     private final TradingKafkaProducer producer;
+    private final TradingKafkaOutboxMarker marker;
     private final OutboxPublisherProperties outboxPublisherProperties;
     private final TradingMetrics tradingMetrics;
 
     /**
-     * 이벤트 1건 = 독립 트랜잭션. 배치 전체를 하나로 묶으면 한 건 실패가 이미 발행된 다른 건의
-     * 상태 갱신까지 롤백시켜 중복 발행을 유발하므로, 스케줄러가 아니라 이 메서드 단위로 커밋한다.
+     * 카프카 전송 결과(성공/실패) 기록은 {@link TradingKafkaOutboxMarker}가 별도 트랜잭션으로 처리한다.
+     * 전송 자체는 트랜잭션 밖에서 이뤄져 DB 커넥션을 카프카 응답 대기 동안 붙잡지 않는다.
      */
-    @Transactional
     public boolean publishOne(Long id){
         OutboxEvents outboxEvents = outboxEventsQueryRepository.findById(id)
                 .orElseThrow(() -> new CustomException(TradingErrorCode.OUTBOX_EVENT_NOT_FOUND));
@@ -49,14 +48,14 @@ public class TradingKafkaOutboxPublisher {
                     outboxEvents.getPayload(),
                     SEND_TIMEOUT_SECONDS
             );
-            outboxEvents.markPublished(Instant.now());
-            tradingMetrics.recordPublishSuccess(sendSample, outboxEvents.getOccurredAt());
-            return true;
         } catch (Exception e) {
             log.error("[Outbox Publisher] Failed to publish outboxEventId={}", id, e);
-            outboxEvents.markFailedAttempt(e.getMessage(), outboxPublisherProperties.maxRetry());
+            marker.markFailedAttempt(e, outboxPublisherProperties.maxRetry(), id);
             tradingMetrics.recordPublishFailure(sendSample);
             return false;
         }
+        marker.markPublished(id);
+        tradingMetrics.recordPublishSuccess(sendSample, outboxEvents.getOccurredAt());
+        return true;
     }
 }

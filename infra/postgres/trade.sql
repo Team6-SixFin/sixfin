@@ -240,7 +240,7 @@ CREATE INDEX idx_p_outbox_events_event_id ON trading_service.p_outbox_events(eve
 CREATE INDEX idx_p_outbox_events_status ON trading_service.p_outbox_events(status);
 
 CREATE INDEX IF NOT EXISTS idx_outbox_events_pending
-    ON trading_service.p_outbox_events (occurred_at) WHERE status = 'PENDING';
+    ON trading_service.p_outbox_events (occurred_at, id) WHERE status = 'PENDING';
 
 -- M-2 초기 구현의 명세 외 컬럼·컬럼명은 빈 테이블에서만 자동 정렬한다.
 -- 데이터가 있으면 의미를 추측해 변환하지 않고 수동 이관을 요구한다.
@@ -349,7 +349,7 @@ DROP COLUMN IF EXISTS topic,
 
 DROP INDEX IF EXISTS trading_service.idx_outbox_events_pending;
 CREATE INDEX idx_outbox_events_pending
-    ON trading_service.p_outbox_events (occurred_at) WHERE status = 'PENDING';
+    ON trading_service.p_outbox_events (occurred_at, id) WHERE status = 'PENDING';
 
 CREATE INDEX IF NOT EXISTS idx_orders_account_id ON trading_service.p_orders (account_id);
 CREATE INDEX IF NOT EXISTS idx_orders_position_id ON trading_service.p_orders (position_id);
