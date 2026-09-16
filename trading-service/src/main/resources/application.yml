@@ -24,8 +24,9 @@ trading:
   outbox:
     publisher:
       topic: trade-events.v1
-      batch-size: 100
+      batch-size: 2000
       max-retry: 5
+      parallelism: 4
 
 market:
   clock:
