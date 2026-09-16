@@ -318,8 +318,9 @@ public class AiContextAssembler {
                 a.getHighestSellPrice(),
                 a.getLowestSellPrice(),
                 hasClosedInfo ? null : a.getRealizedProfit(),
-                hasClosedInfo ? null : format(a.getFirstExecutedAt()),
-                hasClosedInfo ? null : format(a.getLastExecutedAt())
+                // [변경] SQL의 to_char가 이미 ISO-8601 문자열을 반환하므로 format() 불필요
+                hasClosedInfo ? null : a.getFirstExecutedAt(),
+                hasClosedInfo ? null : a.getLastExecutedAt()
         );
     }
 

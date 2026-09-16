@@ -101,8 +101,10 @@ public interface ExecutionSnapshotRepository extends JpaRepository<ExecutionSnap
                 MAX(executed_price) FILTER (WHERE trade_type = 'SELL')              AS "highestSellPrice",
                 MIN(executed_price) FILTER (WHERE trade_type = 'SELL')              AS "lowestSellPrice",
                 COALESCE(SUM(execution_realized_profit), 0)                         AS "realizedProfit",
-                MIN(executed_at)                                                    AS "firstExecutedAt",
-                MAX(executed_at)                                                    AS "lastExecutedAt"
+                to_char(MIN(executed_at) AT TIME ZONE 'UTC',
+                        'YYYY-MM-DD"T"HH24:MI"Z"')                                  AS "firstExecutedAt",
+                to_char(MAX(executed_at) AT TIME ZONE 'UTC',
+                        'YYYY-MM-DD"T"HH24:MI"Z"')                                  AS "lastExecutedAt"
             FROM execution_snapshots
             WHERE position_id = :positionId
             """, nativeQuery = true)
