@@ -60,7 +60,7 @@ class TradingKafkaOutboxPublisherTest {
 
     private TradingKafkaOutboxPublisher publisherWithMaxRetry(int maxRetry) {
         return new TradingKafkaOutboxPublisher(
-                outboxEventsRepository, producer, new OutboxPublisherProperties(TOPIC, 100, maxRetry),
+                outboxEventsRepository, producer, new OutboxPublisherProperties(TOPIC, 100, maxRetry, 4),
                 tradingMetrics);
     }
 

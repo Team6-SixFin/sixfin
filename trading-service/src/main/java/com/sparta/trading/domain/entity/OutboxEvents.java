@@ -59,6 +59,8 @@ public class OutboxEvents extends AuditableEntity {
     @Column(name = "status", nullable = false, length = 20)
     private OutboxStatus status;
 
+    // 현재 매매 흐름에서는 quote.marketTime을 톨해 저장됨.
+    // 같은 seq의 매매는 같은 marketTime을 가짐.
     @Column(name = "occurred_at", nullable = false)
     private Instant occurredAt;
 

@@ -3,6 +3,7 @@ package com.sparta.trading.infrastructure.persistence.repository.outboxEvents;
 import com.sparta.trading.application.dto.query.TradingAdminSearchOutboxEventQurey;
 import com.sparta.trading.domain.entity.OutboxEvents;
 import com.sparta.trading.domain.repository.outboxEvents.OutboxEventsQueryRepository;
+import com.sparta.trading.domain.repository.outboxEvents.PendingOutboxEventsRef;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -40,8 +41,8 @@ public class OutboxEventsQueryRepositoryImpl implements OutboxEventsQueryReposit
     }
 
     @Override
-    public List<Long> findPendingIds(int count) {
-        return outboxEventJpaRepository.findPendingIds(count);
+    public List<PendingOutboxEventsRef> findPendingRefs(int count) {
+        return outboxEventJpaRepository.findPendingRefs(count);
     }
 
     @Override
