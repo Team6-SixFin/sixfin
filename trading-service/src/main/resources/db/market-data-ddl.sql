@@ -71,7 +71,7 @@ CREATE TABLE IF NOT EXISTS trading_service.p_price_candles (
 -- ----------------------------------------
 CREATE TABLE IF NOT EXISTS trading_service.p_orders (
     id                      UUID            PRIMARY KEY DEFAULT gen_random_uuid(),
-    request_id              UUID            NOT NULL UNIQUE,
+    request_id              UUID            NOT NULL,
     account_id              UUID            NOT NULL,
     stock_id                BIGINT          NOT NULL,
     position_id             UUID,
@@ -89,7 +89,8 @@ CREATE TABLE IF NOT EXISTS trading_service.p_orders (
     updated_at              TIMESTAMPTZ,
     updated_by              UUID,
     deleted_at              TIMESTAMPTZ,
-    deleted_by              UUID
+    deleted_by              UUID,
+    CONSTRAINT uk_orders_account_request_id UNIQUE (account_id, request_id)
 );
 
 -- 리플레이 스케줄러가 "현재 seq 이하만" 조회할 때 사용 (candles P1 API도 동일)
@@ -287,6 +288,22 @@ ALTER TABLE trading_service.p_orders
     ALTER COLUMN created_at SET NOT NULL,
     ALTER COLUMN created_by SET NOT NULL;
 
+ALTER TABLE trading_service.p_orders
+    DROP CONSTRAINT IF EXISTS p_orders_request_id_key;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conrelid = 'trading_service.p_orders'::regclass
+          AND conname = 'uk_orders_account_request_id'
+    ) THEN
+        ALTER TABLE trading_service.p_orders
+            ADD CONSTRAINT uk_orders_account_request_id UNIQUE (account_id, request_id);
+    END IF;
+END $$;
+
 ALTER TABLE trading_service.p_positions
     ADD COLUMN IF NOT EXISTS user_id UUID,
     ADD COLUMN IF NOT EXISTS total_buy_amount NUMERIC(19,4) NOT NULL DEFAULT 0,
@@ -324,7 +341,6 @@ ALTER TABLE trading_service.p_executions
     ALTER COLUMN user_id SET NOT NULL,
     ALTER COLUMN candle_seq SET NOT NULL,
     ALTER COLUMN market_time SET NOT NULL;
-    ALTER COLUMN created_by SET NOT NULL;
 
 UPDATE trading_service.p_executions
 SET created_by = user_id

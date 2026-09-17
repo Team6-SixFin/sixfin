@@ -3,8 +3,8 @@ package com.sparta.trading.infrastructure.persistence.repository.cashledgers;
 import com.sparta.trading.domain.entity.CashLedgerTxType;
 import com.sparta.trading.domain.entity.CashLedgers;
 import com.sparta.trading.domain.repository.cashledgers.LedgerSequenceMismatchGroup;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Slice;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -21,7 +21,7 @@ interface CashLedgersJpaRepository extends JpaRepository<CashLedgers, Long> {
               and (:txType is null or cashLedger.txType = :txType)
             order by cashLedger.createdAt desc, cashLedger.id desc
             """)
-    Page<CashLedgers> findAllByAccountIdAndTxType(
+    Slice<CashLedgers> findAllByAccountIdAndTxType(
             @Param("accountId") UUID accountId,
             @Param("txType") CashLedgerTxType txType,
             Pageable pageable

@@ -3,7 +3,7 @@ package com.sparta.trading.presentation.controller.cashledgers;
 import com.sparta.trading.application.service.CashLedgersQueryService;
 import com.sparta.trading.domain.entity.CashLedgerTxType;
 import com.sparta.trading.global.exception.GlobalExceptionHandler;
-import com.sparta.trading.global.response.PageResponse;
+import com.sparta.trading.global.response.SliceResponse;
 import com.sparta.trading.presentation.dto.response.CashLedgerResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -11,9 +11,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.SliceImpl;
 import org.springframework.data.web.PageableHandlerMethodArgumentResolver;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -51,13 +51,13 @@ class CashLedgerQueryControllerTest {
     }
 
     @Test
-    void getCashLedgers_usesDefaultPageableAndReturnsPageResponse() throws Exception {
+    void getCashLedgers_usesDefaultPageableAndReturnsSliceResponse() throws Exception {
         UUID userId = UUID.randomUUID();
         UUID executionId = UUID.randomUUID();
         CashLedgerResponse cashLedgerResponse = cashLedgerResponseOf(executionId, CashLedgerTxType.BUY);
 
         when(cashLedgerQueryService.getCashLedgers(eq(userId), isNull(), any(Pageable.class)))
-                .thenReturn(pageResponseOf(cashLedgerResponse, 0, 20, 1));
+                .thenReturn(sliceResponseOf(cashLedgerResponse, 0, 20, false));
 
         mockMvc.perform(get("/api/trading/cash-ledgers").header("X-User-Id", userId))
                 .andExpect(status().isOk())
@@ -68,6 +68,9 @@ class CashLedgerQueryControllerTest {
                 .andExpect(jsonPath("$.pageInfo.paginationType").value("OFFSET"))
                 .andExpect(jsonPath("$.pageInfo.page").value(0))
                 .andExpect(jsonPath("$.pageInfo.size").value(20))
+                .andExpect(jsonPath("$.pageInfo.hasNext").value(false))
+                .andExpect(jsonPath("$.pageInfo.totalElements").doesNotExist())
+                .andExpect(jsonPath("$.pageInfo.totalPages").doesNotExist())
                 .andExpect(jsonPath("$.summary").value(nullValue()));
 
         ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
@@ -88,7 +91,7 @@ class CashLedgerQueryControllerTest {
                 eq(userId),
                 eq(CashLedgerTxType.BUY),
                 any(Pageable.class)
-        )).thenReturn(pageResponseOf(null, 1, 30, 0));
+        )).thenReturn(sliceResponseOf(null, 1, 30, false));
 
         mockMvc.perform(get("/api/trading/cash-ledgers")
                         .header("X-User-Id", userId)
@@ -98,7 +101,8 @@ class CashLedgerQueryControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content").isEmpty())
                 .andExpect(jsonPath("$.pageInfo.page").value(1))
-                .andExpect(jsonPath("$.pageInfo.size").value(30));
+                .andExpect(jsonPath("$.pageInfo.size").value(30))
+                .andExpect(jsonPath("$.pageInfo.hasNext").value(false));
 
         ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
         verify(cashLedgerQueryService).getCashLedgers(
@@ -135,20 +139,20 @@ class CashLedgerQueryControllerTest {
         );
     }
 
-    private PageResponse<CashLedgerResponse> pageResponseOf(
+    private SliceResponse<CashLedgerResponse> sliceResponseOf(
             CashLedgerResponse cashLedgerResponse,
             int page,
             int size,
-            long totalElements
+            boolean hasNext
     ) {
         List<CashLedgerResponse> content = cashLedgerResponse == null
                 ? List.of()
                 : List.of(cashLedgerResponse);
 
-        return PageResponse.of(new PageImpl<>(
+        return SliceResponse.of(new SliceImpl<>(
                 content,
                 PageRequest.of(page, size),
-                totalElements
+                hasNext
         ));
     }
 }

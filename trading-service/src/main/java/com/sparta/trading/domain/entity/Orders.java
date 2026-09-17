@@ -14,14 +14,21 @@ import java.util.UUID;
 @Getter
 @Entity
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-@Table(name = "p_orders", schema = "trading_service")
+@Table(
+        name = "p_orders",
+        schema = "trading_service",
+        uniqueConstraints = @UniqueConstraint(
+                name = "uk_orders_account_request_id",
+                columnNames = {"account_id", "request_id"}
+        )
+)
 public class Orders extends BaseEntity {
 
     @Id
     @Column(name="id")
     private UUID id;
 
-    @Column(name="request_id", nullable = false, unique = true)
+    @Column(name="request_id", nullable = false)
     private UUID requestId;
 
     @Column(name="account_id")

@@ -15,6 +15,7 @@ import com.sparta.trading.global.exception.CustomException;
 import com.sparta.trading.global.exception.GlobalErrorCode;
 import com.sparta.trading.global.exception.TradingErrorCode;
 import com.sparta.trading.global.response.PageResponse;
+import com.sparta.trading.global.response.SliceResponse;
 import com.sparta.trading.infrastructure.persistence.repository.candles.PriceCandlesRepository;
 import com.sparta.trading.infrastructure.persistence.repository.stocks.StocksRepository;
 import com.sparta.trading.presentation.dto.response.TradingExecutionResponseDto;
@@ -29,6 +30,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.SliceImpl;
+import org.springframework.data.domain.Sort;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;
@@ -80,13 +83,14 @@ class TradingQueryServiceTest {
     // ==============================
 
     @Test
-    void searchOrder_returnsEmptyPageWhenAccountMissing() {
+    void searchOrder_returnsEmptySliceWhenAccountMissing() {
         when(accountsQueryRepository.findByUserId(USER_ID)).thenReturn(Optional.empty());
 
-        PageResponse<TradingOrderResponseDto> result = service.searchOrder(
+        SliceResponse<TradingOrderResponseDto> result = service.searchOrder(
                 USER_ID, null, null, null, PageRequest.of(0, 20));
 
         assertThat(result.getContent()).isEmpty();
+        assertThat(result.getPageInfo().isHasNext()).isFalse();
         verify(ordersQueryRepository, never()).searchOrder(any(), any(), anyList(), any());
     }
 
@@ -114,16 +118,17 @@ class TradingQueryServiceTest {
         Stocks msft = stock(2L, "MSFT", "Microsoft Corporation");
         Orders aaplOrder = filledOrder(account.getId(), aapl.getId());
         Orders msftOrder = filledOrder(account.getId(), msft.getId());
-        Pageable pageable = PageRequest.of(0, 20);
+        Pageable pageable = orderPageable(0, 20);
 
         when(accountsQueryRepository.findByUserId(USER_ID)).thenReturn(Optional.of(account));
-        when(ordersQueryRepository.searchOrder(any(), eq(null), eq(List.of(account.getId())), eq(pageable)))
-                .thenReturn(new PageImpl<>(List.of(aaplOrder, msftOrder), pageable, 2));
+        when(ordersQueryRepository.searchOrderSlice(any(), eq(null), eq(List.of(account.getId())), eq(pageable)))
+                .thenReturn(new SliceImpl<>(List.of(aaplOrder, msftOrder), pageable, true));
         when(stocksRepository.findAllById(anyList())).thenReturn(List.of(aapl, msft));
 
-        PageResponse<TradingOrderResponseDto> result = service.searchOrder(USER_ID, null, null, null, pageable);
+        SliceResponse<TradingOrderResponseDto> result = service.searchOrder(USER_ID, null, null, null, pageable);
 
         assertThat(result.getContent()).hasSize(2);
+        assertThat(result.getPageInfo().isHasNext()).isTrue();
         assertThat(result.getContent())
                 .extracting(TradingOrderResponseDto::symbol)
                 .containsExactlyInAnyOrder("AAPL", "MSFT");
@@ -132,32 +137,46 @@ class TradingQueryServiceTest {
     @Test
     void searchOrder_passesSentinelStockIdWhenSymbolDoesNotExist() {
         Accounts account = accountOf(USER_ID);
-        Pageable pageable = PageRequest.of(0, 20);
+        Pageable pageable = orderPageable(0, 20);
         when(accountsQueryRepository.findByUserId(USER_ID)).thenReturn(Optional.of(account));
         when(stocksRepository.findBySymbol("NOPE")).thenReturn(Optional.empty());
-        when(ordersQueryRepository.searchOrder(any(), eq(-1L), eq(List.of(account.getId())), eq(pageable)))
-                .thenReturn(new PageImpl<>(List.of(), pageable, 0));
+        when(ordersQueryRepository.searchOrderSlice(any(), eq(-1L), eq(List.of(account.getId())), eq(pageable)))
+                .thenReturn(new SliceImpl<>(List.of(), pageable, false));
 
-        PageResponse<TradingOrderResponseDto> result = service.searchOrder(USER_ID, null, null, "NOPE", pageable);
+        SliceResponse<TradingOrderResponseDto> result = service.searchOrder(USER_ID, null, null, "NOPE", pageable);
 
         assertThat(result.getContent()).isEmpty();
-        verify(ordersQueryRepository).searchOrder(any(), eq(-1L), eq(List.of(account.getId())), eq(pageable));
+        verify(ordersQueryRepository).searchOrderSlice(any(), eq(-1L), eq(List.of(account.getId())), eq(pageable));
     }
 
     @Test
     void searchOrder_passesStatusAndSideThroughToQuery() {
         Accounts account = accountOf(USER_ID);
-        Pageable pageable = PageRequest.of(0, 20);
+        Pageable pageable = orderPageable(0, 20);
         when(accountsQueryRepository.findByUserId(USER_ID)).thenReturn(Optional.of(account));
-        when(ordersQueryRepository.searchOrder(any(), any(), anyList(), any()))
-                .thenReturn(new PageImpl<>(List.of(), pageable, 0));
+        when(ordersQueryRepository.searchOrderSlice(any(), any(), anyList(), any()))
+                .thenReturn(new SliceImpl<>(List.of(), pageable, false));
 
         service.searchOrder(USER_ID, "FILLED", "BUY", null, pageable);
 
         ArgumentCaptor<TradingAdminSearchOrderQuery> captor = ArgumentCaptor.forClass(TradingAdminSearchOrderQuery.class);
-        verify(ordersQueryRepository).searchOrder(captor.capture(), any(), anyList(), any());
+        verify(ordersQueryRepository).searchOrderSlice(captor.capture(), any(), anyList(), any());
         assertThat(captor.getValue().status()).isEqualTo("FILLED");
         assertThat(captor.getValue().side()).isEqualTo("BUY");
+    }
+
+    @Test
+    void searchOrder_addsStableDefaultSortWhenPageableHasNoSort() {
+        Accounts account = accountOf(USER_ID);
+        Pageable requestedPageable = PageRequest.of(1, 20);
+        Pageable expectedPageable = orderPageable(1, 20);
+        when(accountsQueryRepository.findByUserId(USER_ID)).thenReturn(Optional.of(account));
+        when(ordersQueryRepository.searchOrderSlice(any(), eq(null), eq(List.of(account.getId())), eq(expectedPageable)))
+                .thenReturn(new SliceImpl<>(List.of(), expectedPageable, false));
+
+        service.searchOrder(USER_ID, null, null, null, requestedPageable);
+
+        verify(ordersQueryRepository).searchOrderSlice(any(), eq(null), eq(List.of(account.getId())), eq(expectedPageable));
     }
 
     // ==============================
@@ -257,16 +276,17 @@ class TradingQueryServiceTest {
         Executions msftExecution = Executions.buy(
                 UUID.randomUUID(), UUID.randomUUID(), USER_ID, msft.getId(),
                 3, new BigDecimal("200.0000"), new BigDecimal("200.0000"), 12L, MARKET_TIME);
-        Pageable pageable = PageRequest.of(0, 20);
+        Pageable pageable = executionPageable(0, 20);
 
         when(executionRepository.search(eq(USER_ID), eq(null), eq(null), eq(null), eq(pageable)))
-                .thenReturn(new PageImpl<>(List.of(aaplExecution, msftExecution), pageable, 2));
+                .thenReturn(new SliceImpl<>(List.of(aaplExecution, msftExecution), pageable, true));
         when(stocksRepository.findAllById(anyList())).thenReturn(List.of(aapl, msft));
 
-        PageResponse<TradingExecutionResponseDto> result =
+        SliceResponse<TradingExecutionResponseDto> result =
                 service.searchExecutions(USER_ID, null, null, null, pageable);
 
         assertThat(result.getContent()).hasSize(2);
+        assertThat(result.getPageInfo().isHasNext()).isTrue();
         assertThat(result.getContent())
                 .extracting(TradingExecutionResponseDto::symbol)
                 .containsExactlyInAnyOrder("AAPL", "MSFT");
@@ -282,16 +302,28 @@ class TradingQueryServiceTest {
 
     @Test
     void searchExecutions_passesSentinelStockIdWhenSymbolDoesNotExist() {
-        Pageable pageable = PageRequest.of(0, 20);
+        Pageable pageable = executionPageable(0, 20);
         when(stocksRepository.findBySymbol("NOPE")).thenReturn(Optional.empty());
         when(executionRepository.search(eq(USER_ID), eq(null), eq(-1L), eq(null), eq(pageable)))
-                .thenReturn(new PageImpl<>(List.of(), pageable, 0));
+                .thenReturn(new SliceImpl<>(List.of(), pageable, false));
 
-        PageResponse<TradingExecutionResponseDto> result =
+        SliceResponse<TradingExecutionResponseDto> result =
                 service.searchExecutions(USER_ID, null, "NOPE", null, pageable);
 
         assertThat(result.getContent()).isEmpty();
         verify(executionRepository).search(eq(USER_ID), eq(null), eq(-1L), eq(null), eq(pageable));
+    }
+
+    @Test
+    void searchExecutions_addsStableDefaultSortWhenPageableHasNoSort() {
+        Pageable requestedPageable = PageRequest.of(1, 20);
+        Pageable expectedPageable = executionPageable(1, 20);
+        when(executionRepository.search(eq(USER_ID), eq(null), eq(null), eq(null), eq(expectedPageable)))
+                .thenReturn(new SliceImpl<>(List.of(), expectedPageable, false));
+
+        service.searchExecutions(USER_ID, null, null, null, requestedPageable);
+
+        verify(executionRepository).search(eq(USER_ID), eq(null), eq(null), eq(null), eq(expectedPageable));
     }
 
     // ==============================
@@ -314,6 +346,20 @@ class TradingQueryServiceTest {
                 .build();
         ReflectionTestUtils.setField(stock, "id", id);
         return stock;
+    }
+
+    private Pageable orderPageable(int page, int size) {
+        return PageRequest.of(page, size, Sort.by(
+                Sort.Order.desc("createdAt"),
+                Sort.Order.desc("id")
+        ));
+    }
+
+    private Pageable executionPageable(int page, int size) {
+        return PageRequest.of(page, size, Sort.by(
+                Sort.Order.desc("createdAt"),
+                Sort.Order.desc("id")
+        ));
     }
 
     private Orders filledOrder(UUID accountId, Long stockId) {

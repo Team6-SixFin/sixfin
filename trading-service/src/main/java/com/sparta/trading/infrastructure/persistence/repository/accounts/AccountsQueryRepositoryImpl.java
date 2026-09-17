@@ -39,6 +39,11 @@ public class AccountsQueryRepositoryImpl implements AccountsQueryRepository {
     }
 
     @Override
+    public Optional<UUID> findIdByUserId(UUID userId) {
+        return tradingAccountsJpaRepository.findIdByUserId(userId);
+    }
+
+    @Override
     public Optional<Accounts> findById(UUID accountId) {
         return tradingAccountsJpaRepository.findById(accountId);
     }

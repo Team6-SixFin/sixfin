@@ -53,10 +53,10 @@ import java.util.UUID;
                 @Index(name = "idx_feedback_position_created",
                         columnList = "position_id, created_at, id"),
 
-                @Index(name = "idx_feedback_user_id",         columnList = "user_id"),
-                @Index(name = "idx_feedback_position_id",     columnList = "position_id"),
-                @Index(name = "idx_feedback_type",            columnList = "feedback_type"),
-                @Index(name = "idx_feedback_status",          columnList = "status")
+                @Index(name = "idx_feedback_user_id", columnList = "user_id"),
+                @Index(name = "idx_feedback_position_id", columnList = "position_id"),
+                @Index(name = "idx_feedback_type", columnList = "feedback_type"),
+                @Index(name = "idx_feedback_status", columnList = "status")
         }
 )
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
