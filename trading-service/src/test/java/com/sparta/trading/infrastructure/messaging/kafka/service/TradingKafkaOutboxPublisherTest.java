@@ -3,6 +3,7 @@ package com.sparta.trading.infrastructure.messaging.kafka.service;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.sparta.trading.domain.entity.OutboxEvents;
+import com.sparta.trading.domain.entity.OutboxStatus;
 import com.sparta.trading.domain.repository.outboxEvents.OutboxEventsQueryRepository;
 import com.sparta.trading.global.exception.CustomException;
 import com.sparta.trading.global.exception.TradingErrorCode;
@@ -10,6 +11,7 @@ import com.sparta.trading.infrastructure.messaging.kafka.OutboxPublisherProperti
 import com.sparta.trading.infrastructure.messaging.kafka.producer.TradingKafkaProducer;
 import com.sparta.trading.infrastructure.monitoring.TradingMetrics;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -21,6 +23,7 @@ import org.springframework.kafka.support.SendResult;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.ExecutionException;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -69,7 +72,7 @@ class TradingKafkaOutboxPublisherTest {
     private TradingKafkaOutboxPublisher publisher() {
         return new TradingKafkaOutboxPublisher(
                 outboxEventsRepository, producer, marker,
-                new OutboxPublisherProperties(TOPIC, 100, MAX_RETRY, 4),
+                new OutboxPublisherProperties(TOPIC, 100, MAX_RETRY, 4, 5000),
                 tradingMetrics);
     }
 
@@ -90,36 +93,63 @@ class TradingKafkaOutboxPublisherTest {
         pendingEvent.markPublished(Instant.now());
         when(outboxEventsRepository.findById(OUTBOX_ID)).thenReturn(Optional.of(pendingEvent));
 
-        boolean result = publisher().publishOne(OUTBOX_ID);
+        OutboxPublishResult result = publisher().publishOne(OUTBOX_ID);
 
-        assertThat(result).isTrue();
-        verify(producer, never()).sendSync(anyString(), anyString(), any(), anyLong());
+        assertThat(result).isEqualTo(OutboxPublishResult.PUBLISHED);
+        verify(producer, never()).sendSync(anyString(), anyString(), any());
         verifyNoInteractions(marker);
     }
 
     @Test
     void delegatesToMarkerMarkPublishedOnSuccessfulSend() throws Exception {
         when(outboxEventsRepository.findById(OUTBOX_ID)).thenReturn(Optional.of(pendingEvent));
-        when(producer.sendSync(eq(TOPIC), anyString(), any(), anyLong()))
+        when(producer.sendSync(eq(TOPIC), anyString(), any()))
                 .thenReturn(mock(SendResult.class));
 
-        boolean result = publisher().publishOne(OUTBOX_ID);
+        OutboxPublishResult result = publisher().publishOne(OUTBOX_ID);
 
-        assertThat(result).isTrue();
+        assertThat(result).isEqualTo(OutboxPublishResult.PUBLISHED);
         verify(marker).markPublished(OUTBOX_ID);
         verify(marker, never()).markFailedAttempt(any(), anyInt(), anyLong());
     }
 
     @Test
-    void delegatesToMarkerMarkFailedAttemptOnSendFailure() throws Exception {
-        RuntimeException sendFailure = new RuntimeException("broker unavailable");
+    void transientKafkaFailureKeepsPendingWithoutConsumingRetry() throws Exception {
+        ExecutionException sendFailure = new ExecutionException(
+                new org.apache.kafka.common.errors.TimeoutException("broker unavailable"));
         when(outboxEventsRepository.findById(OUTBOX_ID)).thenReturn(Optional.of(pendingEvent));
-        when(producer.sendSync(eq(TOPIC), anyString(), any(), anyLong()))
+        when(producer.sendSync(eq(TOPIC), anyString(), any()))
                 .thenThrow(sendFailure);
 
-        boolean result = publisher().publishOne(OUTBOX_ID);
+        OutboxPublishResult result = publisher().publishOne(OUTBOX_ID);
 
-        assertThat(result).isFalse();
+        assertThat(result).isEqualTo(OutboxPublishResult.RETRY_LATER);
+        verifyNoInteractions(marker);
+    }
+
+    @Test
+    void permanentRecordFailureIsMarkedFailedImmediately() throws Exception {
+        RecordTooLargeException sendFailure = new RecordTooLargeException("too large");
+        when(outboxEventsRepository.findById(OUTBOX_ID)).thenReturn(Optional.of(pendingEvent));
+        when(producer.sendSync(eq(TOPIC), anyString(), any()))
+                .thenThrow(sendFailure);
+        when(marker.markFailedAttempt(sendFailure, 1, OUTBOX_ID)).thenReturn(OutboxStatus.FAILED);
+
+        assertThat(publisher().publishOne(OUTBOX_ID)).isEqualTo(OutboxPublishResult.FAILED);
+        verify(marker).markFailedAttempt(sendFailure, 1, OUTBOX_ID);
+    }
+
+    @Test
+    void unknownFailureUsesConfiguredRetryLimit() throws Exception {
+        RuntimeException sendFailure = new RuntimeException("unknown error");
+        when(outboxEventsRepository.findById(OUTBOX_ID)).thenReturn(Optional.of(pendingEvent));
+        when(producer.sendSync(eq(TOPIC), anyString(), any()))
+                .thenThrow(sendFailure);
+        when(marker.markFailedAttempt(sendFailure, MAX_RETRY, OUTBOX_ID)).thenReturn(OutboxStatus.PENDING);
+
+        OutboxPublishResult result = publisher().publishOne(OUTBOX_ID);
+
+        assertThat(result).isEqualTo(OutboxPublishResult.RETRY_WITHOUT_PAUSE);
         ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(marker).markFailedAttempt(exceptionCaptor.capture(), eq(MAX_RETRY), eq(OUTBOX_ID));
         assertThat(exceptionCaptor.getValue()).isSameAs(sendFailure);

@@ -7,7 +7,6 @@ import org.springframework.kafka.support.SendResult;
 import org.springframework.stereotype.Component;
 
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.TimeUnit;
 
 @Slf4j
 @Component
@@ -18,12 +17,13 @@ public class TradingKafkaProducer {
 
     /**
      * key(=userId)를 지정해 같은 사용자의 이벤트가 같은 파티션으로 가도록 보장한다.
-     * Outbox Publisher가 건별 트랜잭션 안에서 결과를 바로 확인해야 하므로 동기로 대기한다.
+     * Kafka producer의 delivery.timeout.ms로 완료 시점이 제한된다. 완료 전에 자체
+     * 타임아웃을 내면 전송 중인 레코드를 실패로 오인해 다음 이벤트가 앞지를 수 있다.
      */
-    public SendResult<String, Object> sendSync(String topic, String key, Object payload, long timeoutSeconds)
+    public SendResult<String, Object> sendSync(String topic, String key, Object payload)
             throws Exception {
         CompletableFuture<SendResult<String, Object>> future = kafkaTemplate.send(topic, key, payload);
-        SendResult<String, Object> result = future.get(timeoutSeconds, TimeUnit.SECONDS);
+        SendResult<String, Object> result = future.get();
         log.info("[Outbox Publisher] Sent to topic [{}] key=[{}] | offset={}",
                 topic, key, result.getRecordMetadata().offset());
         return result;

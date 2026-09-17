@@ -27,6 +27,7 @@ trading:
       batch-size: 2000
       max-retry: 5
       parallelism: 4
+      retry-pause-ms: ${OUTBOX_RETRY_PAUSE_MS:5000}
 
 market:
   clock:

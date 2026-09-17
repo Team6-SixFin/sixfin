@@ -69,8 +69,9 @@ class TradingKafkaOutboxMarkerTest {
     void markFailedAttemptStaysPendingBelowMaxRetry() {
         when(outboxEventsCommandRepository.findByIdForUpdate(OUTBOX_ID)).thenReturn(Optional.of(pendingEvent));
 
-        marker.markFailedAttempt(new RuntimeException("broker unavailable"), 5, OUTBOX_ID);
+        OutboxStatus result = marker.markFailedAttempt(new RuntimeException("broker unavailable"), 5, OUTBOX_ID);
 
+        assertThat(result).isEqualTo(OutboxStatus.PENDING);
         assertThat(pendingEvent.getStatus()).isEqualTo(OutboxStatus.PENDING);
         assertThat(pendingEvent.getRetryCount()).isEqualTo(1);
         assertThat(pendingEvent.getLastError()).isEqualTo("broker unavailable");
@@ -80,8 +81,9 @@ class TradingKafkaOutboxMarkerTest {
     void markFailedAttemptTransitionsToFailedWhenMaxRetryReached() {
         when(outboxEventsCommandRepository.findByIdForUpdate(OUTBOX_ID)).thenReturn(Optional.of(pendingEvent));
 
-        marker.markFailedAttempt(new RuntimeException("broker unavailable"), 1, OUTBOX_ID);
+        OutboxStatus result = marker.markFailedAttempt(new RuntimeException("broker unavailable"), 1, OUTBOX_ID);
 
+        assertThat(result).isEqualTo(OutboxStatus.FAILED);
         assertThat(pendingEvent.getStatus()).isEqualTo(OutboxStatus.FAILED);
         assertThat(pendingEvent.getRetryCount()).isEqualTo(1);
     }

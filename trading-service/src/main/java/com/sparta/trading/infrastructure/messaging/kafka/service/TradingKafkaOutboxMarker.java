@@ -1,6 +1,7 @@
 package com.sparta.trading.infrastructure.messaging.kafka.service;
 
 import com.sparta.trading.domain.entity.OutboxEvents;
+import com.sparta.trading.domain.entity.OutboxStatus;
 import com.sparta.trading.domain.repository.outboxEvents.OutboxEventsCommandRepository;
 import com.sparta.trading.global.exception.CustomException;
 import com.sparta.trading.global.exception.TradingErrorCode;
@@ -24,9 +25,10 @@ public class TradingKafkaOutboxMarker {
     }
 
     @Transactional
-    public void markFailedAttempt(Exception e, int maxRetry, long id) {
+    public OutboxStatus markFailedAttempt(Exception e, int maxRetry, long id) {
         OutboxEvents outboxEvents = outboxEventsCommandRepository.findByIdForUpdate(id)
                 .orElseThrow(() -> new CustomException(TradingErrorCode.OUTBOX_EVENT_NOT_FOUND));
         outboxEvents.markFailedAttempt(e.getMessage(), maxRetry);
+        return outboxEvents.getStatus();
     }
 }

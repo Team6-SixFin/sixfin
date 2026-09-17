@@ -101,7 +101,7 @@ class TradingKafkaProducerIntegrationTest {
         OutboxEvents outboxEvent = OutboxEvents.buyExecuted(
                 eventId, UUID.randomUUID(), userId, objectMapper.valueToTree(envelope), Instant.now());
 
-        producer.sendSync(TOPIC, outboxEvent.getPartitionKey(), outboxEvent.getPayload(), 5);
+        producer.sendSync(TOPIC, outboxEvent.getPartitionKey(), outboxEvent.getPayload());
 
         ConsumerRecord<String, String> record = KafkaTestUtils.getSingleRecord(consumer, TOPIC, Duration.ofSeconds(5));
         log.info("record: [{}]", record);
