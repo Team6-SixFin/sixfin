@@ -28,10 +28,20 @@ import java.util.UUID;
 @Table(
         name = "feedbacks",
         indexes = {
-                @Index(name = "idx_feedback_user_id", columnList = "user_id"),
-                @Index(name = "idx_feedback_position_id", columnList = "position_id"),
-                @Index(name = "idx_feedback_type", columnList = "feedback_type"),
-                @Index(name = "idx_feedback_status", columnList = "status")
+                // === 커서 페이징 + 필터 조회의 seek 경로 ===
+                // [Why 복합] user_id로 좁힌 뒤 id 역방향 스캔으로 정렬까지 인덱스에서 끝낸다.
+                // PostgreSQL B-tree는 양방향 스캔이 가능하므로 DESC 인덱스를 따로 만들 필요가 없다.
+                @Index(name = "idx_feedback_user_id_id",      columnList = "user_id, id"),
+                // type / status 필터 조회도 필터 컬럼을 앞에 둬 정렬까지 인덱스로 처리한다.
+                @Index(name = "idx_feedback_user_type_id",    columnList = "user_id, feedback_type, id"),
+                @Index(name = "idx_feedback_user_status_id",  columnList = "user_id, status, id"),
+                // positionId 필터는 선택도가 높아 position_id 선두로 충분하다.
+                @Index(name = "idx_feedback_position_id_id",  columnList = "position_id, id"),
+
+                @Index(name = "idx_feedback_user_id",         columnList = "user_id"),
+                @Index(name = "idx_feedback_position_id",     columnList = "position_id"),
+                @Index(name = "idx_feedback_type",            columnList = "feedback_type"),
+                @Index(name = "idx_feedback_status",          columnList = "status")
         }
 )
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
