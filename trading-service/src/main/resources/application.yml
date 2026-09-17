@@ -42,6 +42,10 @@ market:
 market-data:
   csv-dir: ${MARKET_DATA_DIR:../tools/market-data-collector/out}
 
+quote:
+  reader:
+    type: redis
+
 server:
   port: 19093
 

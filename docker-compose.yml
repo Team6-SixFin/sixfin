@@ -70,6 +70,7 @@ services:
     # Windows/macOS뿐 아니라 Linux Docker에서도 호스트의 Learning 서비스에 접근할 수 있게 한다.
     extra_hosts:
       - "host.docker.internal:host-gateway"
+      - "sixfin-app:host-gateway"
 
   # ---------- Grafana ----------
   grafana:
