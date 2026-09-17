@@ -3,18 +3,16 @@ package com.sparta.trading.application.service;
 import com.sparta.trading.domain.entity.Accounts;
 import com.sparta.trading.domain.entity.CashLedgerTxType;
 import com.sparta.trading.domain.entity.CashLedgers;
-import com.sparta.trading.domain.repository.accounts.AccountsCommandRepository;
 import com.sparta.trading.domain.repository.accounts.AccountsQueryRepository;
-import com.sparta.trading.domain.repository.cashledgers.CashLedgersCommandRepository;
 import com.sparta.trading.domain.repository.cashledgers.CashLedgersQueryRepository;
 import com.sparta.trading.global.exception.CustomException;
 import com.sparta.trading.global.exception.TradingErrorCode;
-import com.sparta.trading.global.response.PageResponse;
+import com.sparta.trading.global.response.SliceResponse;
 import com.sparta.trading.global.util.PageableUtil;
 import com.sparta.trading.presentation.dto.response.CashLedgerResponse;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Slice;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,7 +26,7 @@ public class CashLedgersQueryService {
     private final CashLedgersQueryRepository cashLedgersQueryRepository;
 
     @Transactional(readOnly = true)
-    public PageResponse<CashLedgerResponse> getCashLedgers(
+    public SliceResponse<CashLedgerResponse> getCashLedgers(
             UUID userId,
             CashLedgerTxType txType,
             Pageable pageable
@@ -41,15 +39,15 @@ public class CashLedgersQueryService {
         Pageable normalizedPageable = PageableUtil.normalize(pageable);
 
         // 계좌 ID와 txType 조건에 맞는 현금원장 조회
-        Page<CashLedgers> cashLedgerPage = cashLedgersQueryRepository.findAllByAccountIdAndTxType(
+        Slice<CashLedgers> cashLedgerSlice = cashLedgersQueryRepository.findAllByAccountIdAndTxType(
                 account.getId(),
                 txType,
                 normalizedPageable
         );
 
         // DTO로 변환
-        Page<CashLedgerResponse> responsePage = cashLedgerPage.map(CashLedgerResponse::from);
+        Slice<CashLedgerResponse> responseSlice = cashLedgerSlice.map(CashLedgerResponse::from);
 
-        return PageResponse.of(responsePage);
+        return SliceResponse.of(responseSlice);
     }
 }
