@@ -150,6 +150,7 @@ services:
     environment:
       <<: *app-env
       JAVA_TOOL_OPTIONS: "-Xmx256m -XX:MaxMetaspaceSize=256m"
+      QUOTE_READER_TYPE: ${QUOTE_READER_TYPE:-redis}
     volumes:
       - ./tools/market-data-collector/out:/tools/market-data-collector/out
     healthcheck:
