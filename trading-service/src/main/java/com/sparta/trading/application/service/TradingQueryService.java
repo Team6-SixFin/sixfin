@@ -12,13 +12,18 @@ import com.sparta.trading.global.exception.CustomException;
 import com.sparta.trading.global.exception.GlobalErrorCode;
 import com.sparta.trading.global.exception.TradingErrorCode;
 import com.sparta.trading.global.response.PageResponse;
+import com.sparta.trading.global.response.SliceResponse;
 import com.sparta.trading.global.util.PageableUtil;
 import com.sparta.trading.infrastructure.persistence.repository.candles.PriceCandlesRepository;
 import com.sparta.trading.infrastructure.persistence.repository.stocks.StocksRepository;
 import com.sparta.trading.presentation.dto.response.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Slice;
+import org.springframework.data.domain.SliceImpl;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -35,6 +40,11 @@ import java.util.stream.Stream;
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class TradingQueryService {
+
+    private static final Sort ORDER_HISTORY_SORT = Sort.by(
+            Sort.Order.desc("createdAt"),
+            Sort.Order.desc("id")
+    );
 
     private final CurrentSeqProvider currentSeqProvider;
     private final StocksRepository stocksRepository;
@@ -123,8 +133,8 @@ public class TradingQueryService {
     // = 매매
     // ==============================
 
-    public PageResponse<TradingOrderResponseDto> searchOrder(UUID userId, String status, String side, String symbol, Pageable pageable) {
-        Pageable normalized = PageableUtil.normalize(pageable);
+    public SliceResponse<TradingOrderResponseDto> searchOrder(UUID userId, String status, String side, String symbol, Pageable pageable) {
+        Pageable normalized = normalizeOrderHistoryPageable(pageable);
 
         validateEnumIfPresent(status, OrderStatus.class);
         validateEnumIfPresent(side, OrderSide.class);
@@ -132,21 +142,29 @@ public class TradingQueryService {
         // search의 경우에는 계좌가 없으면 그냥 빈 응답 반환
         Optional<Accounts> account = accountsQueryRepository.findByUserId(userId);
         if (account.isEmpty()) {
-            return PageResponse.of(Page.empty(normalized));
+            return SliceResponse.of(new SliceImpl<>(List.of(), normalized, false));
         }
 
         // symbol이 있는지 확인
         Long targetStockId = resolveStockIdOrSentinel(symbol);
 
-        // 관리자용 Search Order 로직 사용. 새로 user용 search함수를 만들어봐야 하이버네이트에서 같은 쿼리 생성
+        // 사용자 이력은 Count Query 없이 조회해야 하므로 관리자 Page 조회와 분리된 Slice 쿼리를 사용한다.
         TradingAdminSearchOrderQuery query = new TradingAdminSearchOrderQuery(userId, symbol, side, status,
                 null, null, null, null, null);
-        Page<Orders> orderPage = OrdersQueryRepository.searchOrder(
+        Slice<Orders> orderSlice = OrdersQueryRepository.searchOrderSlice(
                 query, targetStockId, List.of(account.get().getId()), normalized);
 
-        Map<Long, Stocks> stockById = findStocksByIds(orderPage.getContent().stream().map(Orders::getStockId));
-        return PageResponse.of(orderPage.map(order ->
+        Map<Long, Stocks> stockById = findStocksByIds(orderSlice.getContent().stream().map(Orders::getStockId));
+        return SliceResponse.of(orderSlice.map(order ->
                 TradingOrderResponseDto.from(stockById.get(order.getStockId()), order)));
+    }
+
+    private Pageable normalizeOrderHistoryPageable(Pageable pageable) {
+        Pageable normalized = PageableUtil.normalize(pageable);
+        if (normalized.getSort().isSorted()) {
+            return normalized;
+        }
+        return PageRequest.of(normalized.getPageNumber(), normalized.getPageSize(), ORDER_HISTORY_SORT);
     }
 
     public TradingOrderDetailResponseDto findOrderById(UUID userId, UUID orderId) {

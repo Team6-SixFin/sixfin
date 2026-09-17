@@ -1,11 +1,13 @@
 package com.sparta.trading.presentation.controller;
 
 import com.sparta.trading.global.response.PageResponse;
+import com.sparta.trading.global.response.SliceResponse;
 import com.sparta.trading.global.util.PageableUtil;
 import com.sparta.trading.presentation.dto.response.*;
 import com.sparta.trading.application.service.TradingQueryService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.web.bind.annotation.*;
 
@@ -69,12 +71,16 @@ public class TradingQueryController {
     // = 매매
     // ==============================
     @GetMapping("/orders")
-    public PageResponse<TradingOrderResponseDto> searchOrder(
+    public SliceResponse<TradingOrderResponseDto> searchOrder(
             @RequestHeader(USER_ID_HEADER) UUID userId,
             @RequestParam(required = false) String status,
             @RequestParam(required = false) String side,
             @RequestParam(required = false) String symbol,
-            @PageableDefault(size = PageableUtil.DEFAULT_SIZE) Pageable pageable
+            @PageableDefault(
+                    size = PageableUtil.DEFAULT_SIZE,
+                    sort = {"createdAt", "id"},
+                    direction = Sort.Direction.DESC
+            ) Pageable pageable
     ){
         return tradingQueryService.searchOrder(userId, status, side, symbol, pageable);
     }

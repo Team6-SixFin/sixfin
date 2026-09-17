@@ -7,6 +7,7 @@ import com.sparta.trading.domain.repository.orders.OrdersQueryRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Slice;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -26,6 +27,21 @@ public class OrdersQueryRepositoryImpl implements OrdersQueryRepository {
             List<UUID> accountIds,
             Pageable pageable) {
         return orderJpaRepository.searchOrder(stockId,
+                accountIds,
+                query.side(),
+                query.status(),
+                query.from(),
+                query.to(),
+                pageable);
+    }
+
+    @Override
+    public Slice<Orders> searchOrderSlice(
+            TradingAdminSearchOrderQuery query,
+            Long stockId,
+            List<UUID> accountIds,
+            Pageable pageable) {
+        return orderJpaRepository.searchOrderSlice(stockId,
                 accountIds,
                 query.side(),
                 query.status(),

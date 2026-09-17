@@ -4,6 +4,7 @@ import com.sparta.trading.domain.entity.Orders;
 import com.sparta.trading.domain.repository.orders.DuplicateRequestGroup;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Slice;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -33,6 +34,23 @@ import java.util.UUID;
                               @Param("from") Instant from,
                               @Param("to") Instant to,
                               Pageable pageable);
+
+     @Query("""
+        SELECT o FROM Orders o
+        WHERE (:stockId IS NULL OR o.stockId = :stockId)
+          AND (coalesce(:accountIds, null) IS NULL OR o.accountId IN :accountIds)
+          AND (:side IS NULL OR o.side = :side)
+          AND (:status IS NULL OR o.status = :status)
+          AND (cast(:from as string) IS NULL OR o.createdAt >= :from)
+          AND (cast(:to as string) IS NULL OR o.createdAt <= :to)
+    """)
+     Slice<Orders> searchOrderSlice(@Param("stockId") Long stockId,
+                                    @Param("accountIds") List<UUID> accountIds,
+                                    @Param("side") String side,
+                                    @Param("status") String status,
+                                    @Param("from") Instant from,
+                                    @Param("to") Instant to,
+                                    Pageable pageable);
 
      @Query("""
         SELECT o.accountId AS accountId, o.requestId AS requestId, COUNT(o) AS duplicateCount
