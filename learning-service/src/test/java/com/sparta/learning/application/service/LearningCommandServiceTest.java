@@ -23,12 +23,14 @@ import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.support.TransactionCallback;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import javax.swing.text.html.Option;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.function.Consumer;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -354,6 +356,79 @@ class LearningCommandServiceTest {
         );
 
         assertSame(aiFailure, exception);
+    }
+
+    @Test
+    @DisplayName("요청형: Executor가 포화상태면 피드백을 FAILED로 내리고 503을 반환한다 ")
+    void marksFailedAndReturnsCapacityErrorWhenOnDemandRejected(){
+        setupCommonMocksForProcess();
+        when(executionSnapshotRepository.findFirstByPositionIdAndUserIdOrderByExecutedAtDescIdDesc(positionId, userId))
+                .thenReturn(Optional.of(createExecutionSnapshot(TradeType.BUY)));
+
+        // 제출 시점에 거부된다. future는 만들어지지 않는다
+        when(aiFeedbackProcessor.processAiFeedbackAsync(any()))
+                .thenThrow(new RejectedExecutionException("AI executor 큐가 가득찼습니다"));
+
+        // when
+        CustomException exception = assertThrows(CustomException.class,
+                () -> learningCommandService.createOnDemandFeedback(positionId, userId));
+
+        // then
+        assertEquals(LearningErrorCode.AI_CAPACITY_EXCEEDED, exception.getErrorCode());
+
+        // PROCESSING으로 남으면 다음 요청이 409로 막힌다. FAILED여야 재점유가 가능함
+        Feedback saved = fakeFeedbackDb.values().iterator().next();
+        assertEquals(FeedbackStatus.FAILED, saved.getStatus());
+        assertNotNull(saved.getFailureReason());
+    }
+
+    @Test
+    @DisplayName("요청형: FAILED로 내린 피드백은 다음 요청에서 다시 생성된다")
+    void regeneratesFeedbackAfterCapacityFailure() {
+        // given
+        setupCommonMocksForProcess();
+        when(executionSnapshotRepository.findFirstByPositionIdAndUserIdOrderByExecutedAtDescIdDesc(positionId, userId))
+                .thenReturn(Optional.of(createExecutionSnapshot(TradeType.BUY)));
+
+        AiFeedbackResponse mockAiResponse = new AiFeedbackResponse(
+                "요약", "총평", List.of("잘함"), List.of("개선점"), List.of("다음행동"), List.of("질문")
+        );
+        // 1번째 제출은 거부되고, 2번째는 정상 처리된다
+        when(aiFeedbackProcessor.processAiFeedbackAsync(any()))
+                .thenThrow(new RejectedExecutionException("AI executor 큐가 가득찼습니다. "))
+                .thenReturn(CompletableFuture.completedFuture(mockAiResponse));
+
+        assertThrows(CustomException.class,
+                () -> learningCommandService.createOnDemandFeedback(positionId, userId));
+
+        // when
+        AiFeedbackResponse response = learningCommandService.createOnDemandFeedback(positionId, userId);
+
+        // then
+        // 409(FEEDBACK_GENERATION_IN_PROGRESS)가 아니라 정상 생성되어야 한다
+        assertNotNull(response);
+        assertEquals("요약", response.summary());
+    }
+
+    @Test
+    @DisplayName("카프카: executor가 포화면 피드백을 FAILED로 내리고 예외를 전파하지 않는다")
+    void swallowsRejectionOnKafkaPathAndMarksFailed() {
+        setupCommonMocksForProcess();
+        when(executionSnapshotRepository.findFirstByPositionIdAndUserIdOrderByExecutedAtAscIdAsc(positionId, userId))
+                .thenReturn(Optional.of(createExecutionSnapshot(TradeType.BUY)));
+
+        when(aiFeedbackProcessor.processAiFeedbackAsync(any()))
+                .thenThrow(new RejectedExecutionException("AI executor 큐가 가득찼습니다. "));
+
+        // when, 예외가 올라가면 Kafka 이벤트가 실패로 기록된다. 체결·진단은 이미 커밋된 상태라 예외가 올라가면 안된다
+        AiFeedbackResponse response =
+                learningCommandService.createEntryFeedback(positionId, userId).join();
+
+        // then
+        assertNull(response);
+
+        Feedback saved = fakeFeedbackDb.values().iterator().next();
+        assertEquals(FeedbackStatus.FAILED, saved.getStatus());
     }
 
     private Feedback processingFeedback(ExecutionSnapshot latestExecution) {
