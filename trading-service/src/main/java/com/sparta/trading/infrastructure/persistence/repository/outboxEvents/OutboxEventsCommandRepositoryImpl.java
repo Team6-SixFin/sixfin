@@ -5,6 +5,8 @@ import com.sparta.trading.domain.repository.outboxEvents.OutboxEventsCommandRepo
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
+import java.util.Optional;
+
 @Repository
 @RequiredArgsConstructor
 public class OutboxEventsCommandRepositoryImpl implements OutboxEventsCommandRepository {
@@ -14,6 +16,11 @@ public class OutboxEventsCommandRepositoryImpl implements OutboxEventsCommandRep
     @Override
     public OutboxEvents save(OutboxEvents outboxEvent) {
         return outboxEventJpaRepository.save(outboxEvent);
+    }
+
+    @Override
+    public Optional<OutboxEvents> findByIdForUpdate(long id) {
+        return outboxEventJpaRepository.findById(id);
     }
 
 }
