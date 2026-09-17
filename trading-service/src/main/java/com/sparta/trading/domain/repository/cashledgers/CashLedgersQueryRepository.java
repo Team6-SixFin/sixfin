@@ -2,16 +2,15 @@ package com.sparta.trading.domain.repository.cashledgers;
 
 import com.sparta.trading.domain.entity.CashLedgerTxType;
 import com.sparta.trading.domain.entity.CashLedgers;
-import jakarta.ws.rs.HEAD;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Slice;
 
 import java.util.List;
 import java.util.UUID;
 
 public interface CashLedgersQueryRepository {
 
-    Page<CashLedgers> findAllByAccountIdAndTxType(
+    Slice<CashLedgers> findAllByAccountIdAndTxType(
             UUID accountId,
             CashLedgerTxType txType,
             Pageable pageable
