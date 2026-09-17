@@ -1,15 +1,22 @@
 package com.sparta.trading.application.service;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sparta.trading.domain.entity.Accounts;
 import com.sparta.trading.domain.entity.CashLedgers;
 import com.sparta.trading.domain.entity.Positions;
-import com.sparta.trading.domain.repository.accounts.AccountsQueryRepository;
+import com.sparta.trading.domain.repository.accounts.AccountsCommandRepository;
 import com.sparta.trading.domain.repository.cashledgers.CashLedgersCommandRepository;
-import com.sparta.trading.domain.repository.positions.PositionsQueryRepository;
+import com.sparta.trading.domain.repository.positions.PositionsCommandRepository;
 import com.sparta.trading.global.exception.CustomException;
 import com.sparta.trading.global.exception.TradingErrorCode;
+import com.sparta.trading.infrastructure.messaging.kafka.service.OutboxPublishResult;
+import com.sparta.trading.infrastructure.messaging.kafka.service.TradingKafkaOutboxMarker;
+import com.sparta.trading.infrastructure.messaging.kafka.service.TradingKafkaOutboxPublisher;
 import com.sparta.trading.presentation.dto.request.TradingAdminResetAccountRequest;
+import com.sparta.trading.presentation.dto.request.TradingAdminRetryOutBoxRequest;
 import com.sparta.trading.presentation.dto.response.TradingAdminResetAccountResponse;
+import com.sparta.trading.presentation.dto.response.TradingAdminRetryOutBoxResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,8 +34,6 @@ public class TradingAdminCommandService {
     private final PositionsCommandRepository positionsCommandRepository;
     private static final ObjectMapper JSON_NODE_MAPPER = new ObjectMapper();
 
-    private final AccountsQueryRepository tradingAccountsQueryRepository;
-    private final PositionsQueryRepository positionRepository;
     private final CashLedgersCommandRepository cashLedgerRepository;
     private final TradingKafkaOutboxMarker outboxMarker;
     private final TradingKafkaOutboxPublisher outboxPublisher;

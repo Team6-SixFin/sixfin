@@ -1,20 +1,28 @@
 package com.sparta.trading.application.service;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sparta.trading.domain.entity.Accounts;
 import com.sparta.trading.domain.entity.CashLedgers;
 import com.sparta.trading.domain.entity.PositionStatus;
 import com.sparta.trading.domain.entity.Positions;
-import com.sparta.trading.domain.repository.accounts.AccountsQueryRepository;
+import com.sparta.trading.domain.repository.accounts.AccountsCommandRepository;
 import com.sparta.trading.domain.repository.cashledgers.CashLedgersCommandRepository;
-import com.sparta.trading.domain.repository.positions.PositionsQueryRepository;
+import com.sparta.trading.domain.repository.positions.PositionsCommandRepository;
 import com.sparta.trading.global.exception.CustomException;
 import com.sparta.trading.global.exception.TradingErrorCode;
+import com.sparta.trading.infrastructure.messaging.kafka.service.OutboxPublishResult;
+import com.sparta.trading.infrastructure.messaging.kafka.service.TradingKafkaOutboxMarker;
+import com.sparta.trading.infrastructure.messaging.kafka.service.TradingKafkaOutboxPublisher;
 import com.sparta.trading.presentation.dto.request.TradingAdminResetAccountRequest;
+import com.sparta.trading.presentation.dto.request.TradingAdminRetryOutBoxRequest;
 import com.sparta.trading.presentation.dto.response.TradingAdminResetAccountResponse;
+import com.sparta.trading.presentation.dto.response.TradingAdminRetryOutBoxResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -22,16 +30,14 @@ import org.springframework.test.util.ReflectionTestUtils;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.lenient;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class TradingAdminCommandServiceTest {
@@ -58,7 +64,7 @@ class TradingAdminCommandServiceTest {
     @BeforeEach
     void setUp() {
         service = new TradingAdminCommandService(
-                tradingAccountsQueryRepository, positionRepository, cashLedgerRepository,
+                accountsCommandRepository, positionsCommandRepository, cashLedgerRepository,
                 outboxMarker, outboxPublisher
         );
         targetUserId = UUID.randomUUID();
