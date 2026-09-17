@@ -6,6 +6,7 @@ import com.sparta.learning.domain.model.DiagnosisPhase;
 import com.sparta.learning.domain.model.RuleCode;
 import com.sparta.learning.domain.rule.DiagnosisRule;
 import com.sparta.learning.domain.rule.DiagnosisContext;
+import com.sparta.learning.domain.rule.PreviousDiagnosisCount;
 import com.sparta.learning.domain.rule.StopLossSetRule;
 import com.sparta.learning.fixture.DiagnosisContextFixture;
 import com.sparta.learning.fixture.ExecutionSnapshotFixture;
@@ -176,8 +177,9 @@ class DiagnosisServiceTest {
     void 이전_진단을_Context로_전달하면서_성공을_계측한다() {
         ExecutionSnapshot snapshot = ExecutionSnapshotFixture.firstBuyWithStopLoss();
         DiagnosisResult previous = new StopLossSetRule().diagnose(DiagnosisContextFixture.of(snapshot));
-        when(diagnosisResultRepository.findByPositionIdOrderByIdAsc(snapshot.getPositionId()))
-                .thenReturn(List.of(previous));
+        List<PreviousDiagnosisCount> previousCounts = DiagnosisContextFixture.countBy(List.of(previous));
+        when(diagnosisResultRepository.countPreviousByPositionId(snapshot.getPositionId()))
+                .thenReturn(previousCounts);
         DiagnosisRule rule = mock(DiagnosisRule.class);
         when(rule.getRuleCode()).thenReturn(RuleCode.STOP_LOSS_SET);
         when(rule.supports(any())).thenReturn(true);
@@ -188,7 +190,7 @@ class DiagnosisServiceTest {
         ArgumentCaptor<DiagnosisContext> captor = ArgumentCaptor.forClass(DiagnosisContext.class);
         verify(rule).diagnose(captor.capture());
         assertThat(captor.getValue().executionSnapshot()).isSameAs(snapshot);
-        assertThat(captor.getValue().previousDiagnoses()).containsExactly(previous);
+        assertThat(captor.getValue().previousCounts()).isEqualTo(previousCounts);
         assertThat(meterRegistry.get("learning.diagnosis.runs")
                 .tag("phase", "ENTRY").tag("result", "SUCCESS").counter().count()).isEqualTo(1.0);
     }
@@ -197,7 +199,7 @@ class DiagnosisServiceTest {
     @Test
     void 이전_진단_조회_실패를_계측하고_전파한다() {
         ExecutionSnapshot snapshot = ExecutionSnapshotFixture.firstBuyWithStopLoss();
-        when(diagnosisResultRepository.findByPositionIdOrderByIdAsc(snapshot.getPositionId()))
+        when(diagnosisResultRepository.countPreviousByPositionId(snapshot.getPositionId()))
                 .thenThrow(new IllegalStateException("이전 진단 조회 실패"));
 
         assertThatThrownBy(() -> diagnosisService.diagnose(snapshot))

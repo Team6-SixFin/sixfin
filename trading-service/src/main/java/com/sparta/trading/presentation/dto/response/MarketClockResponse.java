@@ -1,7 +1,7 @@
 package com.sparta.trading.presentation.dto.response;
 
 import com.sparta.trading.domain.entity.ClockStatus;
-import com.sparta.trading.domain.entity.MarketClock;
+import com.sparta.trading.domain.entity.MarketClockSnapshot;
 
 import java.time.Instant;
 
@@ -14,15 +14,15 @@ public record MarketClockResponse (
         ClockStatus status,
         Instant updatedAt
 ) {
-    public static MarketClockResponse of(MarketClock clock, Long currentSeq, Instant currentMarketTime, ClockStatus effectiveStatus) {
+    public static MarketClockResponse of(MarketClockSnapshot clock, Long currentSeq, Instant currentMarketTime, ClockStatus effectiveStatus) {
         return new MarketClockResponse(
                 currentSeq,
                 currentMarketTime,
-                clock.getStartSeq(),
-                clock.getEndSeq(),
-                clock.getSpeedFactor(),
+                clock.startSeq(),
+                clock.endSeq(),
+                clock.speedFactor(),
                 effectiveStatus,
-                clock.getUpdatedAt()
+                clock.updatedAt()
         );
     }
 }
