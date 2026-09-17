@@ -6,6 +6,7 @@ import com.sparta.trading.domain.repository.executions.ExecutionsQueryRepository
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Slice;
 import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
@@ -39,7 +40,7 @@ public class ExecutionsQueryRepositoryImpl implements ExecutionsQueryRepository 
     }
 
     @Override
-    public Page<Executions> search(UUID userId, UUID positionId, Long stockId, String side, Pageable pageable) {
+    public Slice<Executions> search(UUID userId, UUID positionId, Long stockId, String side, Pageable pageable) {
         return tradingExecutionsJpaRepository.search(userId, positionId, stockId, side, pageable);
     }
 
