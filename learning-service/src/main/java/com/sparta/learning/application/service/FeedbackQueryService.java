@@ -13,6 +13,7 @@ import com.sparta.learning.domain.entity.FeedbackResource;
 import com.sparta.learning.global.exception.CustomException;
 import com.sparta.learning.global.exception.LearningErrorCode;
 import com.sparta.learning.global.response.PageResponse;
+import com.sparta.learning.global.response.SliceResponse;
 import com.sparta.learning.infrastructure.persistence.repository.ExecutionSnapshotRepository;
 import com.sparta.learning.infrastructure.persistence.repository.FeedbackDetailQueryRepository;
 import com.sparta.learning.infrastructure.persistence.repository.FeedbackQueryRepository;
@@ -20,6 +21,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Slice;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -39,24 +41,22 @@ public class FeedbackQueryService {
     private final ExecutionSnapshotRepository executionSnapshotRepository;
     private final FeedbackDetailQueryRepository feedbackDetailQueryRepository;
 
-    public PageResponse<FeedbackListItemResponse> getFeedbacks(FeedbackListQuery query) {
+    public SliceResponse<FeedbackListItemResponse> getFeedbacks(FeedbackListQuery query) {
         Pageable pageable = PageRequest.of(query.page(), query.size());
 
-        Page<FeedbackListRow> feedbackPage = feedbackQueryRepository.findListRows(query, pageable);
-        Map<UUID, PositionStockInfo> stockInfoByPosition = findStockInfo(feedbackPage.getContent());
+        Slice<FeedbackListRow> feedbackSlice = feedbackQueryRepository.findListRows(query, pageable);
+        Map<UUID, PositionStockInfo> stockInfoByPosition = findStockInfo(feedbackSlice.getContent());
 
-        List<FeedbackListItemResponse> content = feedbackPage.getContent().stream()
-                .map(row -> {
-                    PositionStockInfo stockInfo = stockInfoByPosition.get(row.positionId());
-                    return FeedbackListItemResponse.from(
-                            row,
-                            stockInfo == null ? null : stockInfo.getStockSymbol(),
-                            stockInfo == null ? null : stockInfo.getStockName()
-                    );
-                })
-                .toList();
+        Slice<FeedbackListItemResponse> responseSlice = feedbackSlice.map(row -> {
+            PositionStockInfo stockInfo = stockInfoByPosition.get(row.positionId());
+            return FeedbackListItemResponse.from(
+                    row,
+                    stockInfo == null ? null : stockInfo.getStockSymbol(),
+                    stockInfo == null ? null : stockInfo.getStockName()
+            );
+        });
 
-        return PageResponse.from(feedbackPage, content);
+        return SliceResponse.of(responseSlice);
     }
 
     public FeedbackDetailResponse getFeedbackDetail(UUID userId, Long feedbackId) {
