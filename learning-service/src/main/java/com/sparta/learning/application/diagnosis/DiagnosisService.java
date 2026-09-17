@@ -6,6 +6,7 @@ import com.sparta.learning.domain.entity.ExecutionSnapshot;
 import com.sparta.learning.domain.model.DiagnosisPhase;
 import com.sparta.learning.domain.rule.DiagnosisContext;
 import com.sparta.learning.domain.rule.DiagnosisRule;
+import com.sparta.learning.domain.rule.PreviousDiagnosisCount;
 import com.sparta.learning.infrastructure.monitoring.LearningMetrics;
 import com.sparta.learning.infrastructure.persistence.repository.DiagnosisResultRepository;
 import io.micrometer.core.instrument.Timer;
@@ -39,7 +40,7 @@ public class DiagnosisService {
         // 규칙은 도메인 계층이라 DB를 조회할 수 없으므로 이전 진단을 미리 담아 전달한다
         // 규칙 실행 전에 한 번만 조회해 모든 규칙이 같은 시점의 데이터를 보게 한다
         return runAndSave(
-                () -> DiagnosisContext.ofExecution(snapshot, findPreviousResults(snapshot.getPositionId())),
+                () -> DiagnosisContext.ofExecution(snapshot, findPreviousCounts(snapshot.getPositionId())),
                 phase,
                 "executionId = " + snapshot.getExecutionId()
         );
@@ -51,14 +52,15 @@ public class DiagnosisService {
     public List<DiagnosisResult> diagnoseClose(ClosedPositionSnapshot snapshot){
         // CLOSE 규칙은 그동안 쌓인 진단 결과를 집계해 판정한다
         return runAndSave(
-                () -> DiagnosisContext.ofClosedPosition(snapshot, findPreviousResults(snapshot.getPositionId())),
+                () -> DiagnosisContext.ofClosedPosition(snapshot, findPreviousCounts(snapshot.getPositionId())),
                 DiagnosisPhase.CLOSE,
                 "positionId = " + snapshot.getPositionId()
         );
     }
 
-    private List<DiagnosisResult> findPreviousResults(UUID positionId){
-        return diagnosisResultRepository.findByPositionIdOrderByIdAsc(positionId);
+    // 규칙이 쓰는 값은 건수뿐이라 진단 본문 대신 집계를 받아 전달한다
+    private List<PreviousDiagnosisCount> findPreviousCounts(UUID positionId){
+        return diagnosisResultRepository.countPreviousByPositionId(positionId);
     }
 
     // 규칙 실행부터 저장까지의 흐름은 체결과 포지션 종료가 동일하다

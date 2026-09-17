@@ -34,11 +34,12 @@ public class TradingKafkaOutboxPublisher {
      * 상태 갱신까지 롤백시켜 중복 발행을 유발하므로, 스케줄러가 아니라 이 메서드 단위로 커밋한다.
      */
     @Transactional
-    public void publishOne(Long id){
+    public boolean publishOne(Long id){
         OutboxEvents outboxEvents = outboxEventsQueryRepository.findById(id)
                 .orElseThrow(() -> new CustomException(TradingErrorCode.OUTBOX_EVENT_NOT_FOUND));
 
-        if(!OutboxStatus.PENDING.equals(outboxEvents.getStatus())) return;
+        // 멱등 처리이므로 성공
+        if(!OutboxStatus.PENDING.equals(outboxEvents.getStatus())) return true;
 
         Timer.Sample sendSample = tradingMetrics.startTimer();
         try {
@@ -50,10 +51,12 @@ public class TradingKafkaOutboxPublisher {
             );
             outboxEvents.markPublished(Instant.now());
             tradingMetrics.recordPublishSuccess(sendSample, outboxEvents.getOccurredAt());
+            return true;
         } catch (Exception e) {
             log.error("[Outbox Publisher] Failed to publish outboxEventId={}", id, e);
             outboxEvents.markFailedAttempt(e.getMessage(), outboxPublisherProperties.maxRetry());
             tradingMetrics.recordPublishFailure(sendSample);
+            return false;
         }
     }
 }

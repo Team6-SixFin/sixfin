@@ -16,7 +16,7 @@ public interface OutboxEventsQueryRepository {
 
     List<OutboxEvents> findUnpublished(Pageable pageable);
 
-    List<Long> findPendingIds(int count);
+    List<PendingOutboxEventsRef> findPendingRefs(int count);
 
     Optional<OutboxEvents> findById(long id);
 }

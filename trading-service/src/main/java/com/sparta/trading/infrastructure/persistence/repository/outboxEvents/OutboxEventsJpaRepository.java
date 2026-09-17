@@ -1,6 +1,7 @@
 package com.sparta.trading.infrastructure.persistence.repository.outboxEvents;
 
 import com.sparta.trading.domain.entity.OutboxEvents;
+import com.sparta.trading.domain.repository.outboxEvents.PendingOutboxEventsRef;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -14,7 +15,7 @@ public interface OutboxEventsJpaRepository extends JpaRepository<OutboxEvents, L
 
     @Query("""
         SELECT o From OutboxEvents o
-         WHERE (:status IS NULL OR o.status=:status)
+         WHERE (:status IS NULL OR CAST(o.status AS string)=:status)
            AND (:eventType IS NULL OR o.eventType=:eventType)
            AND (cast(:minRetryCount as string) IS NULL OR o.retryCount <= :minRetryCount)
            AND (cast(:from as string) IS NULL OR o.createdAt >= :from)
@@ -36,6 +37,7 @@ public interface OutboxEventsJpaRepository extends JpaRepository<OutboxEvents, L
     @Query("SELECT o FROM OutboxEvents o WHERE o.status <> 'PUBLISHED'")
     List<OutboxEvents> findUnpublished(Pageable pageable);
 
-    @Query("SELECT o.id FROM OutboxEvents o WHERE o.status = 'PENDING' ORDER BY o.occurredAt ASC, o.id ASC limit :count")
-    List<Long> findPendingIds(int count);
+    @Query("SELECT new com.sparta.trading.domain.repository.outboxEvents.PendingOutboxEventsRef(o.id, o.partitionKey) " +
+            "FROM OutboxEvents o WHERE o.status = 'PENDING' ORDER BY o.occurredAt ASC, o.id ASC limit :count")
+    List<PendingOutboxEventsRef> findPendingRefs(int count);
 }
