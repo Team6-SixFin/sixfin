@@ -5,6 +5,7 @@ import com.sparta.trading.domain.entity.ReconciliationStatus;
 import com.sparta.trading.domain.repository.accounts.AccountsQueryRepository;
 import com.sparta.trading.domain.repository.cashledgers.CashLedgersQueryRepository;
 import com.sparta.trading.domain.repository.executions.ExecutionsQueryRepository;
+import com.sparta.trading.domain.repository.orders.DuplicateRequestGroup;
 import com.sparta.trading.domain.repository.orders.OrdersQueryRepository;
 import com.sparta.trading.domain.repository.outboxEvents.OutboxEventsQueryRepository;
 import com.sparta.trading.domain.repository.positions.PositionsQueryRepository;
@@ -18,6 +19,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.redis.core.StringRedisTemplate;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -67,6 +69,42 @@ class TradingAdminQueryServiceReconciliationTest {
 
         assertThat(response.overallStatus()).isEqualTo(ReconciliationStatus.MISMATCH);
         assertThat(response.checks().get(0).mismatchedCount()).isEqualTo(2);
+    }
+
+    @Test
+    void reconciliation_returnsAccountScopedDuplicateRequestDetails() {
+        UUID accountId = UUID.randomUUID();
+        UUID requestId = UUID.randomUUID();
+        DuplicateRequestGroup duplicateGroup = new DuplicateRequestGroup() {
+            @Override
+            public UUID getAccountId() {
+                return accountId;
+            }
+
+            @Override
+            public UUID getRequestId() {
+                return requestId;
+            }
+
+            @Override
+            public Long getDuplicateCount() {
+                return 2L;
+            }
+        };
+        when(tradingOrderQueryRepository.findDuplicateRequestGroups(null))
+                .thenReturn(List.of(duplicateGroup));
+
+        TradingReconciliationResponse response = service().reconciliation(
+                new TradingReconciliationQuery(null, "DUPLICATE_REQUEST", true));
+
+        assertThat(response.overallStatus()).isEqualTo(ReconciliationStatus.MISMATCH);
+        assertThat(response.checks()).singleElement().satisfies(check -> {
+            assertThat(check.mismatchedCount()).isEqualTo(1);
+            assertThat(check.details()).singleElement().satisfies(detail ->
+                    assertThat(detail).containsEntry("accountId", accountId)
+                            .containsEntry("requestId", requestId)
+                            .containsEntry("duplicateCount", 2L));
+        });
     }
 
     @Test

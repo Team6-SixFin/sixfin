@@ -9,16 +9,16 @@ import com.sparta.trading.domain.repository.cashledgers.CashLedgersCommandReposi
 import com.sparta.trading.domain.repository.cashledgers.CashLedgersQueryRepository;
 import com.sparta.trading.global.exception.CustomException;
 import com.sparta.trading.global.exception.TradingErrorCode;
-import com.sparta.trading.global.response.PageResponse;
+import com.sparta.trading.global.response.SliceResponse;
 import com.sparta.trading.presentation.dto.response.CashLedgerResponse;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Slice;
+import org.springframework.data.domain.SliceImpl;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -59,10 +59,10 @@ class CashLedgerQueryServiceTest {
         CashLedgers cashLedger = cashLedgerOf(executionId, CashLedgerTxType.BUY);
         PageRequest requestedPageable = PageRequest.of(1, 25);
         PageRequest normalizedPageable = PageRequest.of(1, 20);
-        Page<CashLedgers> cashLedgerPage = new PageImpl<>(
+        Slice<CashLedgers> cashLedgerSlice = new SliceImpl<>(
                 List.of(cashLedger),
                 normalizedPageable,
-                21
+                true
         );
 
         when(accountsQueryRepository.findByUserId(userId)).thenReturn(Optional.of(account));
@@ -70,9 +70,9 @@ class CashLedgerQueryServiceTest {
                 accountId,
                 CashLedgerTxType.BUY,
                 normalizedPageable
-        )).thenReturn(cashLedgerPage);
+        )).thenReturn(cashLedgerSlice);
 
-        PageResponse<CashLedgerResponse> response = cashLedgerQueryService.getCashLedgers(
+        SliceResponse<CashLedgerResponse> response = cashLedgerQueryService.getCashLedgers(
                 userId,
                 CashLedgerTxType.BUY,
                 requestedPageable
@@ -88,8 +88,7 @@ class CashLedgerQueryServiceTest {
         assertThat(response.getPageInfo().getPaginationType()).isEqualTo("OFFSET");
         assertThat(response.getPageInfo().getPage()).isEqualTo(1);
         assertThat(response.getPageInfo().getSize()).isEqualTo(20);
-        assertThat(response.getPageInfo().getTotalElements()).isEqualTo(21);
-        assertThat(response.getPageInfo().getTotalPages()).isEqualTo(2);
+        assertThat(response.getPageInfo().isHasNext()).isTrue();
         assertThat(response.getSummary()).isNull();
 
         verify(cashLedgersQueryRepository).findAllByAccountIdAndTxType(
@@ -105,13 +104,13 @@ class CashLedgerQueryServiceTest {
         UUID accountId = UUID.randomUUID();
         Accounts account = accountOf(accountId);
         PageRequest pageable = PageRequest.of(0, 30);
-        Page<CashLedgers> cashLedgerPage = new PageImpl<>(List.of(), pageable, 0);
+        Slice<CashLedgers> cashLedgerSlice = new SliceImpl<>(List.of(), pageable, false);
 
         when(accountsQueryRepository.findByUserId(userId)).thenReturn(Optional.of(account));
         when(cashLedgersQueryRepository.findAllByAccountIdAndTxType(accountId, null, pageable))
-                .thenReturn(cashLedgerPage);
+                .thenReturn(cashLedgerSlice);
 
-        PageResponse<CashLedgerResponse> response = cashLedgerQueryService.getCashLedgers(
+        SliceResponse<CashLedgerResponse> response = cashLedgerQueryService.getCashLedgers(
                 userId,
                 null,
                 pageable
@@ -119,6 +118,7 @@ class CashLedgerQueryServiceTest {
 
         assertThat(response.getContent()).isEmpty();
         assertThat(response.getPageInfo().getSize()).isEqualTo(30);
+        assertThat(response.getPageInfo().isHasNext()).isFalse();
         assertThat(response.getSummary()).isNull();
         verify(cashLedgersQueryRepository).findAllByAccountIdAndTxType(
                 accountId,

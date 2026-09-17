@@ -20,6 +20,16 @@ interface PositionsJpaRepository extends JpaRepository<Positions, UUID> {
     @Query("select p from Positions p where p.accountId = :accountId and p.stockId = :stockId and p.status = 'OPEN'")
     Optional<Positions> findOpenByAccountIdAndStockIdForUpdate(UUID accountId, Long stockId);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            select p from Positions p
+            where p.accountId = :accountId
+              and p.status = 'OPEN'
+              and p.deletedAt is null
+            order by p.id asc
+            """)
+    List<Positions> findAllOpenByAccountIdForUpdate(UUID accountId);
+
     @Query("""
             select p from Positions p
                         where p.accountId = :accountId

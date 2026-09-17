@@ -27,6 +27,11 @@ public class PositionsCommandRepositoryImpl implements PositionsCommandRepositor
     }
 
     @Override
+    public List<Positions> findAllOpenByAccountIdForUpdate(UUID accountId) {
+        return positionJpaRepository.findAllOpenByAccountIdForUpdate(accountId);
+    }
+
+    @Override
     public Positions save(Positions position) {
         return positionJpaRepository.save(position);
     }

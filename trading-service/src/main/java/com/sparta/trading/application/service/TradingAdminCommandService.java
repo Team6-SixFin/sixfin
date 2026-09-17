@@ -1,7 +1,5 @@
 package com.sparta.trading.application.service;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sparta.trading.domain.entity.Accounts;
 import com.sparta.trading.domain.entity.CashLedgers;
 import com.sparta.trading.domain.entity.Positions;
@@ -10,13 +8,8 @@ import com.sparta.trading.domain.repository.cashledgers.CashLedgersCommandReposi
 import com.sparta.trading.domain.repository.positions.PositionsQueryRepository;
 import com.sparta.trading.global.exception.CustomException;
 import com.sparta.trading.global.exception.TradingErrorCode;
-import com.sparta.trading.infrastructure.messaging.kafka.service.OutboxPublishResult;
-import com.sparta.trading.infrastructure.messaging.kafka.service.TradingKafkaOutboxMarker;
-import com.sparta.trading.infrastructure.messaging.kafka.service.TradingKafkaOutboxPublisher;
 import com.sparta.trading.presentation.dto.request.TradingAdminResetAccountRequest;
-import com.sparta.trading.presentation.dto.request.TradingAdminRetryOutBoxRequest;
 import com.sparta.trading.presentation.dto.response.TradingAdminResetAccountResponse;
-import com.sparta.trading.presentation.dto.response.TradingAdminRetryOutBoxResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,6 +23,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class TradingAdminCommandService {
 
+    private final AccountsCommandRepository accountsCommandRepository;
+    private final PositionsCommandRepository positionsCommandRepository;
     private static final ObjectMapper JSON_NODE_MAPPER = new ObjectMapper();
 
     private final AccountsQueryRepository tradingAccountsQueryRepository;
@@ -48,14 +43,15 @@ public class TradingAdminCommandService {
             UUID adminUserId,
             TradingAdminResetAccountRequest request
     ) {
-        Accounts account = tradingAccountsQueryRepository.findByUserId(targetUserId)
+        Accounts account = accountsCommandRepository.findByUserIdForUpdate(targetUserId)
                 .orElseThrow(() -> new CustomException(TradingErrorCode.ACCOUNT_NOT_FOUND));
 
         BigDecimal targetDeposit = request.initialDeposit() != null
                 ? request.initialDeposit()
                 : account.getInitialDeposit();
 
-        List<Positions> openPositions = positionRepository.findAllOpenByAccountId(account.getId());
+        List<Positions> openPositions = positionsCommandRepository
+                .findAllOpenByAccountIdForUpdate(account.getId());
 
         boolean cashAlreadyAtTarget = account.getCashBalance().compareTo(targetDeposit) == 0;
         if (cashAlreadyAtTarget && openPositions.isEmpty()) {

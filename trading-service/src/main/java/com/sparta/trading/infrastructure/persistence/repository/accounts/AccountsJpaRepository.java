@@ -27,6 +27,9 @@ import java.util.UUID;
 
      Optional<Accounts> findByUserId(UUID userId);
 
+     @Query("select a.id from Accounts a where a.userId = :userId")
+     Optional<UUID> findIdByUserId(UUID userId);
+
      @Query("SELECT COUNT(a) FROM Accounts a WHERE a.cashBalance < 0 AND (:accountId IS NULL OR a.id = :accountId)")
      long countNegativeCashBalance(UUID accountId);
 
