@@ -38,8 +38,8 @@ public class TradingKafkaOutboxPublisher {
         OutboxEvents outboxEvents = outboxEventsQueryRepository.findById(id)
                 .orElseThrow(() -> new CustomException(TradingErrorCode.OUTBOX_EVENT_NOT_FOUND));
 
-        // 다른 경로에서 이미 처리된 건은 다시 전송하지 않는다.
-        if(!OutboxStatus.PENDING.equals(outboxEvents.getStatus())) return OutboxPublishResult.PUBLISHED;
+        // 이미 발행된 건만 스킵한다. PENDING은 정상 흐름, FAILED는 관리자 재발행(publishOne 재호출)을 허용하기 위함.
+        if(OutboxStatus.PUBLISHED.equals(outboxEvents.getStatus())) return OutboxPublishResult.PUBLISHED;
 
         Timer.Sample sendSample = tradingMetrics.startTimer();
         try {

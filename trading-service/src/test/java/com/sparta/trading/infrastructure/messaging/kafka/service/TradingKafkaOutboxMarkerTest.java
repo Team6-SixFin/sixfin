@@ -89,6 +89,19 @@ class TradingKafkaOutboxMarkerTest {
     }
 
     @Test
+    void markFailedAttemptOnAlreadyFailedEventDoesNotThrow() {
+        pendingEvent.markFailedAttempt("first failure", 1); // 이미 FAILED로 만들어둠
+        when(outboxEventsCommandRepository.findByIdForUpdate(OUTBOX_ID)).thenReturn(Optional.of(pendingEvent));
+
+        OutboxStatus result = marker.markFailedAttempt(new RuntimeException("retry failed again"), 1, OUTBOX_ID);
+
+        assertThat(result).isEqualTo(OutboxStatus.FAILED);
+        assertThat(pendingEvent.getStatus()).isEqualTo(OutboxStatus.FAILED);
+        assertThat(pendingEvent.getRetryCount()).isEqualTo(2);
+        assertThat(pendingEvent.getLastError()).isEqualTo("retry failed again");
+    }
+
+    @Test
     void markFailedAttemptThrowsWhenOutboxEventNotFound() {
         when(outboxEventsCommandRepository.findByIdForUpdate(OUTBOX_ID)).thenReturn(Optional.empty());
 

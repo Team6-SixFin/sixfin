@@ -7,10 +7,17 @@ import com.sparta.trading.domain.entity.Positions;
 import com.sparta.trading.domain.repository.accounts.AccountsQueryRepository;
 import com.sparta.trading.domain.repository.cashledgers.CashLedgersCommandRepository;
 import com.sparta.trading.domain.repository.positions.PositionsQueryRepository;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sparta.trading.global.exception.CustomException;
 import com.sparta.trading.global.exception.TradingErrorCode;
+import com.sparta.trading.infrastructure.messaging.kafka.service.OutboxPublishResult;
+import com.sparta.trading.infrastructure.messaging.kafka.service.TradingKafkaOutboxMarker;
+import com.sparta.trading.infrastructure.messaging.kafka.service.TradingKafkaOutboxPublisher;
 import com.sparta.trading.presentation.dto.request.TradingAdminResetAccountRequest;
+import com.sparta.trading.presentation.dto.request.TradingAdminRetryOutBoxRequest;
 import com.sparta.trading.presentation.dto.response.TradingAdminResetAccountResponse;
+import com.sparta.trading.presentation.dto.response.TradingAdminRetryOutBoxResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -22,12 +29,14 @@ import org.springframework.test.util.ReflectionTestUtils;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -45,6 +54,12 @@ class TradingAdminCommandServiceTest {
     @Mock
     private CashLedgersCommandRepository cashLedgerRepository;
 
+    @Mock
+    private TradingKafkaOutboxMarker outboxMarker;
+
+    @Mock
+    private TradingKafkaOutboxPublisher outboxPublisher;
+
     private TradingAdminCommandService service;
     private UUID targetUserId;
     private UUID adminUserId;
@@ -52,7 +67,8 @@ class TradingAdminCommandServiceTest {
     @BeforeEach
     void setUp() {
         service = new TradingAdminCommandService(
-                tradingAccountsQueryRepository, positionRepository, cashLedgerRepository
+                tradingAccountsQueryRepository, positionRepository, cashLedgerRepository,
+                outboxMarker, outboxPublisher
         );
         targetUserId = UUID.randomUUID();
         adminUserId = UUID.randomUUID();
@@ -146,6 +162,38 @@ class TradingAdminCommandServiceTest {
                         .isEqualTo(TradingErrorCode.ACCOUNT_NOT_FOUND));
 
         verify(positionRepository, never()).findAllOpenByAccountId(any());
+    }
+
+    @Test
+    @DisplayName("payload 없이 재발행하면 payload를 덮어쓰지 않고 publishOne만 호출한다")
+    void retryOutBoxWithoutPayloadOverwrite() {
+        Long outboxId = 10L;
+        when(outboxPublisher.publishOne(outboxId)).thenReturn(OutboxPublishResult.PUBLISHED);
+
+        TradingAdminRetryOutBoxResponse response = service.retryOutBoxResponse(
+                outboxId, new TradingAdminRetryOutBoxRequest(null));
+
+        assertThat(response.result()).isEqualTo(OutboxPublishResult.PUBLISHED);
+        assertThat(response.payloadOverwritten()).isFalse();
+        verify(outboxMarker, never()).overwritePayload(anyLong(), any());
+        verify(outboxPublisher).publishOne(outboxId);
+    }
+
+    @Test
+    @DisplayName("payload가 있으면 먼저 덮어쓴 뒤 publishOne을 호출한다")
+    void retryOutBoxWithPayloadOverwrite() {
+        Long outboxId = 11L;
+        Map<String, Object> payload = Map.of("fixed", true);
+        JsonNode expectedPayload = new ObjectMapper().valueToTree(payload);
+        when(outboxPublisher.publishOne(outboxId)).thenReturn(OutboxPublishResult.FAILED);
+
+        TradingAdminRetryOutBoxResponse response = service.retryOutBoxResponse(
+                outboxId, new TradingAdminRetryOutBoxRequest(payload));
+
+        assertThat(response.result()).isEqualTo(OutboxPublishResult.FAILED);
+        assertThat(response.payloadOverwritten()).isTrue();
+        verify(outboxMarker).overwritePayload(outboxId, expectedPayload);
+        verify(outboxPublisher).publishOne(outboxId);
     }
 
     private Accounts accountOf(UUID userId) {

@@ -130,8 +130,13 @@ public class OutboxEvents extends AuditableEntity {
     public void markFailedAttempt(String errorMessage, int maxRetry) {
         addRetryCount();
         this.lastError = errorMessage;
-        if (retryCount >= maxRetry) {
+        // 이미 FAILED인 건(관리자 재발행 실패 등)은 자기 자신 전이를 다시 시도하지 않는다.
+        if (retryCount >= maxRetry && this.status != OutboxStatus.FAILED) {
             setStatus(OutboxStatus.FAILED);
         }
+    }
+
+    public void overwritePayload(JsonNode newPayload){
+        this.payload = newPayload;
     }
 }

@@ -2,7 +2,9 @@ package com.sparta.trading.presentation.controller.admin;
 
 import com.sparta.trading.application.service.TradingAdminCommandService;
 import com.sparta.trading.presentation.dto.request.TradingAdminResetAccountRequest;
+import com.sparta.trading.presentation.dto.request.TradingAdminRetryOutBoxRequest;
 import com.sparta.trading.presentation.dto.response.TradingAdminResetAccountResponse;
+import com.sparta.trading.presentation.dto.response.TradingAdminRetryOutBoxResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -29,5 +31,13 @@ public class TradingAdminCommandController {
             @Valid @RequestBody TradingAdminResetAccountRequest request
     ) {
         return tradingAdminCommandService.resetAccounts(userId, adminUserId, request);
+    }
+
+    @PostMapping("/outbox/{id}/retry")
+    public TradingAdminRetryOutBoxResponse retryOutBoxResponse(
+            @PathVariable("id") Long id,
+            @Valid @RequestBody TradingAdminRetryOutBoxRequest request
+    ) {
+        return tradingAdminCommandService.retryOutBoxResponse(id, request);
     }
 }

@@ -1,5 +1,6 @@
 package com.sparta.trading.infrastructure.messaging.kafka.service;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.sparta.trading.domain.entity.OutboxEvents;
 import com.sparta.trading.domain.entity.OutboxStatus;
 import com.sparta.trading.domain.repository.outboxEvents.OutboxEventsCommandRepository;
@@ -30,5 +31,12 @@ public class TradingKafkaOutboxMarker {
                 .orElseThrow(() -> new CustomException(TradingErrorCode.OUTBOX_EVENT_NOT_FOUND));
         outboxEvents.markFailedAttempt(e.getMessage(), maxRetry);
         return outboxEvents.getStatus();
+    }
+
+    @Transactional
+    public void overwritePayload(long id, JsonNode newPayload) {
+        OutboxEvents outboxEvents = outboxEventsCommandRepository.findByIdForUpdate(id)
+                .orElseThrow(() -> new CustomException(TradingErrorCode.OUTBOX_EVENT_NOT_FOUND));
+        outboxEvents.overwritePayload(newPayload);
     }
 }

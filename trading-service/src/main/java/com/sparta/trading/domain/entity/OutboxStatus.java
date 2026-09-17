@@ -4,15 +4,16 @@ import lombok.AllArgsConstructor;
 
 import java.util.Set;
 
-@AllArgsConstructor
 public enum OutboxStatus {
-    PUBLISHED(Set.of()),
-    FAILED(Set.of(PUBLISHED)),
-    PENDING(Set.of(PUBLISHED, FAILED)),
+    PUBLISHED,
+    FAILED,
+    PENDING,
     ;
 
-    private final Set<OutboxStatus> next;
-    public boolean validateNext(OutboxStatus next){
-        return this.next.contains(next);
+    public boolean validateNext(OutboxStatus next) {
+        return switch (this) {
+            case PENDING, FAILED -> next == PUBLISHED || next == FAILED;
+            case PUBLISHED -> false;
+        };
     }
 }
