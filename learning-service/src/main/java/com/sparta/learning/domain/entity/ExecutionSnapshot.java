@@ -31,7 +31,31 @@ import java.util.UUID;
                 @Index(name = "idx_execution_snapshot_position_id", columnList = "position_id"),
                 @Index(name = "idx_execution_snapshot_user_id", columnList = "user_id"),
                 @Index(name = "idx_execution_snapshot_stock_id", columnList = "stock_id"),
-                @Index(name = "idx_execution_snapshot_executed_at", columnList = "executed_at")
+                @Index(name = "idx_execution_snapshot_executed_at", columnList = "executed_at"),
+
+                // ===== [신규] AI 컨텍스트 대표 체결 조회용 =====
+                /*
+                 * findContextExecutions의 "최초 1건" / "최근 N건" 분기를 인덱스만으로 끝내기 위한 복합 인덱스.
+                 *
+                 * 단일 position_id 인덱스만 있으면 각 분기가 그 포지션의 전체 행(최대 1,000행)을
+                 * 힙에서 읽어 executed_at으로 정렬한 뒤 LIMIT을 적용한다.
+                 * UNION 분기가 4개라 같은 1,000행을 네 번 훑게 되어, 개선 전보다 DB 작업량이 오히려 늘어난다.
+                 * 이 인덱스가 있으면 분기 1은 1행, 분기 2는 N행만 읽고 끝난다.
+                 *
+                 * id를 마지막에 둔 이유: executed_at이 같은 체결의 순서를 인덱스만으로 확정하기 위함.
+                 * (쿼리의 ORDER BY executed_at, id 와 동일한 순서)
+                 *
+                 * DESC를 쓰지 않은 이유: Hibernate 버전에 따라 columnList의 ASC/DESC가 DDL에 반영되지
+                 * 않는 사례가 있고, PostgreSQL은 단일 방향 정렬이면 인덱스를 역방향 스캔할 수 있다.
+                 */
+                @Index(name = "idx_execution_snapshot_position_executed", columnList = "position_id, executed_at, id"),
+
+                /*
+                 * findContextExecutions의 "최대 수량 매수/매도" 분기용.
+                 * 없으면 위 복합 인덱스로 포지션 행을 훑은 뒤 quantity로 정렬한다.
+                 * execution_snapshots는 INSERT만 발생하는 append-only 테이블이라 인덱스 유지 비용이 낮다.
+                 */
+                @Index(name = "idx_execution_snapshot_position_type_qty", columnList = "position_id, trade_type, quantity")
         }
 )
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
