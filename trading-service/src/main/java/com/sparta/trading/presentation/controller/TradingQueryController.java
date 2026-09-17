@@ -94,12 +94,16 @@ public class TradingQueryController {
     }
 
     @GetMapping("/executions")
-    public PageResponse<TradingExecutionResponseDto> searchExecutions(
+    public SliceResponse<TradingExecutionResponseDto> searchExecutions(
             @RequestHeader(USER_ID_HEADER) UUID userId,
             @RequestParam(required = false) UUID positionId,
             @RequestParam(required = false) String symbol,
             @RequestParam(required = false) String side,
-            @PageableDefault(size = PageableUtil.DEFAULT_SIZE) Pageable pageable
+            @PageableDefault(
+                    size = PageableUtil.DEFAULT_SIZE,
+                    sort = {"createdAt", "id"},
+                    direction = Sort.Direction.DESC
+            ) Pageable pageable
     ) {
         return tradingQueryService.searchExecutions(userId, positionId, symbol, side, pageable);
     }

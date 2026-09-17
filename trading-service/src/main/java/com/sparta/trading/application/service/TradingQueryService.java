@@ -45,6 +45,10 @@ public class TradingQueryService {
             Sort.Order.desc("createdAt"),
             Sort.Order.desc("id")
     );
+    private static final Sort EXECUTION_HISTORY_SORT = Sort.by(
+            Sort.Order.desc("createdAt"),
+            Sort.Order.desc("id")
+    );
 
     private final CurrentSeqProvider currentSeqProvider;
     private final StocksRepository stocksRepository;
@@ -184,19 +188,27 @@ public class TradingQueryService {
     }
 
     /** positionId/symbol/side는 전부 선택 필터. Executions는 userId를 직접 들고 있어 계좌 조회가 필요 없다. */
-    public PageResponse<TradingExecutionResponseDto> searchExecutions(
+    public SliceResponse<TradingExecutionResponseDto> searchExecutions(
             UUID userId, UUID positionId, String symbol, String side, Pageable pageable) {
         // 검증
-        Pageable normalized = PageableUtil.normalize(pageable);
+        Pageable normalized = normalizeExecutionHistoryPageable(pageable);
         validateEnumIfPresent(side, OrderSide.class);
 
         Long targetStockId = resolveStockIdOrSentinel(symbol);
 
-        Page<Executions> executionPage = executionsQueryRepository.search(userId, positionId, targetStockId, side, normalized);
+        Slice<Executions> executionSlice = executionsQueryRepository.search(userId, positionId, targetStockId, side, normalized);
 
-        Map<Long, Stocks> stockById = findStocksByIds(executionPage.getContent().stream().map(Executions::getStockId));
-        return PageResponse.of(
-                executionPage.map(e -> TradingExecutionResponseDto.from(stockById.get(e.getStockId()), e)));
+        Map<Long, Stocks> stockById = findStocksByIds(executionSlice.getContent().stream().map(Executions::getStockId));
+        return SliceResponse.of(
+                executionSlice.map(e -> TradingExecutionResponseDto.from(stockById.get(e.getStockId()), e)));
+    }
+
+    private Pageable normalizeExecutionHistoryPageable(Pageable pageable) {
+        Pageable normalized = PageableUtil.normalize(pageable);
+        if (normalized.getSort().isSorted()) {
+            return normalized;
+        }
+        return PageRequest.of(normalized.getPageNumber(), normalized.getPageSize(), EXECUTION_HISTORY_SORT);
     }
 
     /** symbol 필터가 존재하지 않는 종목이면 -1을 줘서 결과가 확실히 비도록 한다. */

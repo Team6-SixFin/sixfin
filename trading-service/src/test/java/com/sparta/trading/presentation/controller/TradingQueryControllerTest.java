@@ -80,4 +80,39 @@ class TradingQueryControllerTest {
                         Sort.Order.desc("id")
                 );
     }
+
+    @Test
+    void searchExecutions_usesStableDefaultSortAndReturnsSliceResponse() throws Exception {
+        UUID userId = UUID.randomUUID();
+        Pageable pageable = PageRequest.of(0, 20, Sort.by(
+                Sort.Order.desc("createdAt"),
+                Sort.Order.desc("id")
+        ));
+        when(tradingQueryService.searchExecutions(eq(userId), isNull(), isNull(), isNull(), any(Pageable.class)))
+                .thenReturn(SliceResponse.of(new SliceImpl<>(List.of(), pageable, false)));
+
+        mockMvc.perform(get("/api/trading/executions").header("X-User-Id", userId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content").isEmpty())
+                .andExpect(jsonPath("$.pageInfo.paginationType").value("OFFSET"))
+                .andExpect(jsonPath("$.pageInfo.page").value(0))
+                .andExpect(jsonPath("$.pageInfo.size").value(20))
+                .andExpect(jsonPath("$.pageInfo.hasNext").value(false))
+                .andExpect(jsonPath("$.pageInfo.totalElements").doesNotExist())
+                .andExpect(jsonPath("$.pageInfo.totalPages").doesNotExist());
+
+        ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+        verify(tradingQueryService).searchExecutions(
+                eq(userId),
+                isNull(),
+                isNull(),
+                isNull(),
+                pageableCaptor.capture()
+        );
+        assertThat(pageableCaptor.getValue().getSort())
+                .containsExactly(
+                        Sort.Order.desc("createdAt"),
+                        Sort.Order.desc("id")
+                );
+    }
 }

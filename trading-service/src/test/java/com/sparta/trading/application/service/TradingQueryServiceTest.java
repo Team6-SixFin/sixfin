@@ -276,16 +276,17 @@ class TradingQueryServiceTest {
         Executions msftExecution = Executions.buy(
                 UUID.randomUUID(), UUID.randomUUID(), USER_ID, msft.getId(),
                 3, new BigDecimal("200.0000"), new BigDecimal("200.0000"), 12L, MARKET_TIME);
-        Pageable pageable = PageRequest.of(0, 20);
+        Pageable pageable = executionPageable(0, 20);
 
         when(executionRepository.search(eq(USER_ID), eq(null), eq(null), eq(null), eq(pageable)))
-                .thenReturn(new PageImpl<>(List.of(aaplExecution, msftExecution), pageable, 2));
+                .thenReturn(new SliceImpl<>(List.of(aaplExecution, msftExecution), pageable, true));
         when(stocksRepository.findAllById(anyList())).thenReturn(List.of(aapl, msft));
 
-        PageResponse<TradingExecutionResponseDto> result =
+        SliceResponse<TradingExecutionResponseDto> result =
                 service.searchExecutions(USER_ID, null, null, null, pageable);
 
         assertThat(result.getContent()).hasSize(2);
+        assertThat(result.getPageInfo().isHasNext()).isTrue();
         assertThat(result.getContent())
                 .extracting(TradingExecutionResponseDto::symbol)
                 .containsExactlyInAnyOrder("AAPL", "MSFT");
@@ -301,16 +302,28 @@ class TradingQueryServiceTest {
 
     @Test
     void searchExecutions_passesSentinelStockIdWhenSymbolDoesNotExist() {
-        Pageable pageable = PageRequest.of(0, 20);
+        Pageable pageable = executionPageable(0, 20);
         when(stocksRepository.findBySymbol("NOPE")).thenReturn(Optional.empty());
         when(executionRepository.search(eq(USER_ID), eq(null), eq(-1L), eq(null), eq(pageable)))
-                .thenReturn(new PageImpl<>(List.of(), pageable, 0));
+                .thenReturn(new SliceImpl<>(List.of(), pageable, false));
 
-        PageResponse<TradingExecutionResponseDto> result =
+        SliceResponse<TradingExecutionResponseDto> result =
                 service.searchExecutions(USER_ID, null, "NOPE", null, pageable);
 
         assertThat(result.getContent()).isEmpty();
         verify(executionRepository).search(eq(USER_ID), eq(null), eq(-1L), eq(null), eq(pageable));
+    }
+
+    @Test
+    void searchExecutions_addsStableDefaultSortWhenPageableHasNoSort() {
+        Pageable requestedPageable = PageRequest.of(1, 20);
+        Pageable expectedPageable = executionPageable(1, 20);
+        when(executionRepository.search(eq(USER_ID), eq(null), eq(null), eq(null), eq(expectedPageable)))
+                .thenReturn(new SliceImpl<>(List.of(), expectedPageable, false));
+
+        service.searchExecutions(USER_ID, null, null, null, requestedPageable);
+
+        verify(executionRepository).search(eq(USER_ID), eq(null), eq(null), eq(null), eq(expectedPageable));
     }
 
     // ==============================
@@ -336,6 +349,13 @@ class TradingQueryServiceTest {
     }
 
     private Pageable orderPageable(int page, int size) {
+        return PageRequest.of(page, size, Sort.by(
+                Sort.Order.desc("createdAt"),
+                Sort.Order.desc("id")
+        ));
+    }
+
+    private Pageable executionPageable(int page, int size) {
         return PageRequest.of(page, size, Sort.by(
                 Sort.Order.desc("createdAt"),
                 Sort.Order.desc("id")
