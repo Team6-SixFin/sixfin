@@ -19,12 +19,15 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.stream.Collectors;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class LearningCommandService {
+
+    private static final String CAPACITY_FAILURE_REASON = "AI executor 포화로 요청을 제출하지 못했습니다.";
 
     private final FeedbackRepository feedbackRepository;
     private final ExecutionSnapshotRepository executionSnapshotRepository;
@@ -55,8 +58,17 @@ public class LearningCommandService {
             throw new CustomException(LearningErrorCode.FEEDBACK_GENERATION_IN_PROGRESS);
         }
 
+        CompletableFuture<AiFeedbackResponse> future;
+        try{
+            future = aiFeedbackProcessor.processAiFeedbackAsync(context);
+        }
+        catch (RejectedExecutionException exception){
+            markFeedbackFailed(context, FeedbackType.ON_DEMAND_FEEDBACK);
+            throw new CustomException(LearningErrorCode.AI_CAPACITY_EXCEEDED);
+        }
+
         // 사용자 API 요청은 결과를 기다리되 비동기 예외의 원인을 복원해 기존 오류 응답을 유지한다.
-        return awaitFeedback(aiFeedbackProcessor.processAiFeedbackAsync(context));
+        return awaitFeedback(future);
     }
 
     /**
@@ -67,7 +79,7 @@ public class LearningCommandService {
                 prepareGenerationContext(positionId, userId, FeedbackType.ENTRY_FEEDBACK)
         );
         // AI 호출만 비동기로 위임
-        return aiFeedbackProcessor.processAiFeedbackAsync(context);
+        return submitOrMarkFailed(context,FeedbackType.ENTRY_FEEDBACK);
     }
 
     /**
@@ -77,7 +89,7 @@ public class LearningCommandService {
         GenerationContext context = transactionTemplate.execute(status ->
                 prepareGenerationContext(positionId, userId, FeedbackType.POSITION_REVIEW)
         );
-        return aiFeedbackProcessor.processAiFeedbackAsync(context);
+        return submitOrMarkFailed(context, FeedbackType.POSITION_REVIEW);
     }
 
     // =================================================================================
@@ -187,6 +199,31 @@ public class LearningCommandService {
         if (!newMappings.isEmpty()) {
             feedbackDiagnosisRepository.saveAll(newMappings);
         }
+    }
+
+    /** 카프카 경로의 AI 작업제출. 거부되면 피드백을 FAILED로 내리고 이벤트는 성공 처리 */
+    private CompletableFuture<AiFeedbackResponse> submitOrMarkFailed(
+            GenerationContext context, FeedbackType feedbackType){
+        try{
+            return aiFeedbackProcessor.processAiFeedbackAsync(context);
+        }
+        catch (RejectedExecutionException exception){
+            markFeedbackFailed(context, feedbackType);
+
+            return CompletableFuture.completedFuture(null);
+        }
+    }
+
+    /** 거부된 피드백을 재시도 가능한 상태로 되돌린다. */
+    private void markFeedbackFailed(GenerationContext context, FeedbackType feedbackType){
+        String feedbackKey = context.feedback().getFeedbackKey();
+        UUID positionId = context.feedback().getPositionId();
+
+        transactionTemplate.executeWithoutResult(status ->
+                feedbackRepository.findByFeedbackKey(feedbackKey).ifPresent(feedback -> feedback.fail(CAPACITY_FAILURE_REASON))
+        );
+
+        log.warn("[{}] AI executor 포화로 피드백 생성을 건너뜁니다. positionId={}", feedbackType, positionId);
     }
 
     private boolean isProcessing(GenerationContext context) {

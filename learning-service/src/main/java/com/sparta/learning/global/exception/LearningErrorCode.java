@@ -31,7 +31,9 @@ public enum LearningErrorCode implements ErrorCode {
     AI_PROVIDER_OVERRIDE_FORBIDDEN(HttpStatus.FORBIDDEN, "AI 제공자 변경 권한이 없습니다."),
     AI_PROVIDER_OVERRIDE_NOT_CONFIGURED(HttpStatus.SERVICE_UNAVAILABLE, "AI 제공자 변경 기능이 설정되지 않았습니다."),
     AI_STUB_NOT_AVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "Stub AI가 활성화되지 않았습니다."),
-    AI_RESPONSE_GENERATION_FAILED(HttpStatus.BAD_GATEWAY, "AI 피드백 생성을 실패했습니다.");
+    AI_RESPONSE_GENERATION_FAILED(HttpStatus.BAD_GATEWAY, "AI 피드백 생성을 실패했습니다."),
+    AI_CAPACITY_EXCEEDED(HttpStatus.SERVICE_UNAVAILABLE, "AI 피드백 요청이 많아 처리하지 못했습니다. 잠시 후 다시 시도해주세요.")
+    ;
 
 
 
