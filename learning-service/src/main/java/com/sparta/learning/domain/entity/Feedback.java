@@ -102,6 +102,10 @@ public class Feedback extends BaseEntity {
     @Column(name = "completed_at")
     private OffsetDateTime completedAt;
 
+    /** 생성을 시도한 횟수. PROCESSING 으로 점유할 때마다 1씩 오른다 */
+    @Column(name = "attempt_count", nullable = false, columnDefinition = "integer not null default 0")
+    private int attemptCount;
+
     @Builder
     private Feedback(
             String feedbackKey,
@@ -117,6 +121,7 @@ public class Feedback extends BaseEntity {
         this.basedOnExecutionId = basedOnExecutionId;
         this.status = FeedbackStatus.PENDING;
         this.aiUsed = false;
+        this.attemptCount = 0;
     }
 
     public void complete(JsonNode content, boolean aiUsed, String promptVersion) {
