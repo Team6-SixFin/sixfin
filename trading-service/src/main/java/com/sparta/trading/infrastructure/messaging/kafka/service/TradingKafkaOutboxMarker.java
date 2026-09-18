@@ -34,9 +34,22 @@ public class TradingKafkaOutboxMarker {
     }
 
     @Transactional
-    public void overwritePayload(long id, JsonNode newPayload) {
+    public OutboxEvents claimFailedForRetry(long id, JsonNode replacementPayload) {
+        OutboxEvents outboxEvents = outboxEventsCommandRepository.claim(id)
+            .orElseThrow(() -> new CustomException(TradingErrorCode.OUTBOX_EVENT_NOT_FOUND));
+
+        if (outboxEvents.getStatus() != OutboxStatus.FAILED) {
+            throw new CustomException(TradingErrorCode.OUTBOX_NOT_FAILED);
+        }
+        if (replacementPayload != null) outboxEvents.overwritePayload(replacementPayload);
+        outboxEvents.setStatus(OutboxStatus.RETRYING);
+        return outboxEvents;
+    }
+
+    @Transactional
+    public void markManualRetryFailed(long id, Exception error, boolean countAttempt) {
         OutboxEvents outboxEvents = outboxEventsCommandRepository.findByIdForUpdate(id)
                 .orElseThrow(() -> new CustomException(TradingErrorCode.OUTBOX_EVENT_NOT_FOUND));
-        outboxEvents.overwritePayload(newPayload);
+        outboxEvents.failManualRetry(error.getMessage(), countAttempt);
     }
 }

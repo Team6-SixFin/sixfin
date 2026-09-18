@@ -14,6 +14,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -109,5 +110,107 @@ class TradingKafkaOutboxMarkerTest {
                 .isInstanceOf(CustomException.class)
                 .extracting(e -> ((CustomException) e).getErrorCode())
                 .isEqualTo(TradingErrorCode.OUTBOX_EVENT_NOT_FOUND);
+    }
+
+    @Test
+    void claimFailedForRetryReplacesPayloadAndMovesToRetrying() {
+        pendingEvent.markFailedAttempt("bad payload", 1);
+        ObjectNode replacement = replacementPayload();
+        replacement.put("occurredAt", pendingEvent.getOccurredAt().truncatedTo(ChronoUnit.MICROS).toString());
+        when(outboxEventsCommandRepository.claim(OUTBOX_ID)).thenReturn(Optional.of(pendingEvent));
+
+        OutboxEvents claimed = marker.claimFailedForRetry(OUTBOX_ID, replacement);
+
+        assertThat(claimed.getStatus()).isEqualTo(OutboxStatus.RETRYING);
+        assertThat(claimed.getPayload()).isEqualTo(replacement);
+    }
+
+    @Test
+    void claimFailedForRetryRejectsPendingWithoutChangingPayload() {
+        ObjectNode original = (ObjectNode) pendingEvent.getPayload();
+        when(outboxEventsCommandRepository.claim(OUTBOX_ID)).thenReturn(Optional.of(pendingEvent));
+
+        assertThatThrownBy(() -> marker.claimFailedForRetry(OUTBOX_ID, replacementPayload()))
+                .isInstanceOf(CustomException.class)
+                .extracting(e -> ((CustomException) e).getErrorCode())
+                .isEqualTo(TradingErrorCode.OUTBOX_NOT_FAILED);
+        assertThat(pendingEvent.getStatus()).isEqualTo(OutboxStatus.PENDING);
+        assertThat(pendingEvent.getPayload()).isSameAs(original);
+    }
+
+    @Test
+    void secondAdminCannotClaimRetryingEvent() {
+        pendingEvent.markFailedAttempt("bad payload", 1);
+        pendingEvent.setStatus(OutboxStatus.RETRYING);
+        when(outboxEventsCommandRepository.claim(OUTBOX_ID)).thenReturn(Optional.of(pendingEvent));
+
+        assertThatThrownBy(() -> marker.claimFailedForRetry(OUTBOX_ID, null))
+                .isInstanceOf(CustomException.class)
+                .extracting(e -> ((CustomException) e).getErrorCode())
+                .isEqualTo(TradingErrorCode.OUTBOX_NOT_FAILED);
+    }
+
+    @Test
+    void claimFailedForRetryRejectsChangedEventIdentity() {
+        pendingEvent.markFailedAttempt("bad payload", 1);
+        ObjectNode replacement = replacementPayload().put("userId", UUID.randomUUID().toString());
+        when(outboxEventsCommandRepository.claim(OUTBOX_ID)).thenReturn(Optional.of(pendingEvent));
+
+        assertThatThrownBy(() -> marker.claimFailedForRetry(OUTBOX_ID, replacement))
+                .isInstanceOf(CustomException.class)
+                .extracting(e -> ((CustomException) e).getErrorCode())
+                .isEqualTo(TradingErrorCode.OUTBOX_PAYLOAD_MISMATCH);
+        assertThat(pendingEvent.getStatus()).isEqualTo(OutboxStatus.FAILED);
+        assertThat(pendingEvent.getPayload()).isNotEqualTo(replacement);
+    }
+
+    @Test
+    void claimFailedForRetryKeepsVirtualOccurredAt() {
+        pendingEvent.markFailedAttempt("bad payload", 1);
+        ObjectNode replacement = replacementPayload().put("occurredAt", pendingEvent.getOccurredAt().plusSeconds(1).toString());
+        when(outboxEventsCommandRepository.claim(OUTBOX_ID)).thenReturn(Optional.of(pendingEvent));
+
+        assertThatThrownBy(() -> marker.claimFailedForRetry(OUTBOX_ID, replacement))
+                .isInstanceOf(CustomException.class)
+                .extracting(e -> ((CustomException) e).getErrorCode())
+                .isEqualTo(TradingErrorCode.OUTBOX_PAYLOAD_MISMATCH);
+        assertThat(pendingEvent.getStatus()).isEqualTo(OutboxStatus.FAILED);
+    }
+
+    @Test
+    void manualFailureAlwaysReleasesRetryingClaim() {
+        pendingEvent.markFailedAttempt("bad payload", 1);
+        pendingEvent.setStatus(OutboxStatus.RETRYING);
+        when(outboxEventsCommandRepository.findByIdForUpdate(OUTBOX_ID)).thenReturn(Optional.of(pendingEvent));
+
+        marker.markManualRetryFailed(OUTBOX_ID, new RuntimeException("broker unavailable"), false);
+
+        assertThat(pendingEvent.getStatus()).isEqualTo(OutboxStatus.FAILED);
+        assertThat(pendingEvent.getRetryCount()).isEqualTo(1);
+        assertThat(pendingEvent.getLastError()).isEqualTo("broker unavailable");
+    }
+
+    @Test
+    void manualPermanentFailureCountsAttemptAndReleasesClaim() {
+        pendingEvent.markFailedAttempt("bad payload", 1);
+        pendingEvent.setStatus(OutboxStatus.RETRYING);
+        when(outboxEventsCommandRepository.findByIdForUpdate(OUTBOX_ID)).thenReturn(Optional.of(pendingEvent));
+
+        marker.markManualRetryFailed(OUTBOX_ID, new RuntimeException("invalid record"), true);
+
+        assertThat(pendingEvent.getStatus()).isEqualTo(OutboxStatus.FAILED);
+        assertThat(pendingEvent.getRetryCount()).isEqualTo(2);
+        assertThat(pendingEvent.getLastError()).isEqualTo("invalid record");
+    }
+
+    private ObjectNode replacementPayload() {
+        ObjectNode envelope = JsonNodeFactory.instance.objectNode()
+                .put("eventId", pendingEvent.getEventId().toString())
+                .put("eventType", pendingEvent.getEventType())
+                .put("eventVersion", pendingEvent.getEventVersion())
+                .put("occurredAt", pendingEvent.getOccurredAt().toString())
+                .put("userId", pendingEvent.getPartitionKey());
+        envelope.set("payload", JsonNodeFactory.instance.objectNode().put("fixed", true));
+        return envelope;
     }
 }

@@ -12,7 +12,6 @@ import com.sparta.trading.domain.repository.positions.PositionsCommandRepository
 import com.sparta.trading.global.exception.CustomException;
 import com.sparta.trading.global.exception.TradingErrorCode;
 import com.sparta.trading.infrastructure.messaging.kafka.service.OutboxPublishResult;
-import com.sparta.trading.infrastructure.messaging.kafka.service.TradingKafkaOutboxMarker;
 import com.sparta.trading.infrastructure.messaging.kafka.service.TradingKafkaOutboxPublisher;
 import com.sparta.trading.presentation.dto.request.TradingAdminResetAccountRequest;
 import com.sparta.trading.presentation.dto.request.TradingAdminRetryOutBoxRequest;
@@ -52,9 +51,6 @@ class TradingAdminCommandServiceTest {
     private CashLedgersCommandRepository cashLedgerRepository;
 
     @Mock
-    private TradingKafkaOutboxMarker outboxMarker;
-
-    @Mock
     private TradingKafkaOutboxPublisher outboxPublisher;
 
     private TradingAdminCommandService service;
@@ -65,7 +61,7 @@ class TradingAdminCommandServiceTest {
     void setUp() {
         service = new TradingAdminCommandService(
                 accountsCommandRepository, positionsCommandRepository, cashLedgerRepository,
-                outboxMarker, outboxPublisher
+                outboxPublisher
         );
         targetUserId = UUID.randomUUID();
         adminUserId = UUID.randomUUID();
@@ -165,35 +161,33 @@ class TradingAdminCommandServiceTest {
     }
 
     @Test
-    @DisplayName("payload 없이 재발행하면 payload를 덮어쓰지 않고 publishOne만 호출한다")
+    @DisplayName("payload 없이 재발행하면 기존 payload로 선점과 전송을 요청한다")
     void retryOutBoxWithoutPayloadOverwrite() {
         Long outboxId = 10L;
-        when(outboxPublisher.publishOne(outboxId)).thenReturn(OutboxPublishResult.PUBLISHED);
+        when(outboxPublisher.republishOne(outboxId, null)).thenReturn(OutboxPublishResult.PUBLISHED);
 
         TradingAdminRetryOutBoxResponse response = service.retryOutBoxResponse(
                 outboxId, new TradingAdminRetryOutBoxRequest(null));
 
         assertThat(response.result()).isEqualTo(OutboxPublishResult.PUBLISHED);
         assertThat(response.payloadOverwritten()).isFalse();
-        verify(outboxMarker, never()).overwritePayload(anyLong(), any());
-        verify(outboxPublisher).publishOne(outboxId);
+        verify(outboxPublisher).republishOne(outboxId, null);
     }
 
     @Test
-    @DisplayName("payload가 있으면 먼저 덮어쓴 뒤 publishOne을 호출한다")
+    @DisplayName("payload가 있으면 선점과 교체를 한 요청으로 위임한다")
     void retryOutBoxWithPayloadOverwrite() {
         Long outboxId = 11L;
         Map<String, Object> payload = Map.of("fixed", true);
         JsonNode expectedPayload = new ObjectMapper().valueToTree(payload);
-        when(outboxPublisher.publishOne(outboxId)).thenReturn(OutboxPublishResult.FAILED);
+        when(outboxPublisher.republishOne(outboxId, expectedPayload)).thenReturn(OutboxPublishResult.FAILED);
 
         TradingAdminRetryOutBoxResponse response = service.retryOutBoxResponse(
                 outboxId, new TradingAdminRetryOutBoxRequest(payload));
 
         assertThat(response.result()).isEqualTo(OutboxPublishResult.FAILED);
         assertThat(response.payloadOverwritten()).isTrue();
-        verify(outboxMarker).overwritePayload(outboxId, expectedPayload);
-        verify(outboxPublisher).publishOne(outboxId);
+        verify(outboxPublisher).republishOne(outboxId, expectedPayload);
     }
 
     private Accounts accountOf(UUID userId) {

@@ -101,17 +101,49 @@ class TradingKafkaOutboxPublisherTest {
     }
 
     @Test
-    void attemptsSendWhenStatusIsFailed() throws Exception {
+    void schedulerSkipsFailedEvents() throws Exception {
         pendingEvent.markFailedAttempt("previous failure", 1); // FAILED로 전이
         when(outboxEventsRepository.findById(OUTBOX_ID)).thenReturn(Optional.of(pendingEvent));
-        when(producer.sendSync(eq(TOPIC), anyString(), any()))
-                .thenReturn(mock(SendResult.class));
 
         OutboxPublishResult result = publisher().publishOne(OUTBOX_ID);
 
         assertThat(result).isEqualTo(OutboxPublishResult.PUBLISHED);
-        verify(producer).sendSync(eq(TOPIC), anyString(), any());
+        verifyNoInteractions(producer, marker);
+    }
+
+    @Test
+    void manualRetryClaimsFailedEventBeforeSend() throws Exception {
+        pendingEvent.markFailedAttempt("previous failure", 1);
+        pendingEvent.setStatus(OutboxStatus.RETRYING);
+        when(marker.claimFailedForRetry(OUTBOX_ID, null)).thenReturn(pendingEvent);
+        when(producer.sendSync(eq(TOPIC), anyString(), any())).thenReturn(mock(SendResult.class));
+
+        assertThat(publisher().republishOne(OUTBOX_ID, null)).isEqualTo(OutboxPublishResult.PUBLISHED);
         verify(marker).markPublished(OUTBOX_ID);
+    }
+
+    @Test
+    void manualTransientFailureReleasesClaimWithoutCountingRetry() throws Exception {
+        pendingEvent.markFailedAttempt("previous failure", 1);
+        pendingEvent.setStatus(OutboxStatus.RETRYING);
+        Exception failure = new ExecutionException(new org.apache.kafka.common.errors.TimeoutException("broker unavailable"));
+        when(marker.claimFailedForRetry(OUTBOX_ID, null)).thenReturn(pendingEvent);
+        when(producer.sendSync(eq(TOPIC), anyString(), any())).thenThrow(failure);
+
+        assertThat(publisher().republishOne(OUTBOX_ID, null)).isEqualTo(OutboxPublishResult.RETRY_LATER);
+        verify(marker).markManualRetryFailed(OUTBOX_ID, failure, false);
+    }
+
+    @Test
+    void manualPermanentFailureReleasesClaimAndCountsRetry() throws Exception {
+        pendingEvent.markFailedAttempt("previous failure", 1);
+        pendingEvent.setStatus(OutboxStatus.RETRYING);
+        Exception failure = new RecordTooLargeException("too large");
+        when(marker.claimFailedForRetry(OUTBOX_ID, null)).thenReturn(pendingEvent);
+        when(producer.sendSync(eq(TOPIC), anyString(), any())).thenThrow(failure);
+
+        assertThat(publisher().republishOne(OUTBOX_ID, null)).isEqualTo(OutboxPublishResult.FAILED);
+        verify(marker).markManualRetryFailed(OUTBOX_ID, failure, true);
     }
 
     @Test

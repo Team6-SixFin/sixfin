@@ -33,6 +33,8 @@ public enum TradingErrorCode implements  ErrorCode{
     NOTHING_TO_RESET(HttpStatus.CONFLICT, "예수금이 이미 초기값이고 보유 포지션도 없습니다."),
     INVALID_CHECK_CODE(HttpStatus.BAD_REQUEST, "지원하지 않는 검사 항목입니다."),
     INVALID_TRANSITION_OF_OUTBOX_STATUS(HttpStatus.INTERNAL_SERVER_ERROR,"불가능한 아웃박스 STATUS 전환입니다."),
+    OUTBOX_NOT_FAILED(HttpStatus.CONFLICT, "FAILED 상태의 아웃박스 이벤트만 재발행할 수 있습니다."),
+    OUTBOX_PAYLOAD_MISMATCH(HttpStatus.BAD_REQUEST, "교체할 payload의 이벤트 식별 정보가 아웃박스와 일치하지 않습니다."),
     ;
 
     private final HttpStatus httpStatus;

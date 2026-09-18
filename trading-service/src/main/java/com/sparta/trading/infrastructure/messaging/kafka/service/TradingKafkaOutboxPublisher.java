@@ -1,5 +1,6 @@
 package com.sparta.trading.infrastructure.messaging.kafka.service;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.sparta.trading.domain.entity.OutboxEvents;
 import com.sparta.trading.domain.entity.OutboxStatus;
 import com.sparta.trading.domain.repository.outboxEvents.OutboxEventsQueryRepository;
@@ -38,9 +39,23 @@ public class TradingKafkaOutboxPublisher {
         OutboxEvents outboxEvents = outboxEventsQueryRepository.findById(id)
                 .orElseThrow(() -> new CustomException(TradingErrorCode.OUTBOX_EVENT_NOT_FOUND));
 
-        // 이미 발행된 건만 스킵한다. PENDING은 정상 흐름, FAILED는 관리자 재발행(publishOne 재호출)을 허용하기 위함.
-        if(OutboxStatus.PUBLISHED.equals(outboxEvents.getStatus())) return OutboxPublishResult.PUBLISHED;
+        // 이미 발행된 건은 스킵한다.
+        if(!OutboxStatus.PENDING.equals(outboxEvents.getStatus())) return OutboxPublishResult.PUBLISHED;
 
+        return callProducer(id, outboxEvents);
+    }
+
+    public OutboxPublishResult republishOne(Long id, JsonNode replacementPayload){
+        OutboxEvents outboxEvents = marker.claimFailedForRetry(id, replacementPayload);
+
+        return callProducer(id, outboxEvents, true);
+    }
+
+    private OutboxPublishResult callProducer(Long id, OutboxEvents outboxEvents) {
+        return callProducer(id, outboxEvents, false);
+    }
+
+    private OutboxPublishResult callProducer(Long id, OutboxEvents outboxEvents, boolean manualRetry) {
         Timer.Sample sendSample = tradingMetrics.startTimer();
         try {
             producer.sendSync(
@@ -50,7 +65,15 @@ public class TradingKafkaOutboxPublisher {
             );
         } catch (Exception e) {
             tradingMetrics.recordPublishFailure(sendSample);
-            if (isTransient(e)) {
+            boolean transientFailure = isTransient(e);
+            if (manualRetry) {
+                // FAILED는 스케줄러의 대상이 아니므로 매번 RETRYING에서 되돌려 놓는다.
+                marker.markManualRetryFailed(id, e, !transientFailure);
+                if (e instanceof InterruptedException) Thread.currentThread().interrupt();
+                log.warn("[Outbox Publisher] Manual retry failed, outboxEventId={}, transient={}", id, transientFailure, e);
+                return transientFailure ? OutboxPublishResult.RETRY_LATER : OutboxPublishResult.FAILED;
+            }
+            if (transientFailure) {
                 log.warn("[Outbox Publisher] Temporary Kafka failure, outboxEventId={} remains PENDING", id, e);
                 if (e instanceof InterruptedException) Thread.currentThread().interrupt();
                 return OutboxPublishResult.RETRY_LATER;

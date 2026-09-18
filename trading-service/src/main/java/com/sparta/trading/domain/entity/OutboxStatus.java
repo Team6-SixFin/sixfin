@@ -1,18 +1,17 @@
 package com.sparta.trading.domain.entity;
 
-import lombok.AllArgsConstructor;
-
-import java.util.Set;
-
 public enum OutboxStatus {
     PUBLISHED,
     FAILED,
     PENDING,
+    RETRYING
     ;
 
     public boolean validateNext(OutboxStatus next) {
         return switch (this) {
-            case PENDING, FAILED -> next == PUBLISHED || next == FAILED;
+            case PENDING -> next == PUBLISHED || next == FAILED;
+            case FAILED -> next == RETRYING;
+            case RETRYING -> next == FAILED || next == PUBLISHED;
             case PUBLISHED -> false;
         };
     }
