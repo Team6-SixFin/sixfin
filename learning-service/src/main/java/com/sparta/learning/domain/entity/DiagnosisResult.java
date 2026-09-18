@@ -35,7 +35,10 @@ import java.util.UUID;
                 @Index(name = "idx_diagnosis_result_position_id", columnList = "position_id"),
                 @Index(name = "idx_diagnosis_result_user_id", columnList = "user_id"),
                 @Index(name = "idx_diagnosis_result_rule_code", columnList = "rule_code"),
-                @Index(name = "idx_diagnosis_result_result", columnList = "result")
+                @Index(name = "idx_diagnosis_result_result", columnList = "result"),
+                // === FK 인덱스 ===
+                @Index(name = "idx_diagnosis_result_execution_snapshot", columnList = "execution_snapshot_id"),
+                @Index(name = "idx_diagnosis_result_closed_position_snapshot", columnList = "closed_position_snapshot_id")
         }
 )
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
