@@ -4,6 +4,7 @@ import com.sparta.trading.global.entity.BaseEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -17,7 +18,8 @@ import java.util.UUID;
 @Getter
 @Entity
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-@Table(name = "p_executions", schema = "trading_service")
+@Table(name = "p_executions", schema = "trading_service",
+        indexes = @Index(name = "idx_executions_user_created_id", columnList = "user_id, created_at DESC, id DESC"))
 public class Executions extends BaseEntity {
 
     @Id

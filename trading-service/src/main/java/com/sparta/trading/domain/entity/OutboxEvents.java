@@ -20,6 +20,8 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
+import java.time.format.DateTimeParseException;
+import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 
 @Getter
@@ -129,9 +131,47 @@ public class OutboxEvents extends AuditableEntity {
 
     public void markFailedAttempt(String errorMessage, int maxRetry) {
         addRetryCount();
-        this.lastError = errorMessage;
-        if (retryCount >= maxRetry) {
+        recordError(errorMessage);
+        // 이미 FAILED인 건(관리자 재발행 실패 등)은 자기 자신 전이를 다시 시도하지 않는다.
+        if (retryCount >= maxRetry && this.status != OutboxStatus.FAILED) {
             setStatus(OutboxStatus.FAILED);
         }
+    }
+
+    public void failManualRetry(String errorMessage, boolean countAttempt) {
+        if (status != OutboxStatus.RETRYING) {
+            throw new CustomException(TradingErrorCode.INVALID_TRANSITION_OF_OUTBOX_STATUS);
+        }
+        if (countAttempt) addRetryCount();
+        recordError(errorMessage);
+        setStatus(OutboxStatus.FAILED);
+    }
+
+    public void overwritePayload(JsonNode newPayload){
+        // 관리자가 상세 payload를 고쳐도 Learning의 중복 제거 키와 가상 시간은 유지한다.
+        if (newPayload == null || !newPayload.isObject()
+                || !eventId.toString().equals(newPayload.path("eventId").asText())
+                || !eventType.equals(newPayload.path("eventType").asText())
+                || eventVersion != newPayload.path("eventVersion").asInt()
+                || !partitionKey.equals(newPayload.path("userId").asText())
+                || !newPayload.path("payload").isObject()
+                || !matchesOccurredAt(newPayload.path("occurredAt").asText())) {
+            throw new CustomException(TradingErrorCode.OUTBOX_PAYLOAD_MISMATCH);
+        }
+        this.payload = newPayload;
+    }
+
+    private boolean matchesOccurredAt(String candidate) {
+        try {
+            // PostgreSQL TIMESTAMPTZ의 마이크로초 정밀도에 맞춰 비교한다.
+            return occurredAt.truncatedTo(ChronoUnit.MICROS)
+                    .equals(Instant.parse(candidate).truncatedTo(ChronoUnit.MICROS));
+        } catch (DateTimeParseException e) {
+            return false;
+        }
+    }
+
+    private void recordError(String errorMessage) {
+        this.lastError = errorMessage == null ? null : errorMessage.substring(0, Math.min(errorMessage.length(), 500));
     }
 }

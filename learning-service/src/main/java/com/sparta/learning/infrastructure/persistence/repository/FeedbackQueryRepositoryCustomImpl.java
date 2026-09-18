@@ -9,9 +9,7 @@ import com.querydsl.jpa.impl.JPAQueryFactory;
 import com.sparta.learning.application.dto.query.FeedbackListQuery;
 import com.sparta.learning.application.dto.result.FeedbackListRow;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.*;
 
 import java.util.List;
 import java.util.UUID;
@@ -27,27 +25,38 @@ public class FeedbackQueryRepositoryCustomImpl implements FeedbackQueryRepositor
 
     private final JPAQueryFactory queryFactory;
 
+    /**
+     * [Why limit + 1] 요청 개수보다 1건 많게 읽고, 초과분의 존재 자체로 hasNext를 판단한다.
+     * 조건 전체를 세는 count 쿼리 한 번이 통째로 사라진다.
+     * 초과분은 응답에서 잘라내므로 페이지 크기는 그대로 유지된다.
+     *
+     * [정렬을 바꾸지 않는 이유] ORDER BY는 idx_feedback_user_created_id 등
+     * 복합 인덱스의 컬럼 순서와 정확히 맞춰져 있다.
+     * 여기서 정렬 키를 바꾸면 인덱스가 다시 안 먹고, 이번 PR의 개선 효과가
+     * count 제거 때문인지 정렬 변경 때문인지 분리할 수 없게 된다.
+     *
+     * [남은 비용] OFFSET은 그대로다. 뒤 페이지는 건너뛸 행을 여전히 읽는다.
+     * 커서 페이징으로만 해결되며, 이번 측정 결과를 보고 진행 여부를 판단한다.
+     */
     @Override
-    public Page<FeedbackListRow> findListRows(FeedbackListQuery query, Pageable pageable) {
+    public Slice<FeedbackListRow> findListRows(FeedbackListQuery query, Pageable pageable) {
         BooleanBuilder conditions = createConditions(query);
+        int pageSize = pageable.getPageSize();
 
-        List<FeedbackListRow> content = queryFactory
+        List<FeedbackListRow> rows = queryFactory
                 .select(listRow())
                 .from(feedback)
                 .where(conditions)
                 // 생성 시각이 같은 경우에도 결과 순서가 바뀌지 않도록 ID를 보조 정렬 기준으로 사용
                 .orderBy(feedback.createdAt.desc(), feedback.id.desc())
                 .offset(pageable.getOffset())
-                .limit(pageable.getPageSize())
+                .limit(pageSize + 1L)
                 .fetch();
 
-        Long total = queryFactory
-                .select(feedback.count())
-                .from(feedback)
-                .where(conditions)
-                .fetchOne();
+        boolean hasNext = rows.size() > pageSize;
+        List<FeedbackListRow> content = hasNext ? rows.subList(0, pageSize) : rows;
 
-        return new PageImpl<>(content, pageable, total == null ? 0L : total);
+        return new SliceImpl<>(content, pageable, hasNext);
     }
 
     @Override
