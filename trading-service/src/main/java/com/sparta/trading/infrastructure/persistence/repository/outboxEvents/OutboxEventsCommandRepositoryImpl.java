@@ -20,7 +20,12 @@ public class OutboxEventsCommandRepositoryImpl implements OutboxEventsCommandRep
 
     @Override
     public Optional<OutboxEvents> findByIdForUpdate(long id) {
-        return outboxEventJpaRepository.findById(id);
+        return outboxEventJpaRepository.claim(id);
+    }
+
+    @Override
+    public Optional<OutboxEvents> claim(long id) {
+        return outboxEventJpaRepository.claim(id);
     }
 
 }
