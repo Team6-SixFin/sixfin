@@ -17,6 +17,7 @@ import java.util.UUID;
 @Table(
         name = "p_orders",
         schema = "trading_service",
+        indexes = @Index(name = "idx_orders_account_created_id", columnList = "account_id, created_at DESC, id DESC"),
         uniqueConstraints = @UniqueConstraint(
                 name = "uk_orders_account_request_id",
                 columnNames = {"account_id", "request_id"}

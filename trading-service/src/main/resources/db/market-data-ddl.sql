@@ -381,11 +381,15 @@ CREATE INDEX idx_outbox_events_pending
     ON trading_service.p_outbox_events (occurred_at) WHERE status = 'PENDING';
 
 CREATE INDEX IF NOT EXISTS idx_orders_account_id ON trading_service.p_orders (account_id);
+CREATE INDEX IF NOT EXISTS idx_orders_account_created_id
+    ON trading_service.p_orders (account_id, created_at DESC, id DESC);
 CREATE INDEX IF NOT EXISTS idx_orders_position_id ON trading_service.p_orders (position_id);
 CREATE INDEX IF NOT EXISTS idx_positions_stock_id ON trading_service.p_positions (stock_id);
 CREATE INDEX IF NOT EXISTS idx_positions_user_id ON trading_service.p_positions (user_id);
 CREATE INDEX IF NOT EXISTS idx_positions_status ON trading_service.p_positions (status);
 CREATE INDEX IF NOT EXISTS idx_executions_user_id ON trading_service.p_executions (user_id);
+CREATE INDEX IF NOT EXISTS idx_executions_user_created_id
+    ON trading_service.p_executions (user_id, created_at DESC, id DESC);
 CREATE INDEX IF NOT EXISTS idx_executions_stock_id ON trading_service.p_executions (stock_id);
 
 -- 주문·원장 외래 키는 참조 테이블을 모두 만든 뒤 추가한다.

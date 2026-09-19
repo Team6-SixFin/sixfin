@@ -225,10 +225,17 @@ public class LearningCommandService {
         }
     }
 
-    /** 거부된 피드백을 재시도 가능한 상태로 되돌린다. */
+    /** 거부된 피드백을 재시도 가능한 상태로 되돌린다  */
     private void markFeedbackFailed(GenerationContext context, FeedbackType feedbackType){
-        String feedbackKey = context.feedback().getFeedbackKey();
         UUID positionId = context.feedback().getPositionId();
+
+        if (context.isAlreadyProcessed()) {
+            log.warn("[{}] AI executor 포화로 피드백 생성을 건너뜁니다. 이미 처리된 건이라 상태는 유지한다. positionId={}",
+                    feedbackType, positionId);
+            return;
+        }
+
+        String feedbackKey = context.feedback().getFeedbackKey();
 
         transactionTemplate.executeWithoutResult(status ->
                 feedbackRepository.findByFeedbackKey(feedbackKey).ifPresent(feedback -> feedback.fail(CAPACITY_FAILURE_REASON))

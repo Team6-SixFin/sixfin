@@ -448,6 +448,38 @@ class LearningCommandServiceTest {
                 ArgumentCaptor.forClass(LearningCommandService.GenerationContext.class);
         verify(aiFeedbackProcessor).processAiFeedbackAsync(contextCaptor.capture());
         assertTrue(contextCaptor.getValue().isAlreadyProcessed());
+    @DisplayName("요청형: 이미 완료된 피드백은 거부되어도 COMPLETED를 유지한다")
+    void keepsCompletedFeedbackWhenRejected() {
+        // 체결에 변화가 없으면 feedbackKey가 같아 기존 완료 피드백을 그대로 찾는다.
+        setupCommonMocksForProcess();
+        ExecutionSnapshot latestExecution = createExecutionSnapshot(TradeType.BUY);
+        when(executionSnapshotRepository.findFirstByPositionIdAndUserIdOrderByExecutedAtDescIdDesc(positionId, userId))
+                .thenReturn(Optional.of(latestExecution));
+
+        String feedbackKey = String.format("%s:%s:%s",
+                FeedbackType.ON_DEMAND_FEEDBACK.name(), positionId, latestExecution.getExecutionId());
+        Feedback completed = Feedback.builder()
+                .feedbackKey(feedbackKey)
+                .userId(userId)
+                .positionId(positionId)
+                .basedOnExecutionId(latestExecution.getExecutionId())
+                .feedbackType(FeedbackType.ON_DEMAND_FEEDBACK)
+                .build();
+        completed.complete(testObjectMapper.createObjectNode().put("summary", "기존 요약"), true, "v1.0");
+        fakeFeedbackDb.put(feedbackKey, completed);
+
+        when(aiFeedbackProcessor.processAiFeedbackAsync(any()))
+                .thenThrow(new RejectedExecutionException("AI executor 큐가 가득찼습니다."));
+
+        // when
+        assertThrows(CustomException.class,
+                () -> learningCommandService.createOnDemandFeedback(positionId, userId));
+
+        // then
+        // 우리가 점유한 피드백이 아니므로 상태를 되돌리면 안된다
+        // FAILED로 뒤집히면 완료된 피드백이 실패로 보이고, 재처리 대상으로 잘못 집혀 AI를 다시 부른다.
+        assertEquals(FeedbackStatus.COMPLETED, fakeFeedbackDb.get(feedbackKey).getStatus());
+        assertNull(fakeFeedbackDb.get(feedbackKey).getFailureReason());
     }
 
     @Test

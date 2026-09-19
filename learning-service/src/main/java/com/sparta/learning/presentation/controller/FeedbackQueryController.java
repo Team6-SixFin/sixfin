@@ -6,6 +6,7 @@ import com.sparta.learning.application.dto.response.FeedbackListItemResponse;
 import com.sparta.learning.application.service.FeedbackQueryService;
 import com.sparta.learning.global.response.ErrorResponse;
 import com.sparta.learning.global.response.PageResponse;
+import com.sparta.learning.global.response.SliceResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -40,7 +41,9 @@ public class FeedbackQueryController {
     @Operation(
             summary = "피드백 목록 조회",
             description = "로그인 사용자의 최초 매수, 요청형, 포지션 종료 피드백을 최신순으로 조회합니다. "
-                    + "피드백 종류·포지션·생성 상태로 필터링할 수 있으며 페이지 번호는 0부터 시작합니다."
+                    + "피드백 종류·포지션·생성 상태로 필터링할 수 있으며 페이지 번호는 0부터 시작합니다. "
+                    + "전체 건수 조회(count) 비용을 없애기 위해 총 건수와 총 페이지 수는 반환하지 않고 "
+                    + "다음 페이지 존재 여부(pageInfo.hasNext)만 제공합니다."
     )
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "피드백 목록 조회 성공"),
@@ -55,7 +58,7 @@ public class FeedbackQueryController {
                     content = @Content(schema = @Schema(implementation = ErrorResponse.class))
             )
     })
-    public PageResponse<FeedbackListItemResponse> getFeedbacks(
+    public SliceResponse<FeedbackListItemResponse> getFeedbacks(
             @Parameter(
                     description = "Gateway가 JWT의 subject에서 추출한 사용자 UUID. 로컬에서 직접 호출할 때는 이 값을 입력합니다.",
                     required = true,

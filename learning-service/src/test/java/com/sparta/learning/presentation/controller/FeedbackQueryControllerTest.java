@@ -8,6 +8,9 @@ import com.sparta.learning.domain.model.FeedbackStatus;
 import com.sparta.learning.domain.model.FeedbackType;
 import com.sparta.learning.global.exception.GlobalExceptionHandler;
 import com.sparta.learning.global.response.PageResponse;
+import com.sparta.learning.global.response.SliceResponse;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.SliceImpl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -68,7 +71,8 @@ class FeedbackQueryControllerTest {
                 OffsetDateTime.parse("2026-08-31T10:00:05+09:00")
         );
         when(feedbackQueryService.getFeedbacks(any(FeedbackListQuery.class)))
-                .thenReturn(new PageResponse<>(List.of(item), 0, 20, 1, 1, false));
+                .thenReturn(SliceResponse.of(
+                        new SliceImpl<>(List.of(item), PageRequest.of(0, 20), false)));
 
         mockMvc.perform(get("/api/feedbacks")
                         .header("X-User-Id", USER_ID)
@@ -81,12 +85,18 @@ class FeedbackQueryControllerTest {
                 .andExpect(jsonPath("$.content[0].feedbackId").value(101))
                 .andExpect(jsonPath("$.content[0].stockSymbol").value("AAPL"))
                 .andExpect(jsonPath("$.content[0].summary").value("손절 계획을 설정했습니다."))
-                .andExpect(jsonPath("$.page").value(0))
-                .andExpect(jsonPath("$.hasNext").value(false))
+                .andExpect(jsonPath("$.pageInfo.paginationType").value("OFFSET"))
+                .andExpect(jsonPath("$.pageInfo.page").value(0))
+                .andExpect(jsonPath("$.pageInfo.size").value(20))
+                .andExpect(jsonPath("$.pageInfo.hasNext").value(false))
+                // count 쿼리를 제거했으므로 전체 건수·전체 페이지 수는 응답하지 않는다
+                .andExpect(jsonPath("$.totalElements").doesNotExist())
+                .andExpect(jsonPath("$.totalPages").doesNotExist())
                 .andExpect(jsonPath("$.code").doesNotExist())
                 .andExpect(jsonPath("$.message").doesNotExist())
                 .andExpect(jsonPath("$.data").doesNotExist());
 
+        // 요청 파라미터 계약은 그대로이므로 아래 단언은 변경하지 않는다
         ArgumentCaptor<FeedbackListQuery> queryCaptor = ArgumentCaptor.forClass(FeedbackListQuery.class);
         verify(feedbackQueryService).getFeedbacks(queryCaptor.capture());
         assertThat(queryCaptor.getValue().userId()).isEqualTo(USER_ID);
@@ -99,7 +109,8 @@ class FeedbackQueryControllerTest {
     @Test
     void getsProcessingFeedbacks() throws Exception {
         when(feedbackQueryService.getFeedbacks(any(FeedbackListQuery.class)))
-                .thenReturn(new PageResponse<>(List.of(), 0, 20, 0, 0, false));
+                .thenReturn(SliceResponse.of(
+                        new SliceImpl<>(List.of(), PageRequest.of(0, 20), false)));
 
         mockMvc.perform(get("/api/feedbacks")
                         .header("X-User-Id", USER_ID)

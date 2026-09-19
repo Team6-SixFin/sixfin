@@ -20,6 +20,7 @@ import com.sparta.learning.domain.model.TradeType;
 import com.sparta.learning.global.exception.CustomException;
 import com.sparta.learning.global.exception.LearningErrorCode;
 import com.sparta.learning.global.response.PageResponse;
+import com.sparta.learning.global.response.SliceResponse;
 import com.sparta.learning.infrastructure.persistence.repository.ExecutionSnapshotRepository;
 import com.sparta.learning.infrastructure.persistence.repository.FeedbackDetailQueryRepository;
 import com.sparta.learning.infrastructure.persistence.repository.FeedbackQueryRepository;
@@ -32,6 +33,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.SliceImpl;
 
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -82,7 +84,7 @@ class FeedbackQueryServiceTest {
     void returnsPagedFeedbacksWithExecutionStockInfo() {
         PageRequest requestedPage = PageRequest.of(0, 20);
         when(feedbackQueryRepository.findListRows(any(FeedbackListQuery.class), any(Pageable.class)))
-                .thenReturn(new PageImpl<>(List.of(createListRow()), requestedPage, 1));
+            .thenReturn(new SliceImpl<>(List.of(createListRow()), requestedPage, false));
         when(executionSnapshotRepository.findStockInfoByPositionIds(Set.of(POSITION_ID)))
                 .thenReturn(List.of(stockInfo(POSITION_ID, "AAPL", "Apple Inc.")));
 
@@ -94,13 +96,14 @@ class FeedbackQueryServiceTest {
                 0,
                 20
         );
-        PageResponse<FeedbackListItemResponse> result = feedbackQueryService.getFeedbacks(query);
+        SliceResponse<FeedbackListItemResponse> result = feedbackQueryService.getFeedbacks(query);
 
         assertThat(result.content()).hasSize(1);
         assertThat(result.content().getFirst().stockSymbol()).isEqualTo("AAPL");
         assertThat(result.content().getFirst().stockName()).isEqualTo("Apple Inc.");
         assertThat(result.content().getFirst().summary()).isEqualTo("손절 계획을 설정했습니다.");
-        assertThat(result.totalElements()).isEqualTo(1);
+        assertThat(result.pageInfo().hasNext()).isFalse();
+        assertThat(result.pageInfo().paginationType()).isEqualTo("OFFSET");
 
         ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
         verify(feedbackQueryRepository).findListRows(eq(query), pageableCaptor.capture());
@@ -112,11 +115,11 @@ class FeedbackQueryServiceTest {
     @Test
     void returnsNullStockInfoWhenExecutionSnapshotIsMissing() {
         when(feedbackQueryRepository.findListRows(any(FeedbackListQuery.class), any(Pageable.class)))
-                .thenReturn(new PageImpl<>(List.of(createListRow()), PageRequest.of(0, 20), 1));
+                .thenReturn(new SliceImpl<>(List.of(createListRow()), PageRequest.of(0, 20), false));
         when(executionSnapshotRepository.findStockInfoByPositionIds(Set.of(POSITION_ID)))
                 .thenReturn(List.of());
 
-        PageResponse<FeedbackListItemResponse> result = feedbackQueryService.getFeedbacks(
+        SliceResponse<FeedbackListItemResponse> result = feedbackQueryService.getFeedbacks(
                 FeedbackListQuery.of(USER_ID, null, null, null, 0, 20)
         );
 
@@ -128,15 +131,15 @@ class FeedbackQueryServiceTest {
     @Test
     void 같은_포지션의_피드백이_여러_건이어도_종목_정보는_한_번만_조회한다() {
         when(feedbackQueryRepository.findListRows(any(FeedbackListQuery.class), any(Pageable.class)))
-                .thenReturn(new PageImpl<>(
+                .thenReturn(new SliceImpl<>(
                         List.of(createListRow(), createListRow(102L), createListRow(103L)),
                         PageRequest.of(0, 20),
-                        3
+                        false
                 ));
         when(executionSnapshotRepository.findStockInfoByPositionIds(Set.of(POSITION_ID)))
                 .thenReturn(List.of(stockInfo(POSITION_ID, "AAPL", "Apple Inc.")));
 
-        PageResponse<FeedbackListItemResponse> result = feedbackQueryService.getFeedbacks(
+        SliceResponse<FeedbackListItemResponse> result = feedbackQueryService.getFeedbacks(
                 FeedbackListQuery.of(USER_ID, null, null, null, 0, 20)
         );
 
@@ -151,13 +154,14 @@ class FeedbackQueryServiceTest {
     @Test
     void skipsSnapshotQueriesForEmptyPage() {
         when(feedbackQueryRepository.findListRows(any(FeedbackListQuery.class), any(Pageable.class)))
-                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
+                .thenReturn(new SliceImpl<>(List.of(), PageRequest.of(0, 20), false));
 
-        PageResponse<FeedbackListItemResponse> result = feedbackQueryService.getFeedbacks(
+        SliceResponse<FeedbackListItemResponse> result = feedbackQueryService.getFeedbacks(
                 FeedbackListQuery.of(USER_ID, null, null, null, 0, 20)
         );
 
         assertThat(result.content()).isEmpty();
+        assertThat(result.pageInfo().hasNext()).isFalse();
         verifyNoInteractions(executionSnapshotRepository);
     }
 
@@ -280,6 +284,24 @@ class FeedbackQueryServiceTest {
                 .satisfies(exception -> assertThat(((CustomException) exception).getErrorCode())
                         .isEqualTo(LearningErrorCode.POSITION_NOT_FOUND));
     }
+
+    // 다음 페이지가 있으면 hasNext가 응답까지 전달되는지 확인 (count 쿼리 대체 경로)
+    @Test
+    void propagatesHasNextToResponse() {
+        when(feedbackQueryRepository.findListRows(any(FeedbackListQuery.class), any(Pageable.class)))
+                .thenReturn(new SliceImpl<>(List.of(createListRow()), PageRequest.of(0, 20), true));
+        when(executionSnapshotRepository.findStockInfoByPositionIds(Set.of(POSITION_ID)))
+                .thenReturn(List.of(stockInfo(POSITION_ID, "AAPL", "Apple Inc.")));
+
+        SliceResponse<FeedbackListItemResponse> result = feedbackQueryService.getFeedbacks(
+                FeedbackListQuery.of(USER_ID, null, null, null, 0, 20)
+        );
+
+        assertThat(result.pageInfo().hasNext()).isTrue();
+        assertThat(result.pageInfo().page()).isZero();
+        assertThat(result.pageInfo().size()).isEqualTo(20);
+    }
+
 
     /** 네이티브 쿼리 결과인 인터페이스 프로젝션을 테스트에서 값으로 만든다. */
     private PositionStockInfo stockInfo(UUID positionId, String symbol, String name) {
