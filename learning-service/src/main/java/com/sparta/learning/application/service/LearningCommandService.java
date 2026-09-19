@@ -27,7 +27,8 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class LearningCommandService {
 
-    private static final String CAPACITY_FAILURE_REASON = "AI executor 포화로 요청을 제출하지 못했습니다.";
+    // executor 포화로 AI 호출 자체를 못 한 경우의 failure_reason.
+    public static final String CAPACITY_FAILURE_REASON = "AI executor 포화로 요청을 제출하지 못했습니다.";
 
     private final FeedbackRepository feedbackRepository;
     private final ExecutionSnapshotRepository executionSnapshotRepository;
@@ -134,7 +135,17 @@ public class LearningCommandService {
                 isAlreadyProcessed = true;
             } else {
                 // PENDING(또는 FAILED) 상태인 경우 PROCESSING으로 갱신하여 점유
-                feedback.updateStatus(FeedbackStatus.PROCESSING);
+                //
+                // 조회 후 갱신이 아니라 조건부 UPDATE 로 점유한다.
+                // 재처리 스케줄러와 Kafka 재전달이 같은 피드백을 동시에 읽으면
+                // 둘 다 점유에 성공해 AI 를 두 번 호출하게 된다. 진 쪽은 이미 처리 중인 것으로 본다.
+                boolean claimed =
+                        feedbackRepository.claimForProcessing(feedback.getId(), feedback.getStatus()) == 1;
+                if (claimed) {
+                    feedback.updateStatus(FeedbackStatus.PROCESSING);
+                } else {
+                    isAlreadyProcessed = true;
+                }
             }
         } else {
             feedback = Feedback.builder()

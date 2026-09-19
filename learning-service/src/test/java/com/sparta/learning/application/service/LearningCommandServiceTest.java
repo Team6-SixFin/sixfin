@@ -164,6 +164,10 @@ class LearningCommandServiceTest {
             return feedback;
         });
 
+        // 조건부 UPDATE로 생성 권한을 가져온다. 1이면 이겼다는 뜻이다.
+        // 스텁하지 않으면 기본값 0이 돌아와 모든 재생성이 이미 처리 중으로 건너뛰어짐
+        lenient().when(feedbackRepository.claimForProcessing(any(), any())).thenReturn(1);
+
         lenient().when(feedbackDiagnosisRepository.saveAll(any()))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -408,6 +412,42 @@ class LearningCommandServiceTest {
         // 409(FEEDBACK_GENERATION_IN_PROGRESS)가 아니라 정상 생성되어야 한다
         assertNotNull(response);
         assertEquals("요약", response.summary());
+    }
+
+    @Test
+    @DisplayName("점유 경쟁에서 지면 이미 처리 중으로 보고 생성을 건너뛴다")
+    void treatsLostClaimAsAlreadyProcessed() {
+        // given
+        // 스케줄러와 Kafka 재전달이 같은 FAILED 피드백을 동시에 읽는 상황이다.
+        setupCommonMocksForProcess();
+        ExecutionSnapshot firstExecution = createExecutionSnapshot(TradeType.BUY);
+        when(executionSnapshotRepository.findFirstByPositionIdAndUserIdOrderByExecutedAtAscIdAsc(positionId, userId))
+                .thenReturn(Optional.of(firstExecution));
+
+        String feedbackKey = String.format("%s:%s:%s",
+                FeedbackType.ENTRY_FEEDBACK.name(), positionId, firstExecution.getExecutionId());
+        Feedback failed = Feedback.builder()
+                .feedbackKey(feedbackKey)
+                .userId(userId)
+                .positionId(positionId)
+                .basedOnExecutionId(firstExecution.getExecutionId())
+                .feedbackType(FeedbackType.ENTRY_FEEDBACK)
+                .build();
+        failed.fail(LearningCommandService.CAPACITY_FAILURE_REASON);
+        fakeFeedbackDb.put(feedbackKey, failed);
+
+        // 조건부 UPDATE가 0행을 바꿨다 = 다른 주체가 먼저 가져갔다
+        when(feedbackRepository.claimForProcessing(any(), any())).thenReturn(0);
+
+        // when
+        learningCommandService.createEntryFeedback(positionId, userId).join();
+
+        // then
+        // 진 쪽은 생성을 진행하면 안 된다. 둘 다 진행하면 AI가 두 번 호출된다.
+        ArgumentCaptor<LearningCommandService.GenerationContext> contextCaptor =
+                ArgumentCaptor.forClass(LearningCommandService.GenerationContext.class);
+        verify(aiFeedbackProcessor).processAiFeedbackAsync(contextCaptor.capture());
+        assertTrue(contextCaptor.getValue().isAlreadyProcessed());
     }
 
     @Test

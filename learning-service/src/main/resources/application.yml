@@ -67,6 +67,15 @@ learning:
     topics:
       trade-events: ${TRADE_EVENTS_TOPIC:trade-events.v1}
 
+  # 실패한 피드백 재처리 정책
+  feedback:
+    retry:
+      enabled: ${FEEDBACK_RETRY_ENABLED:true}
+      interval: ${FEEDBACK_RETRY_INTERVAL:30s}
+      batch-size: ${FEEDBACK_RETRY_BATCH_SIZE:5}
+      max-attempts: ${FEEDBACK_RETRY_MAX_ATTEMPTS:20}
+      stale-processing-after: ${FEEDBACK_RETRY_STALE_AFTER:10m}
+
   ai:
     # 기동 시 기본 제공자. 헤더 오버라이드가 없는 모든 트래픽
     # (시연, Kafka 로 시작되는 ENTRY·POSITION_REVIEW)이 이 값을 씁니다.
