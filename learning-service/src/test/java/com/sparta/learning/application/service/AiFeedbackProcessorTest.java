@@ -2,6 +2,7 @@ package com.sparta.learning.application.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sparta.learning.application.content.FeedbackLearningResourceService;
+import com.sparta.learning.application.content.LearningResourceLinker;
 import com.sparta.learning.application.dto.response.AiFeedbackResponse;
 import com.sparta.learning.application.port.AiClientPort;
 import com.sparta.learning.domain.entity.AiRequest;
@@ -55,14 +56,17 @@ class AiFeedbackProcessorTest {
     @BeforeEach
     void setUp() {
         meterRegistry = new SimpleMeterRegistry();
+        LearningMetrics learningMetrics = new LearningMetrics(meterRegistry);
+        LearningResourceLinker learningResourceLinker =
+                new LearningResourceLinker(feedbackLearningResourceService, learningMetrics);
         aiFeedbackProcessor = new AiFeedbackProcessor(
                 aiClientPort,
                 objectMapper,
                 feedbackRepository,
                 aiRequestRepository,
                 transactionTemplate,
-                feedbackLearningResourceService,
-                new LearningMetrics(meterRegistry)
+                learningResourceLinker,
+                learningMetrics
         );
 
         doAnswer(invocation -> {
