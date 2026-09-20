@@ -77,6 +77,13 @@ learning:
       stale-processing-after: ${FEEDBACK_RETRY_STALE_AFTER:10m}
 
   ai:
+    # AI 피드백 스레드풀. 큐가 가득 차야 스레드가 core 이상으로 늘어나므로
+    # queue-capacity 는 max-pool-size 보다 작게 둔다.
+    executor:
+      core-pool-size: ${AI_EXECUTOR_CORE_POOL_SIZE:5}
+      max-pool-size: ${AI_EXECUTOR_MAX_POOL_SIZE:20}
+      queue-capacity: ${AI_EXECUTOR_QUEUE_CAPACITY:10}
+
     # 기동 시 기본 제공자. 헤더 오버라이드가 없는 모든 트래픽
     # (시연, Kafka 로 시작되는 ENTRY·POSITION_REVIEW)이 이 값을 씁니다.
     provider: ${LEARNING_AI_PROVIDER:gemini}
@@ -98,6 +105,12 @@ learning:
       max-linked-diagnoses: ${AI_CONTEXT_MAX_LINKED_DIAGNOSES:32}
 
   resources:
+    # 학습 자료 연결 전용 스레드풀
+    executor:
+      core-pool-size: ${LEARNING_RESOURCE_CORE_POOL_SIZE:2}
+      max-pool-size: ${LEARNING_RESOURCE_MAX_POOL_SIZE:8}
+      queue-capacity: ${LEARNING_RESOURCE_QUEUE_CAPACITY:20}
+
     cache:
       ttl: ${LEARNING_RESOURCE_CACHE_TTL:24h}
       pool-size: ${LEARNING_RESOURCE_CACHE_POOL_SIZE:20}

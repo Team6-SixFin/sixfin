@@ -3,7 +3,7 @@ package com.sparta.learning.application.service;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.sparta.learning.application.content.FeedbackLearningResourceService;
+import com.sparta.learning.application.content.LearningResourceLinker;
 import com.sparta.learning.application.dto.response.AiFeedbackResponse;
 import com.sparta.learning.application.port.AiClientPort;
 import com.sparta.learning.domain.entity.AiRequest;
@@ -37,7 +37,7 @@ public class AiFeedbackProcessor {
     private final FeedbackRepository feedbackRepository;
     private final AiRequestRepository aiRequestRepository;
     private final TransactionTemplate transactionTemplate;
-    private final FeedbackLearningResourceService feedbackLearningResourceService;
+    private final LearningResourceLinker learningResourceLinker;
     private final LearningMetrics learningMetrics;
 
     // [수정됨] 분리된 비동기 전담 메서드
@@ -45,24 +45,12 @@ public class AiFeedbackProcessor {
     public CompletableFuture<AiFeedbackResponse> processAiFeedbackAsync(LearningCommandService.GenerationContext context) {
         String generationResult = FAILED;
 
-        try {
-            if (context.isAlreadyProcessed()) {
-                generationResult = ALREADY_PROCESSED;
-                log.info("이미 처리 중이거나 완료된 피드백입니다. 중복 AI 호출을 방지합니다. Key: {}", context.feedback().getFeedbackKey());
-                // 완료된 건이면 기존 데이터를 반환, 처리 중(PROCESSING)이면 null 반환
-                if (context.feedback().getContent() != null) {
-                    try {
-                        AiFeedbackResponse existingResponse =
-                                objectMapper.treeToValue(context.feedback().getContent(), AiFeedbackResponse.class);
-                        recommendLearningResourcesSafely(context.feedback());
-                        return CompletableFuture.completedFuture(existingResponse);
-                    } catch (Exception e) {
-                        log.error("기존 피드백 Content 파싱 실패", e);
-                    }
-                }
-                return CompletableFuture.completedFuture(null);
-            }
+        if (context.isAlreadyProcessed()) {
+            // 호출부가 미리 걸러내지만, 직접 호출하는 경로를 위해 안전망으로 남긴다.
+            return CompletableFuture.completedFuture(resolveAlreadyProcessed(context));
+        }
 
+        try {
             // TODO : 현재 사용 버전 하드코딩이라 추후 수정 해야 함
             // 공통 메타 정보 설정 (모델명 및 프롬프트 버전)
             String requestId = UUID.randomUUID().toString();
@@ -78,7 +66,7 @@ public class AiFeedbackProcessor {
                 transactionTemplate.executeWithoutResult(status ->
                         completeFeedback(feedbackKey, context.contextJsonStr(), finalAiResponse, requestId, modelName, promptVersion)
                 );
-                recommendLearningResourcesSafely(context.feedback());
+                learningResourceLinker.linkAsync(context.feedback());
                 generationResult = SUCCESS;
 
             } catch (Exception e) {
@@ -99,6 +87,34 @@ public class AiFeedbackProcessor {
             learningMetrics.recordFeedbackGeneration(
                     context.feedback().getFeedbackType(),
                     generationResult,
+                    context.generationStartedAtNanos()
+            );
+        }
+    }
+
+    /** 요청형 피드백에서 이미 만들어진 피드백을 AI executor 를 거치지 않고 바로 돌려준다. */
+    public AiFeedbackResponse resolveAlreadyProcessed(LearningCommandService.GenerationContext context) {
+        try {
+            log.info("이미 처리 중이거나 완료된 피드백입니다. 중복 AI 호출을 방지합니다. Key: {}",
+                    context.feedback().getFeedbackKey());
+
+            if (context.feedback().getContent() == null) {
+                return null;
+            }
+
+            try {
+                AiFeedbackResponse existingResponse =
+                        objectMapper.treeToValue(context.feedback().getContent(), AiFeedbackResponse.class);
+                learningResourceLinker.linkAsync(context.feedback());
+                return existingResponse;
+            } catch (Exception e) {
+                log.error("기존 피드백 Content 파싱 실패", e);
+                return null;
+            }
+        } finally {
+            learningMetrics.recordFeedbackGeneration(
+                    context.feedback().getFeedbackType(),
+                    ALREADY_PROCESSED,
                     context.generationStartedAtNanos()
             );
         }
@@ -126,34 +142,6 @@ public class AiFeedbackProcessor {
             throw exception;
         }
     }
-
-    /** 학습 자료 추천 실패가 이미 완료된 AI 피드백의 성공 상태와 응답에 영향을 주지 않게 격리합니다. */
-    private void recommendLearningResourcesSafely(Feedback feedback) {
-        Timer.Sample sample = learningMetrics.startTimer();
-
-        try {
-            int linkedCount = feedbackLearningResourceService.recommendAndLink(
-                    feedback.getFeedbackKey(),
-                    feedback.getUserId(),
-                    feedback.getPositionId(),
-                    feedback.getFeedbackType()
-            );
-            log.info(
-                    "피드백 학습 자료 연결 완료. feedbackKey={}, linkedCount={}",
-                    feedback.getFeedbackKey(),
-                    linkedCount
-            );
-            learningMetrics.recordLearningResourceRecommendation(feedback.getFeedbackType(), SUCCESS, sample);
-        } catch (RuntimeException exception) {
-            learningMetrics.recordLearningResourceRecommendation(feedback.getFeedbackType(), FAILED, sample);
-            log.warn(
-                    "피드백 학습 자료 추천 실패, AI 피드백은 유지합니다. feedbackKey={}",
-                    feedback.getFeedbackKey(),
-                    exception
-            );
-        }
-    }
-
 
     private void validateAiResponse(AiFeedbackResponse response) {
         if (response == null ||

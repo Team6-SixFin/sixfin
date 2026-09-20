@@ -446,13 +446,15 @@ class LearningCommandServiceTest {
         // 진 쪽은 생성을 진행하면 안 된다. 둘 다 진행하면 AI가 두 번 호출된다.
         ArgumentCaptor<LearningCommandService.GenerationContext> contextCaptor =
                 ArgumentCaptor.forClass(LearningCommandService.GenerationContext.class);
-        verify(aiFeedbackProcessor).processAiFeedbackAsync(contextCaptor.capture());
+        verify(aiFeedbackProcessor).resolveAlreadyProcessed(contextCaptor.capture());
         assertTrue(contextCaptor.getValue().isAlreadyProcessed());
+        // AI를 부르지 않는 건이므로 executor 제출 자체가 필요없다
+        verify(aiFeedbackProcessor, never()).processAiFeedbackAsync(any());
     }
 
     @Test
-    @DisplayName("요청형: 이미 완료된 피드백은 거부되어도 COMPLETED를 유지한다")
-    void keepsCompletedFeedbackWhenRejected() {
+    @DisplayName("요청형: 이미 완료된 피드백은 AI executor를 거치지 않고 기존 내용을 돌려준다")
+    void reusesCompletedFeedbackWithoutTouchingExecutor() {
         // 체결에 변화가 없으면 feedbackKey가 같아 기존 완료 피드백을 그대로 찾는다.
         setupCommonMocksForProcess();
         ExecutionSnapshot latestExecution = createExecutionSnapshot(TradeType.BUY);
@@ -471,16 +473,18 @@ class LearningCommandServiceTest {
         completed.complete(testObjectMapper.createObjectNode().put("summary", "기존 요약"), true, "v1.0");
         fakeFeedbackDb.put(feedbackKey, completed);
 
-        when(aiFeedbackProcessor.processAiFeedbackAsync(any()))
-                .thenThrow(new RejectedExecutionException("AI executor 큐가 가득찼습니다."));
+        AiFeedbackResponse existing = new AiFeedbackResponse(
+                "기존 요약", "기존 총평", List.of("잘함"), List.of("개선점"), List.of("다음행동"), List.of("질문")
+        );
+        when(aiFeedbackProcessor.resolveAlreadyProcessed(any())).thenReturn(existing);
 
         // when
-        assertThrows(CustomException.class,
-                () -> learningCommandService.createOnDemandFeedback(positionId, userId));
+        AiFeedbackResponse response = learningCommandService.createOnDemandFeedback(positionId, userId);
 
         // then
-        // 우리가 점유한 피드백이 아니므로 상태를 되돌리면 안된다
-        // FAILED로 뒤집히면 완료된 피드백이 실패로 보이고, 재처리 대상으로 잘못 집혀 AI를 다시 부른다.
+        assertSame(existing, response);
+        // AI executor 제출을 안하기 때문에 FAILED로 뒤집힐 일도 없어짐
+        verify(aiFeedbackProcessor, never()).processAiFeedbackAsync(any());
         assertEquals(FeedbackStatus.COMPLETED, fakeFeedbackDb.get(feedbackKey).getStatus());
         assertNull(fakeFeedbackDb.get(feedbackKey).getFailureReason());
     }
