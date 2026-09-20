@@ -59,6 +59,12 @@ public class LearningCommandService {
             throw new CustomException(LearningErrorCode.FEEDBACK_GENERATION_IN_PROGRESS);
         }
 
+        // 체결 변화가 없어 기존 피드백을 재사용하는 경우다.
+        // AI 를 부르지 않으므로 executor 를 거치지 않고 바로 돌려준다.
+        if (context.isAlreadyProcessed()) {
+            return aiFeedbackProcessor.resolveAlreadyProcessed(context);
+        }
+
         CompletableFuture<AiFeedbackResponse> future;
         try{
             future = aiFeedbackProcessor.processAiFeedbackAsync(context);
@@ -215,6 +221,11 @@ public class LearningCommandService {
     /** 카프카 경로의 AI 작업제출. 거부되면 피드백을 FAILED로 내리고 이벤트는 성공 처리 */
     private CompletableFuture<AiFeedbackResponse> submitOrMarkFailed(
             GenerationContext context, FeedbackType feedbackType){
+        // 재사용 건은 AI 호출이 없으니 풀을 점유하지 않는다.
+        if (context.isAlreadyProcessed()) {
+            return CompletableFuture.completedFuture(aiFeedbackProcessor.resolveAlreadyProcessed(context));
+        }
+
         try{
             return aiFeedbackProcessor.processAiFeedbackAsync(context);
         }

@@ -105,6 +105,12 @@ learning:
       max-linked-diagnoses: ${AI_CONTEXT_MAX_LINKED_DIAGNOSES:32}
 
   resources:
+    # 학습 자료 연결 전용 스레드풀
+    executor:
+      core-pool-size: ${LEARNING_RESOURCE_CORE_POOL_SIZE:2}
+      max-pool-size: ${LEARNING_RESOURCE_MAX_POOL_SIZE:8}
+      queue-capacity: ${LEARNING_RESOURCE_QUEUE_CAPACITY:20}
+
     cache:
       ttl: ${LEARNING_RESOURCE_CACHE_TTL:24h}
       pool-size: ${LEARNING_RESOURCE_CACHE_POOL_SIZE:20}
